@@ -587,37 +587,6 @@ fun VideoEditorScreen(
             }
             }
         }
-ht.toPx() }
-                    visibleText.forEach { layer ->
-                        val motion = MotionCurve.at(
-                            layer.motion,
-                            (playMs * 1_000L - layer.startUs).coerceIn(0L, layer.durationUs)
-                        )
-                        Text(
-                            text = layer.text.orEmpty(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.align(Alignment.Center)
-                                .fillMaxWidth(0.88f)
-                                .graphicsLayer {
-                                    translationX = motion.x * viewportWidthPx / 2f
-                                    translationY = -motion.y * viewportHeightPx / 2f
-                                    scaleX = motion.scale
-                                    scaleY = motion.scale
-                                    rotationZ = motion.rotation
-                                    alpha = motion.opacity * layer.fade.alphaAt(
-                                        (playMs * 1_000L-layer.startUs)
-                                            .coerceIn(0L,layer.durationUs),
-                                        layer.durationUs
-                                    )
-                                }
-                        )
-                    }
-                }
-            }
-        }
         Row(
             Modifier.fillMaxWidth().height(47.dp).padding(horizontal = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
