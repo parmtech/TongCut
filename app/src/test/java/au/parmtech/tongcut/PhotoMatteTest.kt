@@ -28,6 +28,18 @@ class PhotoMatteTest {
         assertEquals(1f,PhotoMatte.chromaAlpha(0xFFFF0000.toInt(),key),0f)
     }
 
+    @Test fun gradeChangesOverlayRgbButPreservesMatteAlpha() {
+        val original = 0x7F4080C0
+        val adjusted = PhotoMatte.applyAlpha(
+            original, 50, 50, 100, 100,
+            PhotoEffects(colorGrade = ColorGrade(exposure = 1f))
+        )
+        assertEquals(0x7F, (adjusted ushr 24) and 255)
+        assertEquals(128, (adjusted ushr 16) and 255)
+        assertEquals(255, (adjusted ushr 8) and 255)
+        assertEquals(255, adjusted and 255)
+    }
+
     @Test fun keyFeatherSoftensOnlyTheChromaBoundaryNotTheShapeMask() {
         val hard = PhotoChroma(tolerance = 0.12f, feather = 0f)
         val soft = hard.copy(feather = 0.2f)
@@ -92,3 +104,4 @@ class PhotoMatteTest {
     @Test(expected=IllegalArgumentException::class)
     fun invalidChromaRejected() { PhotoChroma(tolerance=1.2f) }
 }
+
