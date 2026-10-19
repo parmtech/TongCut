@@ -132,7 +132,11 @@ object VisualComposition {
                     )
                     .setOverlayFrameAnchor(0f, 0f)
                     .setRotationDegrees(pose.rotation)
-                    .setAlphaScale(schedule.alphaFor(inputId, presentationTimeUs) * pose.opacity)
+                    .setAlphaScale(schedule.alphaFor(inputId, presentationTimeUs) *
+                        pose.opacity * (layer?.fade?.alphaAt(
+                            (presentationTimeUs - layer.startUs).coerceIn(0L,layer.durationUs),
+                            layer.durationUs
+                        ) ?: 1f))
                     .build()
             }
         }

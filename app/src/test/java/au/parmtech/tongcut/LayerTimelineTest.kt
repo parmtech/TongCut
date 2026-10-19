@@ -173,4 +173,18 @@ class LayerTimelineTest {
         assertEquals(1_000_000L,right.sourceInUs)
     }
 
+    @Test fun splittingFadedVideoKeepsOpacityContinuous() {
+        val faded = TimelineLayer("faded",video.id,LayerKind.VIDEO,0L,5_000_000L,
+            sourceUri="content://video",sourceDurationUs=5_000_000L,
+            fade=LayerFade(1_000_000,2_000_000))
+        val graph = LayerTimeline(tracks=listOf(video),layers=listOf(faded))
+        val result = graph.splitLayer(faded.id,4_000_000L,"second")
+        val left = result.layers.single { it.id == "faded" }
+        val right = result.layers.single { it.id == "second" }
+        val before = left.fade.alphaAt(left.durationUs,left.durationUs)
+        val after = right.fade.alphaAt(0L,right.durationUs)
+        assertEquals(before,after,0.0001f)
+        assertEquals(0.5f,before,0.0001f)
+    }
+
 }

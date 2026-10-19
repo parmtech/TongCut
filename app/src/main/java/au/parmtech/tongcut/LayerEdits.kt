@@ -171,6 +171,21 @@ object LayerEdits {
     }
 
     /** Change the persisted photograph alpha matte; both preview and export share the renderer. */
+    /** Visual fades are independent from pose/opacity keyframes. */
+    fun setLayerFade(draft: EditorDraft, id: String, fade: LayerFade): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Missing visual layer")
+        require(layer.kind == LayerKind.VIDEO || layer.kind == LayerKind.IMAGE ||
+            layer.kind == LayerKind.TEXT) { "Only visible layers support fades" }
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the track before changing fades"
+        }
+        fade.validate(layer.durationUs)
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(fade = fade) else it
+        }))
+    }
+
     fun setPhotoEffects(draft: EditorDraft, id: String, effects: PhotoEffects): EditorDraft {
         val photo = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.IMAGE }
             ?: throw IllegalArgumentException("Photo layer not found")

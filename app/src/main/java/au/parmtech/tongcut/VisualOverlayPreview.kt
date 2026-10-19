@@ -41,7 +41,10 @@ internal fun VisualOverlayPreview(
             scaleX = pose.scale
             scaleY = pose.scale
             rotationZ = pose.rotation
-            alpha = pose.opacity
+            alpha = pose.opacity * layer.fade.alphaAt(
+                (timelineMs * 1_000L - layer.startUs).coerceIn(0L,layer.durationUs),
+                layer.durationUs
+            )
         }.then(if (layer.kind == LayerKind.VIDEO) Modifier.background(Color.Black) else Modifier),
         contentAlignment = Alignment.Center
     ) {

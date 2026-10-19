@@ -118,6 +118,31 @@ internal fun LayerTools(
                         onChange(LayerEdits.setTrackVisibility(draft, track.id, !track.hidden))
                     }
                     if (kind != LayerKind.AUDIO && kind != LayerKind.STICKER) {
+                        val fade = layer.fade.resetToClip()
+                        fun fadeChange(nextIn: Long, nextOut: Long) {
+                            runCatching {
+                                LayerEdits.setLayerFade(
+                                    draft, layer.id, LayerFade(nextIn,nextOut)
+                                )
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Fade change failed") }
+                        }
+                        SmallLayerButton("Fade in −") {
+                            fadeChange((fade.inUs - 250_000L).coerceAtLeast(0L),fade.outUs)
+                        }
+                        SmallLayerButton("Fade in +") {
+                            fadeChange(minOf(fade.inUs + 250_000L,
+                                layer.durationUs - fade.outUs),fade.outUs)
+                        }
+                        SmallLayerButton("Fade out −") {
+                            fadeChange(fade.inUs,
+                                (fade.outUs - 250_000L).coerceAtLeast(0L))
+                        }
+                        SmallLayerButton("Fade out +") {
+                            fadeChange(fade.inUs,
+                                minOf(fade.outUs + 250_000L, layer.durationUs - fade.inUs))
+                        }
+
                         fun motion(update: (MotionPose) -> MotionPose) {
                             runCatching {
                                 LayerEdits.setMotionAt(draft, layer.id, playheadMs, mutate = update)

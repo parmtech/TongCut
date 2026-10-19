@@ -393,7 +393,11 @@ fun VideoEditorScreen(
                                     scaleX = motion.scale
                                     scaleY = motion.scale
                                     rotationZ = motion.rotation
-                                    alpha = motion.opacity
+                                    alpha = motion.opacity * layer.fade.alphaAt(
+                                        (playMs * 1_000L-layer.startUs)
+                                            .coerceIn(0L,layer.durationUs),
+                                        layer.durationUs
+                                    )
                                 }
                         )
                     }

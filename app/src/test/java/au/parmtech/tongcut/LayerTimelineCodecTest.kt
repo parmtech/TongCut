@@ -155,4 +155,19 @@ class LayerTimelineCodecTest {
         LayerTimelineCodec.decode(raw)
     }
 
+    @Test fun schema6PersistsSplitFadePhaseAndSchema5LoadsDefault() {
+        val photo = TimelineTrack("photo6","Photo",LayerKind.IMAGE,0)
+        val fx = LayerFade(1_000_000L,2_000_000L,3_000_000L,6_000_000L)
+        val graph = LayerTimeline(tracks=listOf(photo),layers=listOf(
+            TimelineLayer("p","photo6",LayerKind.IMAGE,0,3_000_000L,
+                sourceUri="content://photo",fade=fx)
+        ))
+        val serialized = LayerTimelineCodec.encode(graph)
+        assertEquals(6,serialized.getInt("schema"))
+        assertEquals(graph,LayerTimelineCodec.decode(serialized))
+        serialized.put("schema",5)
+        serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
+        assertEquals(LayerFade(),LayerTimelineCodec.decode(serialized).layers.single().fade)
+    }
+
 }

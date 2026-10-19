@@ -243,4 +243,20 @@ class LayerEditsTest {
             PhotoEffects(PhotoMask.CIRCLE))
     }
 
+    @Test fun visibleClipFadesAreReversible() {
+        val initial=LayerEdits.addVisual(base(),0,LayerKind.IMAGE,"content://photo",4_000)
+        val clip=initial.layers.layers.single()
+        val faded=LayerEdits.setLayerFade(initial,clip.id,LayerFade(500_000,750_000))
+        assertEquals(LayerFade(),initial.layers.layers.single().fade)
+        assertEquals(0.5f,faded.layers.layers.single().fade.alphaAt(250_000,4_000_000),0.001f)
+        val history=EditHistory(initial)
+        history.apply(faded)
+        assertEquals(initial,history.undo())
+    }
+    @Test(expected=IllegalArgumentException::class)
+    fun audioLayerFadeIsNotAllowed() {
+        val initial=LayerEdits.addAudio(base(),0,"content://voice",2_000)
+        LayerEdits.setLayerFade(initial,initial.layers.layers.single().id,LayerFade(1_000,0))
+    }
+
 }

@@ -91,7 +91,8 @@ data class TimelineLayer(
     val playbackSpeed: Float = 1f,
     val sourceSpanUs: Long? = null,
     val speedRamp: List<SpeedKeyframe> = emptyList(),
-    val photoEffects: PhotoEffects = PhotoEffects()
+    val photoEffects: PhotoEffects = PhotoEffects(),
+    val fade: LayerFade = LayerFade()
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -101,6 +102,9 @@ data class TimelineLayer(
         require(startUs <= Long.MAX_VALUE - durationUs)
         require(sourceInUs >= 0)
         MotionCurve.validate(motion, durationUs)
+        if (kind == LayerKind.AUDIO) require(fade == LayerFade()) {
+            "Audio fading requires a separate sound envelope"
+        } else fade.validate(durationUs)
         if (kind != LayerKind.IMAGE) require(photoEffects == PhotoEffects()) {
             "Photo masks and chroma are supported only for image layers"
         }
@@ -240,28 +244,33 @@ data class LayerTimeline(
             require(rightDuration >= 1_000L) { "Split too close to ramp edge" }
             val (leftMotion, rightMotion) =
                 MotionCurve.split(layer.motion, leftDuration, layer.durationUs)
+            val (leftFade, rightFade) = layer.fade.split(leftDuration, layer.durationUs)
             val left = layer.copy(
                 durationUs = leftDuration, sourceSpanUs = splitSource,
-                speedRamp = leftRamp, motion = leftMotion
+                speedRamp = leftRamp, motion = leftMotion, fade = leftFade
             )
             val right = layer.copy(
                 id = rightId, startUs = layer.startUs + leftDuration,
                 durationUs = rightDuration, sourceInUs = layer.sourceInUs + splitSource,
-                sourceSpanUs = rightSpan, speedRamp = rightRamp, motion = rightMotion
+                sourceSpanUs = rightSpan, speedRamp = rightRamp, motion = rightMotion,
+                fade = rightFade
             )
             return copy(layers = layers.filterNot { it.id == id } + left + right)
         }
         val leftDuration = requestedLeft
         val (leftMotion, rightMotion) =
             MotionCurve.split(layer.motion, leftDuration, layer.durationUs)
-        val left = layer.copy(durationUs = leftDuration, motion = leftMotion)
+        val (leftFade, rightFade) = if (layer.kind == LayerKind.AUDIO) {
+            LayerFade() to LayerFade()
+        } else layer.fade.split(leftDuration, layer.durationUs)
+        val left = layer.copy(durationUs = leftDuration, motion = leftMotion, fade = leftFade)
         val right = layer.copy(
             id = rightId,
             startUs = atUs,
             durationUs = layer.durationUs - leftDuration,
             sourceInUs = layer.sourceInUs +
                 (leftDuration.toDouble() * layer.playbackSpeed).toLong(),
-            motion = rightMotion
+            motion = rightMotion, fade = rightFade
         )
         return copy(layers = layers.filterNot { it.id == id } + left + right)
     }
@@ -276,7 +285,11 @@ data class LayerTimeline(
                     "Trim this ramped clip using the source speed editor first"
                 }
                 val trimmedMotion = it.motion.filter { key -> key.timeUs <= newDurationUs }
-                it.copy(durationUs = newDurationUs, motion = trimmedMotion)
+                val local = it.fade.resetToClip()
+                val fadeIn = minOf(local.inUs, newDurationUs)
+                val fadeOut = minOf(local.outUs, newDurationUs - fadeIn)
+                it.copy(durationUs = newDurationUs, motion = trimmedMotion,
+                    fade = LayerFade(fadeIn,fadeOut))
             } else it
         })
     }

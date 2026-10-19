@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 5)
+        put("schema", 6)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -40,6 +40,12 @@ object LayerTimelineCodec {
                     put("text", item.text ?: JSONObject.NULL)
                     put("playbackSpeed", item.playbackSpeed.toDouble())
                     put("sourceSpanUs", item.sourceSpanUs ?: JSONObject.NULL)
+                    put("fade", JSONObject().apply {
+                        put("inUs", item.fade.inUs)
+                        put("outUs", item.fade.outUs)
+                        put("offsetUs", item.fade.phaseOffsetUs)
+                        put("totalUs", item.fade.phaseDurationUs ?: JSONObject.NULL)
+                    })
                     put("photoFx", JSONObject().apply {
                         put("mask", item.photoEffects.mask.name)
                         put("feather", item.photoEffects.feather.toDouble())
@@ -78,7 +84,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..5) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..6) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -114,6 +120,15 @@ object LayerTimelineCodec {
                 sourceDurationUs = if (item.has("sourceDurationUs") &&
                     !item.isNull("sourceDurationUs")) item.getLong("sourceDurationUs") else null,
                 text = item.takeNullableString("text"),
+                fade = item.optJSONObject("fade")?.let { fx ->
+                    LayerFade(
+                        inUs = fx.optLong("inUs",0L),
+                        outUs = fx.optLong("outUs",0L),
+                        phaseOffsetUs = fx.optLong("offsetUs",0L),
+                        phaseDurationUs = if (fx.has("totalUs") && !fx.isNull("totalUs"))
+                            fx.getLong("totalUs") else null
+                    )
+                } ?: LayerFade(),
                 photoEffects = item.optJSONObject("photoFx")?.let { fx ->
                     PhotoEffects(
                         mask = PhotoMask.valueOf(fx.optString("mask","NONE")),

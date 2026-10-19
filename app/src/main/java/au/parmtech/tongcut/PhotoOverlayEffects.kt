@@ -52,7 +52,10 @@ object PhotoOverlayEffects {
                         .setRotationDegrees(pose.rotation)
                         .setAlphaScale(
                             if (presentationTimeUs >= layer.startUs &&
-                                presentationTimeUs < layer.endUs) pose.opacity else 0f
+                                presentationTimeUs < layer.endUs) {
+                                pose.opacity * layer.fade.alphaAt(
+                                    presentationTimeUs - layer.startUs,layer.durationUs)
+                            } else 0f
                         ).build()
                 }
             }
