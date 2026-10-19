@@ -99,4 +99,74 @@ class PiPExportDeviceTest {
         }
         context.contentResolver.delete(saved, null, null)
     }
+
+    @Test fun speedTwoPiPShortensVisibleWindowWithoutCuttingMainVideo() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        fun asset(name: String): File {
+            val output = File(context.cacheDir, "speed-$name")
+            InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { stream ->
+                output.outputStream().use { stream.copyTo(it) }
+            }
+            return output
+        }
+        val main = asset("main_blue.mp4")
+        val overlay = asset("overlay_red.mp4")
+        val graph = LayerTimeline(
+            tracks = listOf(TimelineTrack("pip", "Speed test", LayerKind.VIDEO, 0)),
+            layers = listOf(TimelineLayer(
+                id = "fast", trackId = "pip", kind = LayerKind.VIDEO,
+                startUs = 500_000, durationUs = 750_000, playbackSpeed = 2f,
+                sourceUri = Uri.fromFile(overlay).toString(), sourceInUs = 0,
+                sourceDurationUs = 3_000_000
+            ))
+        )
+        val latch = CountDownLatch(1)
+        var saved: Uri? = null
+        var message: String? = null
+        Handler(Looper.getMainLooper()).post {
+            VideoExporter(context).start(
+                clips = listOf(Clip(Uri.fromFile(main), "Blue", 3_000)),
+                options = ExportOptions(shortSidePixels = 720, mute = true),
+                overlayLayers = graph,
+                onProgress = {},
+                onSuccess = { saved = it; latch.countDown() },
+                onError = { message = it; latch.countDown() }
+            )
+        }
+        assertTrue("Speed PiP export timeout", latch.await(180, TimeUnit.SECONDS))
+        assertNull("Speed PiP export error: $message", message)
+        val uri = saved ?: throw AssertionError("No speed MP4 output")
+        MediaMetadataRetriever().use { retriever ->
+            retriever.setDataSource(context, uri)
+            val duration = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull() ?: 0L
+            assertTrue("Main video timeline changed by overlay speed: $duration",
+                duration in 2_800L..3_250L)
+
+            fun countRed(atUs: Long): Int {
+                val bitmap = retriever.getFrameAtTime(
+                    atUs, MediaMetadataRetriever.OPTION_CLOSEST
+                ) ?: throw AssertionError("Frame missing at $atUs")
+                var red = 0
+                for (y in 0 until bitmap.height step 8) {
+                    for (x in 0 until bitmap.width step 8) {
+                        val p = bitmap.getPixel(x,y)
+                        val r = android.graphics.Color.red(p)
+                        val g = android.graphics.Color.green(p)
+                        val b = android.graphics.Color.blue(p)
+                        if (r > 100 && r > g * 1.7 && r > b * 1.7) red++
+                    }
+                }
+                bitmap.recycle()
+                return red
+            }
+            val during = countRed(800_000)
+            val after = countRed(2_000_000)
+            assertTrue("Speed overlay missing at 0.8s or leaked after 1.25s",
+                during > after + 100)
+        }
+        context.contentResolver.delete(uri,null,null)
+    }
+
 }
