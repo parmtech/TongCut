@@ -4,6 +4,8 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * P3 matte settings are persisted for IMAGE and VIDEO overlays. Android bitmap
@@ -38,7 +40,9 @@ data class PhotoEffects(
     val maskScaleX: Float = 1f,
     val maskScaleY: Float = 1f,
     /** Retain the exterior instead of the interior of a selected shape. */
-    val invertMask: Boolean = false
+    val invertMask: Boolean = false,
+    /** Degrees around the geometric center, for adjustable ellipse/diamond masks. */
+    val maskRotationDegrees: Float = 0f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -46,6 +50,7 @@ data class PhotoEffects(
         require(maskCenterY.isFinite() && maskCenterY in -1f..1f)
         require(maskScaleX.isFinite() && maskScaleX in 0.1f..1f)
         require(maskScaleY.isFinite() && maskScaleY in 0.1f..1f)
+        require(maskRotationDegrees.isFinite() && maskRotationDegrees in -180f..180f)
     }
 }
 
@@ -65,7 +70,8 @@ object PhotoMatte {
         x: Int, y: Int, width: Int, height: Int,
         mask: PhotoMask, feather: Float,
         centerX: Float = 0f, centerY: Float = 0f,
-        scaleX: Float = 1f, scaleY: Float = 1f
+        scaleX: Float = 1f, scaleY: Float = 1f,
+        rotationDegrees: Float = 0f
     ): Float {
         require(width > 0 && height > 0)
         require(x in 0 until width && y in 0 until height)
@@ -101,8 +107,11 @@ object PhotoMatte {
                 val dy = py - centerY * height * 0.5f
                 val radiusX = width * 0.48f * scaleX
                 val radiusY = height * 0.48f * scaleY
-                val nx = dx / radiusX
-                val ny = dy / radiusY
+                val angle = Math.toRadians(rotationDegrees.toDouble()).toFloat()
+                val c = cos(angle)
+                val s = sin(angle)
+                val nx = (c * dx + s * dy) / radiusX
+                val ny = (-s * dx + c * dy) / radiusY
                 val distance = if (mask == PhotoMask.ELLIPSE) {
                     sqrt(nx * nx + ny * ny)
                 } else abs(nx) + abs(ny)
@@ -171,7 +180,8 @@ object PhotoMatte {
         val mask = maskAlpha(
             x, y, width, height, settings.mask, settings.feather,
             settings.maskCenterX, settings.maskCenterY,
-            settings.maskScaleX, settings.maskScaleY
+            settings.maskScaleX, settings.maskScaleY,
+            settings.maskRotationDegrees
         )
         val chroma = settings.chroma?.let { chromaAlpha(pixelArgb, it) } ?: 1f
         val shaped = if (settings.invertMask && settings.mask != PhotoMask.NONE)
