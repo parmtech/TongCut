@@ -449,6 +449,10 @@ fun VideoEditorScreen(
 
     val active = previewDraft ?: draft
     val clip = active.selectedClip
+    fun commitGradePreview() {
+        previewDraft?.let(onChange)
+        previewDraft = null
+    }
     val selectedLayer = active.layers.layers.firstOrNull { it.id == selectedLayerId }
     LaunchedEffect(active.layers.layers.map { it.id }) {
         if (selectedLayerId != null &&
@@ -490,6 +494,12 @@ fun VideoEditorScreen(
 
     // A single ExoPlayer playlist plays trimmed media clips consecutively.
     // source URI and clipping window are the same values sent to Transformer.
+    LaunchedEffect(active.colorGrade) {
+        player.setVideoEffects(
+            if (active.colorGrade == ColorGrade()) emptyList()
+            else listOf(ColorGradeEffect(active.colorGrade))
+        )
+    }
     LaunchedEffect(active.clips, active.selectedIndex) {
         val resume = player.isPlaying
         player.pause()
@@ -889,6 +899,27 @@ fun VideoEditorScreen(
                         Text("Source preview only. Exported MP4 applies chosen filter.",
                             color = Color.LightGray, fontSize = 11.sp)
                     }
+                    "Adjust" -> {
+                        val grade = active.colorGrade
+                        Text("SDR colour adjustments update preview and export.",
+                            color = Color.LightGray, fontSize = 11.sp)
+                        GradeSlider("Exposure", grade.exposure, -2f..2f, { value ->
+                            previewDraft = active.copy(colorGrade = grade.copy(exposure = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Contrast", grade.contrast, 0f..2f, { value ->
+                            previewDraft = active.copy(colorGrade = grade.copy(contrast = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Saturation", grade.saturation, 0f..2f, { value ->
+                            previewDraft = active.copy(colorGrade = grade.copy(saturation = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Warmth", grade.temperature, -1f..1f, { value ->
+                            previewDraft = active.copy(colorGrade = grade.copy(temperature = value))
+                        }, ::commitGradePreview)
+                        ToolPill("Reset adjustments") {
+                            previewDraft = null
+                            onChange(active.copy(colorGrade = ColorGrade()))
+                        }
+                    }
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,
                         { onChange(active.copy(canvas = it)) }) { it.label }
                     "Audio" -> {
@@ -1210,6 +1241,29 @@ private fun ToolPill(label: String, onClick: () -> Unit) {
     OutlinedButton(onClick = onClick, shape = RoundedCornerShape(7.dp),
         contentPadding = PaddingValues(horizontal = 13.dp, vertical = 2.dp)) {
         Text(label)
+    }
+}
+
+@Composable
+private fun GradeSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit
+) {
+    Column {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = Color.White, fontSize = 12.sp)
+            Spacer(Modifier.weight(1f))
+            Text("%.2f".format(value), color = Color.LightGray, fontSize = 11.sp)
+        }
+        Slider(
+            value = value,
+            valueRange = range,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished
+        )
     }
 }
 
