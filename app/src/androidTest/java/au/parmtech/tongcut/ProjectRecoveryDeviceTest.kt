@@ -1,0 +1,77 @@
+package au.parmtech.tongcut
+
+import android.content.Context
+import android.util.AtomicFile
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+/** Offline autosave/recovery acceptance, no real user media or network. */
+@RunWith(AndroidJUnit4::class)
+class ProjectRecoveryDeviceTest {
+    private val app: Context get() = ApplicationProvider.getApplicationContext()
+
+    private fun layeredProject(): EditorDraft {
+        var draft = EditorDraft(
+            title="Recover P2 layers",
+            clips=listOf(DraftClip("content://synthetic/main","Main",10_000))
+        )
+        draft = LayerEdits.addText(draft, 1_000L, "Offline title")
+        draft = LayerEdits.addAudio(draft,2_000L,"content://synthetic/audio",5_000L)
+        draft = LayerEdits.addVisual(
+            draft,3_000L,LayerKind.IMAGE,"content://synthetic/image",4_000L
+        )
+        val photo=draft.layers.layers.first { it.kind==LayerKind.IMAGE }
+        draft = LayerEdits.setPhotoEffects(draft,photo.id,
+            PhotoEffects(mask=PhotoMask.CIRCLE,
+                chroma=PhotoChroma(tolerance=0.2f)))
+        val audio=draft.layers.tracks.first { it.kind==LayerKind.AUDIO }
+        draft = LayerEdits.setAudioGain(draft,audio.id,0.6f)
+        return draft
+    }
+
+    @Test fun fullMultilayerDraftSurvivesStoreReopenEvenIfMediaHasMoved() {
+        val id="p2device-recovery-roundtrip"
+        val store=ProjectStore(app,id)
+        store.delete()
+        try {
+            val expected=layeredProject()
+            store.save(expected)
+            val recovered=ProjectStore(app,id).load()
+            assertEquals(expected,recovered)
+            assertEquals("content://synthetic/image",
+                recovered!!.layers.layers.first { it.kind==LayerKind.IMAGE }.sourceUri)
+            val history=EditHistory(recovered)
+            val changed=LayerEdits.changeText(recovered,
+                recovered.layers.layers.first { it.kind==LayerKind.TEXT }.id,"Updated")
+            history.apply(changed)
+            assertEquals(recovered,history.undo())
+            assertEquals(changed,history.redo())
+        } finally { store.delete() }
+    }
+
+    @Test fun interruptedAtomicWriteCannotEraseLastCommittedProject() {
+        val id="p2device-atomic-interrupted"
+        val store=ProjectStore(app,id)
+        store.delete()
+        val json=File(File(app.filesDir,"tongcut-projects"),"$id.json")
+        try {
+            val initial=layeredProject()
+            store.save(initial)
+            val atomic=AtomicFile(json)
+            val unfinished=atomic.startWrite()
+            try {
+                unfinished.write("{broken,uncommitted".toByteArray())
+                unfinished.flush()
+                // Equivalent to process termination BEFORE finishWrite is called.
+                val restored=ProjectStore(app,id).load()
+                assertEquals(initial,restored)
+            } finally {
+                atomic.failWrite(unfinished)
+            }
+        } finally { store.delete() }
+    }
+}

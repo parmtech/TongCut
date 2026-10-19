@@ -37,7 +37,9 @@ class MixedMediaExportDeviceTest {
         InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { input ->
             file.outputStream().use { input.copyTo(it) }
         }
-        assertTrue("Test fixture empty: $name", file.length() > 500)
+        // Tiny uncompressed-color PNG fixtures can be below 500 bytes.
+        val minimum = if (name.endsWith(".png")) 64L else 500L
+        assertTrue("Test fixture empty: $name", file.length() > minimum)
         return file
     }
 

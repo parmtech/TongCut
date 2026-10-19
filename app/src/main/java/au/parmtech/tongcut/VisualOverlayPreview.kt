@@ -2,9 +2,13 @@ package au.parmtech.tongcut
 
 import android.net.Uri
 import android.view.TextureView
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -73,8 +77,24 @@ internal fun VisualOverlayPreview(
             val player = remember(context,layer.id,layer.sourceUri) {
                 ExoPlayer.Builder(context).build().apply { volume = 0f }
             }
+            var videoAspect by remember(player) { mutableFloatStateOf(16f / 9f) }
             DisposableEffect(player) {
-                onDispose { player.release() }
+                val listener = object : Player.Listener {
+                    override fun onVideoSizeChanged(size: VideoSize) {
+                        if (size.width <= 0 || size.height <= 0) return
+                        val rotated = size.unappliedRotationDegrees == 90 ||
+                            size.unappliedRotationDegrees == 270
+                        val w = if (rotated) size.height else size.width
+                        val h = if (rotated) size.width else size.height
+                        val ratio = w.toFloat() * size.pixelWidthHeightRatio / h.toFloat()
+                        if (ratio.isFinite() && ratio in 0.1f..10f) videoAspect = ratio
+                    }
+                }
+                player.addListener(listener)
+                onDispose {
+                    player.removeListener(listener)
+                    player.release()
+                }
             }
             LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs,
                 layer.sourceSpanUs, layer.playbackSpeed, layer.speedRamp) {
@@ -104,12 +124,21 @@ internal fun VisualOverlayPreview(
                     player.seekTo(withinClip)
                 if (playing) player.play() else player.pause()
             }
-            AndroidView(
-                factory = { viewContext ->
-                    TextureView(viewContext).also { player.setVideoTextureView(it) }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+            // A bare TextureView stretches portrait overlays to 16:9; fit the
+            // actual decoded video aspect in the same bounded PiP box used by
+            // Media3 export. PlayerView's SurfaceView would bypass layer alpha.
+            BoxWithConstraints(
+                Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+            ) {
+                val fittedWidth = minOf(maxWidth, maxHeight * videoAspect)
+                val fittedHeight = fittedWidth / videoAspect
+                AndroidView(
+                    factory = { viewContext ->
+                        TextureView(viewContext).also { player.setVideoTextureView(it) }
+                    },
+                    modifier = Modifier.size(fittedWidth, fittedHeight)
+                )
+            }
         }
     }
 }
