@@ -170,7 +170,11 @@ data class TimelineLayer(
 
     /** Relative source position, not project position. */
     fun sourceAt(positionUs: Long): Long {
-        val output = (positionUs - startUs).coerceIn(0L, durationUs)
+        // Compare BEFORE subtracting: a stale negative seek on a layer near
+        // Long.MAX_VALUE can wrap positive and incorrectly choose the final
+        // source frame instead of its first frame.
+        val output = if (positionUs <= startUs) 0L
+            else (positionUs - startUs).coerceAtMost(durationUs)
         if (sourceSpanUs != null && output >= durationUs) {
             return sourceInUs + sourceSpanUs
         }
