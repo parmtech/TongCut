@@ -22,13 +22,17 @@ internal fun LayerTools(
     onAddAudio: () -> Unit,
     onAddVisual: (LayerKind) -> Unit = {},
     onFreezeVideo: (String, Long) -> Unit = { _, _ -> },
-    onError: (String) -> Unit
+    onError: (String) -> Unit,
+    selectedGroupIds: Set<String> = emptySet(),
+    onGroupToggle: (String) -> Unit = {},
+    onGroupClear: () -> Unit = {}
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
     var entry by remember { mutableStateOf("") }
     val layers = draft.layers.layers
         .filter { it.kind == kind }
         .sortedWith(compareBy<TimelineLayer> { it.startUs }.thenBy { it.id })
+    val validGroup = selectedGroupIds.intersect(draft.layers.layers.map { it.id }.toSet())
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -59,6 +63,32 @@ internal fun LayerTools(
                     LayerKind.IMAGE -> "+ Add photo"
                     else -> "+ Add"
                 }, color = ProCyan)
+            }
+        }
+        if (validGroup.isNotEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            ) {
+                Text(
+                    "Group: ${validGroup.size} clips",
+                    color = Color.White, fontSize = 11.sp
+                )
+                if (validGroup.size >= 2) {
+                    SmallLayerButton("Group ◀ 0.5s") {
+                        runCatching {
+                            AdvancedClipEdits.moveGroupBy(draft, validGroup, -500L)
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Cannot move selected clips") }
+                    }
+                    SmallLayerButton("Group 0.5s ▶") {
+                        runCatching {
+                            AdvancedClipEdits.moveGroupBy(draft, validGroup, 500L)
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Cannot move selected clips") }
+                    }
+                }
+                SmallLayerButton("Clear selection") { onGroupClear() }
             }
         }
         layers.forEach { layer ->
@@ -93,6 +123,9 @@ internal fun LayerTools(
                     if (kind == LayerKind.TEXT) {
                         SmallLayerButton("Edit") { editingId = layer.id; entry = layer.text.orEmpty() }
                     }
+                    SmallLayerButton(
+                        if (layer.id in validGroup) "✓ Group" else "+ Group"
+                    ) { onGroupToggle(layer.id) }
                     SmallLayerButton("Split ◆") {
                         runCatching {
                             LayerEdits.splitLayerAtFrame(

@@ -82,6 +82,13 @@ fun VideoEditorScreen(
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
     var audioWarning by remember { mutableStateOf<String?>(null) }
+    // Selected independent clips can span AUDIO/TEXT/VIDEO/IMAGE panels.
+    // Selection is transient UI state; moving them commits one persistent undo edit.
+    var groupIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val onGroupToggle: (String) -> Unit = { id ->
+        groupIds = if (id in groupIds) groupIds - id else groupIds + id
+    }
+    val onGroupClear: () -> Unit = { groupIds = emptySet() }
 
     val scope = rememberCoroutineScope()
     val currentDraft = rememberUpdatedState(draft)
@@ -761,25 +768,37 @@ fun VideoEditorScreen(
                         LayerTools(
                             active, playMs, LayerKind.AUDIO, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                            onError = onInfo
+                            onError = onInfo,
+                            selectedGroupIds = groupIds,
+                            onGroupToggle = onGroupToggle,
+                            onGroupClear = onGroupClear
                         )
                     }
                     "Text" -> LayerTools(
                         active, playMs, LayerKind.TEXT, onChange,
                         onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                        onError = onInfo
+                        onError = onInfo,
+                            selectedGroupIds = groupIds,
+                            onGroupToggle = onGroupToggle,
+                            onGroupClear = onGroupClear
                     )
                     "Overlay" -> {
                         LayerTools(
                             active, playMs, LayerKind.VIDEO, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                             onAddVisual = ::chooseOverlay,
-                            onFreezeVideo = ::freezeVideoOverlay, onError = onInfo
+                            onFreezeVideo = ::freezeVideoOverlay, onError = onInfo,
+                            selectedGroupIds = groupIds,
+                            onGroupToggle = onGroupToggle,
+                            onGroupClear = onGroupClear
                         )
                         LayerTools(
                             active, playMs, LayerKind.IMAGE, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                            onAddVisual = ::chooseOverlay, onError = onInfo
+                            onAddVisual = ::chooseOverlay, onError = onInfo,
+                            selectedGroupIds = groupIds,
+                            onGroupToggle = onGroupToggle,
+                            onGroupClear = onGroupClear
                         )
                     }
                     else -> Text("$opened tools are being implemented. No nonfunctional editing buttons.",
