@@ -910,6 +910,7 @@ fun VideoEditorScreen(
                             active, playMs, LayerKind.AUDIO, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                             onError = onInfo,
+                            focusedLayerId = selectedLayerId,
                             selectedGroupIds = groupIds,
                             onGroupToggle = onGroupToggle,
                             onGroupClear = onGroupClear
@@ -919,7 +920,8 @@ fun VideoEditorScreen(
                         active, playMs, LayerKind.TEXT, onChange,
                         onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                         onError = onInfo,
-                        selectedGroupIds = groupIds,
+                        focusedLayerId = selectedLayerId,
+                            selectedGroupIds = groupIds,
                         onGroupToggle = onGroupToggle,
                         onGroupClear = onGroupClear
                     )
@@ -945,7 +947,8 @@ fun VideoEditorScreen(
                         LayerTools(
                             active, playMs, LayerKind.TEXT, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                            onError = onInfo, selectedGroupIds = groupIds,
+                            onError = onInfo, focusedLayerId = selectedLayerId,
+                            selectedGroupIds = groupIds,
                             onGroupToggle = onGroupToggle, onGroupClear = onGroupClear
                         )
                     }
@@ -955,6 +958,7 @@ fun VideoEditorScreen(
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                             onAddVisual = ::chooseOverlay,
                             onFreezeVideo = ::freezeVideoOverlay, onError = onInfo,
+                            focusedLayerId = selectedLayerId,
                             selectedGroupIds = groupIds,
                             onGroupToggle = onGroupToggle,
                             onGroupClear = onGroupClear
@@ -963,6 +967,7 @@ fun VideoEditorScreen(
                             active, playMs, LayerKind.IMAGE, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                             onAddVisual = ::chooseOverlay, onError = onInfo,
+                            focusedLayerId = selectedLayerId,
                             selectedGroupIds = groupIds,
                             onGroupToggle = onGroupToggle,
                             onGroupClear = onGroupClear
