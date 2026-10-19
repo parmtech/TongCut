@@ -145,7 +145,12 @@ private class MatteShader(
                     float difference = length(pixel.rgb - uKeyColor) * 0.57735026919;
                     matte *= edge(uTolerance, uTolerance + uKeyFeather, difference);
                 }
-                gl_FragColor = vec4(pixel.rgb, pixel.a * matte);
+                // GPU video surfaces are premultiplied when composited by
+                // the Android window. Keeping green RGB at alpha 0 adds a
+                // cyan fringe over a blue underlying video in TextureView.
+                // Premultiply the RGB by the actual matte before compositing.
+                float keyedAlpha = pixel.a * matte;
+                gl_FragColor = vec4(pixel.rgb * keyedAlpha, keyedAlpha);
             }
         """
     }
