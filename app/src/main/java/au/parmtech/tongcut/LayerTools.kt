@@ -403,6 +403,14 @@ internal fun LayerTools(
                             }.onSuccess(onChange)
                                 .onFailure { onError(it.message ?: "Audio speed failed") }
                         }
+                        SpeedRhythmPreset.entries.forEach { preset ->
+                            SmallLayerButton("Audio: ${preset.label}") {
+                                runCatching {
+                                    AudioSpeedEdits.applyPreset(draft,layer.id,preset)
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Audio speed preset failed") }
+                            }
+                        }
                         SmallLayerButton("Speed key here") {
                             runCatching {
                                 AudioSpeedEdits.addKeyAt(
@@ -440,7 +448,8 @@ internal fun LayerTools(
                             .onSuccess(onChange).onFailure { onError(it.message ?: "Delete failed") }
                     }
                 }
-                if (kind == LayerKind.VIDEO && layer.speedRamp.isNotEmpty()) {
+                if (kind in setOf(LayerKind.VIDEO, LayerKind.AUDIO) &&
+                    layer.speedRamp.isNotEmpty()) {
                     SpeedCurveEditor(draft, layer, onChange, onError)
                 }
                 if (kind in setOf(LayerKind.VIDEO, LayerKind.IMAGE, LayerKind.TEXT) &&

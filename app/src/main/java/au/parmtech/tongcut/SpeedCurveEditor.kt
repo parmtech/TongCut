@@ -19,7 +19,7 @@ import kotlin.math.abs
 import kotlin.math.roundToLong
 
 /**
- * Editable video speed graph. X is source clock, Y is the step's playback speed.
+ * Editable video/audio speed graph. X is source clock, Y is the step's playback speed.
  * This intentionally matches the piecewise-constant SpeedRamp provider used
  * for preview and Media3 output; drawing smooth slopes would be misleading.
  */
@@ -30,7 +30,8 @@ internal fun SpeedCurveEditor(
     onChange: (EditorDraft) -> Unit,
     onError: (String) -> Unit
 ) {
-    if (layer.kind != LayerKind.VIDEO || layer.speedRamp.isEmpty()) return
+    if (layer.kind !in setOf(LayerKind.VIDEO, LayerKind.AUDIO) ||
+        layer.speedRamp.isEmpty()) return
     val points = layer.speedRamp
     val sourceSpan = layer.consumedSourceUs
     var chosenOffset by remember(layer.id) { mutableLongStateOf(0L) }
@@ -100,7 +101,10 @@ internal fun SpeedCurveEditor(
             onValueChangeFinished = {
                 val speed = (sliderValue * 20f).roundToLong() / 20f
                 runCatching {
-                    LayerEdits.changeSpeedKey(draft,layer.id,selected.sourceOffsetUs,speed)
+                    if (layer.kind == LayerKind.AUDIO)
+                        AudioSpeedEdits.changeKey(draft,layer.id,selected.sourceOffsetUs,speed)
+                    else
+                        LayerEdits.changeSpeedKey(draft,layer.id,selected.sourceOffsetUs,speed)
                 }.onSuccess(onChange)
                     .onFailure { onError(it.message ?: "Speed key edit failed") }
             },
@@ -120,7 +124,11 @@ internal fun SpeedCurveEditor(
                         val movedUs = (selected.sourceOffsetUs / 1_000L +
                             direction * frameMs).coerceAtLeast(1L) * 1_000L
                         runCatching {
-                            LayerEdits.moveSpeedKey(
+                            if (layer.kind == LayerKind.AUDIO)
+                                AudioSpeedEdits.moveKey(
+                                    draft,layer.id,selected.sourceOffsetUs,movedUs
+                                )
+                            else LayerEdits.moveSpeedKey(
                                 draft,layer.id,selected.sourceOffsetUs,movedUs
                             )
                         }.onSuccess {
@@ -139,7 +147,10 @@ internal fun SpeedCurveEditor(
                 enabled = selected.sourceOffsetUs != 0L,
                 onClick = {
                     runCatching {
-                        LayerEdits.removeSpeedKey(draft,layer.id,selected.sourceOffsetUs)
+                        if (layer.kind == LayerKind.AUDIO)
+                            AudioSpeedEdits.removeKey(draft,layer.id,selected.sourceOffsetUs)
+                        else
+                            LayerEdits.removeSpeedKey(draft,layer.id,selected.sourceOffsetUs)
                     }.onSuccess {
                         chosenOffset = 0L
                         onChange(it)

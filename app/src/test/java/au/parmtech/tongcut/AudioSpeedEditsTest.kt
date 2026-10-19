@@ -141,4 +141,65 @@ class AudioSpeedEditsTest {
         assertEquals(1_000_000L,rightShort.consumedSourceUs)
         assertEquals(500_000L,rightShort.durationUs)
     }
+
+    @Test fun audioCurveGraphEditsPersistAndUndoAsSingleSteps() {
+        val original = draft()
+        val layerId = original.layers.layers.single().id
+        val preset = AudioSpeedEdits.applyPreset(original,layerId,SpeedRhythmPreset.PULSE)
+        assertEquals(4,preset.layers.layers.single().speedRamp.size)
+        assertEquals(4_000_000L,preset.layers.layers.single().consumedSourceUs)
+        val first = preset.layers.layers.single().speedRamp[1]
+        val changed = AudioSpeedEdits.changeKey(preset,layerId,first.sourceOffsetUs,0.75f)
+        assertEquals(0.75f,changed.layers.layers.single().speedRamp[1].speed,0.0001f)
+        assertEquals(first.speed,preset.layers.layers.single().speedRamp[1].speed,0.0001f)
+
+        val moved = AudioSpeedEdits.moveKey(changed,layerId,first.sourceOffsetUs,1_250_000L)
+        assertEquals(1_250_000L,moved.layers.layers.single().speedRamp[1].sourceOffsetUs)
+        assertEquals(4_000_000L,moved.layers.layers.single().consumedSourceUs)
+        val removed = AudioSpeedEdits.removeKey(moved,layerId,1_250_000L)
+        assertEquals(3,removed.layers.layers.single().speedRamp.size)
+        assertEquals(0L,removed.layers.layers.single().speedRamp.first().sourceOffsetUs)
+
+        val history = EditHistory(original)
+        history.apply(preset)
+        history.apply(changed)
+        assertEquals(preset,history.undo())
+        assertEquals(changed,history.redo())
+    }
+
+    @Test fun audioCurveGraphRejectsDuplicateOrMissingKeysAndLockedTracks() {
+        val input = draft()
+        val id = input.layers.layers.single().id
+        val preset = AudioSpeedEdits.applyPreset(input,id,SpeedRhythmPreset.PULSE)
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioSpeedEdits.moveKey(preset,id,1_000_000L,2_000_000L)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioSpeedEdits.moveKey(preset,id,0L,250_000L)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioSpeedEdits.removeKey(preset,id,0L)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioSpeedEdits.changeKey(preset,id,1_250_000L,2f)
+        }
+        val locked = LayerEdits.setTrackLocked(preset,preset.layers.tracks.single().id,true)
+        assertThrows(IllegalArgumentException::class.java) {
+            AudioSpeedEdits.changeKey(locked,id,1_000_000L,0.5f)
+        }
+    }
+
+    @Test fun audioSpeedPresetResetReturnsToOriginalSourceDuration() {
+        val input = draft()
+        val id = input.layers.layers.single().id
+        val rush = AudioSpeedEdits.applyPreset(input,id,SpeedRhythmPreset.RUSH)
+        assertTrue(rush.layers.layers.single().durationUs < 5_000_000L)
+        val reset = AudioSpeedEdits.applyPreset(rush,id,SpeedRhythmPreset.RESET)
+        val layer = reset.layers.layers.single()
+        assertEquals(4_000_000L,layer.durationUs)
+        assertEquals(4_000_000L,layer.consumedSourceUs)
+        assertEquals(4_000_000L,layer.sourceAt(layer.endUs))
+        assertEquals(input.layers.layers.single().startUs,layer.startUs)
+    }
+
 }

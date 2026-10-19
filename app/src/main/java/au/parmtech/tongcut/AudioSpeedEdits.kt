@@ -73,6 +73,57 @@ object AudioSpeedEdits {
         return setCurve(draft,id,SpeedRhythmPresets.build(span,preset))
     }
 
+    /** Change one source-clock audio speed key while preserving all other keys. */
+    fun changeKey(
+        draft: EditorDraft, id: String, sourceOffsetUs: Long, speed: Float
+    ): EditorDraft {
+        require(speed.isFinite() && speed in 0.25f..4f)
+        val clip = audio(draft, id)
+        require(clip.speedRamp.any { it.sourceOffsetUs == sourceOffsetUs }) {
+            "Audio speed key no longer exists"
+        }
+        return setCurve(draft, id, clip.speedRamp.map {
+            if (it.sourceOffsetUs == sourceOffsetUs) it.copy(speed = speed) else it
+        })
+    }
+
+    /** Reposition a nonzero AUDIO key without ever moving its source-zero anchor. */
+    fun moveKey(
+        draft: EditorDraft, id: String, sourceOffsetUs: Long, newSourceOffsetUs: Long
+    ): EditorDraft {
+        val clip = audio(draft, id)
+        require(sourceOffsetUs != 0L) { "The initial audio speed key cannot move" }
+        require(newSourceOffsetUs > 0L &&
+            newSourceOffsetUs < clip.consumedSourceUs &&
+            newSourceOffsetUs % 1_000L == 0L) {
+            "Audio speed key must stay at a valid source millisecond"
+        }
+        require(clip.speedRamp.any { it.sourceOffsetUs == sourceOffsetUs }) {
+            "Audio speed key no longer exists"
+        }
+        require(clip.speedRamp.none {
+            it.sourceOffsetUs == newSourceOffsetUs && it.sourceOffsetUs != sourceOffsetUs
+        }) { "Another speed key exists at that source frame" }
+        return setCurve(draft, id, clip.speedRamp.map {
+            if (it.sourceOffsetUs == sourceOffsetUs)
+                it.copy(sourceOffsetUs = newSourceOffsetUs) else it
+        }.sortedBy { it.sourceOffsetUs })
+    }
+
+    /** Delete a nonzero AUDIO key while retaining the initial speed. */
+    fun removeKey(
+        draft: EditorDraft, id: String, sourceOffsetUs: Long
+    ): EditorDraft {
+        val clip = audio(draft, id)
+        require(sourceOffsetUs != 0L) { "Cannot delete initial audio speed key" }
+        require(clip.speedRamp.any { it.sourceOffsetUs == sourceOffsetUs }) {
+            "Audio speed key no longer exists"
+        }
+        return setCurve(draft, id, clip.speedRamp.filterNot {
+            it.sourceOffsetUs == sourceOffsetUs
+        })
+    }
+
     fun setCurve(
         draft: EditorDraft, id: String, points: List<SpeedKeyframe>
     ): EditorDraft {
