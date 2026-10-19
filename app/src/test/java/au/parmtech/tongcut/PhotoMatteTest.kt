@@ -28,6 +28,20 @@ class PhotoMatteTest {
         assertEquals(1f,PhotoMatte.chromaAlpha(0xFFFF0000.toInt(),key),0f)
     }
 
+    @Test fun keyFeatherSoftensOnlyTheChromaBoundaryNotTheShapeMask() {
+        val hard = PhotoChroma(tolerance = 0.12f, feather = 0f)
+        val soft = hard.copy(feather = 0.2f)
+        // Partially desaturated green near the key: the hard key retains it,
+        // while the feathered key progressively removes the green edge.
+        val lightGreen = 0xFF33D633.toInt()
+        val hardAlpha = PhotoMatte.chromaAlpha(lightGreen, hard)
+        val softAlpha = PhotoMatte.chromaAlpha(lightGreen, soft)
+        assertTrue("A soft chroma boundary should differ from a hard key",
+            softAlpha < hardAlpha)
+        assertEquals(0.04f, PhotoEffects(chroma = soft).feather, 0f)
+        assertEquals(0.2f, PhotoEffects(chroma = soft).chroma!!.feather, 0f)
+    }
+
     @Test fun originalAlphaIsMultipliedRatherThanLost() {
         val fx=PhotoEffects(chroma=PhotoChroma())
         val redHalf=0x80FF0000.toInt()
