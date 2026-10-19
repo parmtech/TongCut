@@ -95,6 +95,9 @@ fun VideoEditorScreen(
     // Selected independent clips can span AUDIO/TEXT/VIDEO/IMAGE panels.
     // Selection is transient UI state; moving them commits one persistent undo edit.
     var groupIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // A single selected layer drives the familiar clip-first editing tool rail.
+    // This is transient navigation state, not a second mutable edit timeline.
+    var selectedLayerId by remember { mutableStateOf<String?>(null) }
     val onGroupToggle: (String) -> Unit = { id ->
         groupIds = if (id in groupIds) groupIds - id else groupIds + id
     }
@@ -444,6 +447,11 @@ fun VideoEditorScreen(
 
     val active = previewDraft ?: draft
     val clip = active.selectedClip
+    val selectedLayer = active.layers.layers.firstOrNull { it.id == selectedLayerId }
+    LaunchedEffect(active.layers.layers.map { it.id }) {
+        if (selectedLayerId != null &&
+            active.layers.layers.none { it.id == selectedLayerId }) selectedLayerId = null
+    }
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
     val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
@@ -749,6 +757,7 @@ fun VideoEditorScreen(
                     playMs = point.timelineMs
                 },
                 onSelect = { index ->
+                    selectedLayerId = null
                     if (index != active.selectedIndex) onChange(active.copy(selectedIndex = index))
                     else {
                         player.pause()
@@ -761,7 +770,9 @@ fun VideoEditorScreen(
                 onAddText = { panel = "Text" },
                 onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                 onAddVisual = ::chooseOverlay,
-                onLayerSelect = { kind ->
+                selectedLayerId = selectedLayerId,
+                onLayerSelect = { kind, id ->
+                    selectedLayerId = id
                     panel = when (kind) {
                         LayerKind.TEXT -> "Text"
                         LayerKind.AUDIO -> "Audio"
@@ -963,26 +974,93 @@ fun VideoEditorScreen(
             }
         }
 
-        LazyRow(
-            modifier = Modifier.fillMaxWidth().height(89.dp)
-                .background(Color(0xFF151515)),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)
-        ) {
-            itemsIndexed(tools) { _, item ->
-                Column(
-                    modifier = Modifier.width(65.dp).fillMaxHeight()
-                        .clickable {
-                            panel = if (panel == item.name) null else item.name
-                            if (item.name in listOf("Effects", "Adjust", "AI"))
-                                onUnavailable(item.name)
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Icon(item.icon, item.name, modifier = Modifier.size(29.dp),
-                        tint = if (panel == item.name) ProCyan else Color(0xFFD9D9D9))
-                    Text(item.name, color = Color.White, fontSize = 12.sp)
+        if (selectedLayer != null) {
+            // True clip-first navigation: a tapped track opens context-specific
+            // actions while the main tool rail remains one "Back" tap away.
+            ClipContextBar(
+                layer = selectedLayer,
+                muted = active.layers.tracks.firstOrNull {
+                    it.id == selectedLayer.trackId
+                }?.muted == true,
+                onAction = { action ->
+                    val layerId = selectedLayer.id
+                    val timelineUs = ChromaSampleMath.safeProjectTimeUs(playMs)
+                    fun applyEdit(edit: (EditorDraft) -> EditorDraft) {
+                        runCatching { edit(active) }
+                            .onSuccess(onChange)
+                            .onFailure { onInfo(it.message ?: "Unable to edit selected clip") }
+                    }
+                    when (action) {
+                        ClipAction.BACK -> {
+                            selectedLayerId = null
+                            panel = null
+                        }
+                        ClipAction.SPLIT -> applyEdit {
+                            LayerEdits.splitLayerAtFrame(it, layerId, timelineUs)
+                        }
+                        ClipAction.TRIM_START -> applyEdit {
+                            LayerEdits.trimLayerStartAtFrame(it, layerId, timelineUs)
+                        }
+                        ClipAction.TRIM_END -> applyEdit {
+                            LayerEdits.trimLayerEndAtFrame(it, layerId, timelineUs)
+                        }
+                        ClipAction.DUPLICATE -> applyEdit {
+                            AdvancedClipEdits.duplicateAt(it, layerId, playMs)
+                        }
+                        ClipAction.KEYFRAME -> applyEdit {
+                            LayerEdits.setMotionAt(it, layerId, playMs, mutate = { pose -> pose })
+                        }
+                        ClipAction.TOOLS -> {
+                            panel = when (selectedLayer.kind) {
+                                LayerKind.AUDIO -> "Audio"
+                                LayerKind.TEXT -> "Text"
+                                LayerKind.VIDEO, LayerKind.IMAGE -> "Overlay"
+                                LayerKind.STICKER -> null
+                            }
+                        }
+                        ClipAction.MUTE -> {
+                            if (selectedLayer.kind == LayerKind.AUDIO) {
+                                val track = active.layers.tracks.firstOrNull {
+                                    it.id == selectedLayer.trackId
+                                }
+                                if (track != null) applyEdit {
+                                    LayerEdits.setTrackMuted(it, track.id, !track.muted)
+                                }
+                            }
+                        }
+                        ClipAction.DELETE -> {
+                            runCatching { LayerEdits.remove(active, layerId) }
+                                .onSuccess {
+                                    onChange(it)
+                                    selectedLayerId = null
+                                    panel = null
+                                }.onFailure { onInfo(it.message ?: "Cannot delete this layer") }
+                        }
+                    }
+                }
+            )
+        } else {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().height(89.dp)
+                    .background(Color(0xFF151515)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp)
+            ) {
+                itemsIndexed(tools) { _, item ->
+                    Column(
+                        modifier = Modifier.width(65.dp).fillMaxHeight()
+                            .clickable {
+                                panel = if (panel == item.name) null else item.name
+                                if (item.name in listOf("Effects", "Adjust", "AI"))
+                                    onUnavailable(item.name)
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Icon(item.icon, item.name, modifier = Modifier.size(29.dp),
+                            tint = if (panel == item.name) ProCyan else Color(0xFFD9D9D9))
+                        Text(item.name, color = Color.White, fontSize = 12.sp)
+                    }
                 }
             }
         }
