@@ -50,6 +50,7 @@ private val tools = listOf(
     ProTool("AI", Icons.Default.SmartToy)
 )
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun VideoEditorScreen(
     draft: EditorDraft,

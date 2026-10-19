@@ -19,12 +19,19 @@ data class TimelineRate(val numerator: Int = 30, val denominator: Int = 1) {
 
     private fun bi(value: Long) = BigInteger.valueOf(value)
 
+    // BigInteger.longValueExact is only exposed at Android API 31+, but TongCut supports 29.
+    // Nonnegative frame counts fit in Long precisely if their bit length is <= 63.
+    private fun BigInteger.checkedLong(): Long {
+        require(signum() >= 0 && bitLength() <= 63) { "Frame timestamp exceeds supported range" }
+        return toLong()
+    }
+
     /** Floor of exact time-to-frame conversion, including 30000/1001 FPS. */
     fun frameAt(us: Long): Long {
         require(us >= 0)
         val numeratorUs = bi(us).multiply(bi(numerator.toLong()))
         val denominatorUs = bi(1_000_000L).multiply(bi(denominator.toLong()))
-        return numeratorUs.divide(denominatorUs).longValueExact()
+        return numeratorUs.divide(denominatorUs).checkedLong()
     }
 
     /** Earliest integer microsecond belonging to the requested frame. */
@@ -34,7 +41,7 @@ data class TimelineRate(val numerator: Int = 30, val denominator: Int = 1) {
             .multiply(bi(denominator.toLong()))
             .multiply(bi(1_000_000L))
         val rateN = bi(numerator.toLong())
-        return numeratorUs.add(rateN.subtract(BigInteger.ONE)).divide(rateN).longValueExact()
+        return numeratorUs.add(rateN.subtract(BigInteger.ONE)).divide(rateN).checkedLong()
     }
 
     fun nearestFrameUs(us: Long): Long {

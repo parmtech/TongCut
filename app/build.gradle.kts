@@ -17,6 +17,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
+        debug {
+            // Internal TEST package, installed alongside older TongCut debug builds.
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-TEST"
+        }
         release {
             isMinifyEnabled = false
         }
