@@ -88,6 +88,7 @@ data class TimelineLayer(
     val sourceInUs: Long = 0,
     val sourceDurationUs: Long? = null,
     val text: String? = null,
+    val captionStyle: CaptionStyle = CaptionStyle(),
     val motion: List<MotionKeyframe> = emptyList(),
     val playbackSpeed: Float = 1f,
     val sourceSpanUs: Long? = null,
@@ -153,7 +154,7 @@ data class TimelineLayer(
             require(sourceInUs == 0L && sourceDurationUs == null)
         } else {
             require(!sourceUri.isNullOrBlank())
-            require(text == null)
+            require(text == null && captionStyle == CaptionStyle())
             if (kind == LayerKind.VIDEO || kind == LayerKind.AUDIO) {
                 val consumedUs = consumedSourceUs
                 require(sourceInUs <= Long.MAX_VALUE - consumedUs)
