@@ -10,7 +10,7 @@
 - Explicit export guard: until a shared renderer can render all layered content, an edit that contains overlay layers will not silently export only the primary video.
 
 ## P2 acceptance criteria still NOT complete
-- [ ] Real per-frame thumbnails extracted at temporal offsets; current gallery thumbnails repeat one poster per clip.
+- [x] Source timeline thumbnails sample distinct source timestamps via Android's MediaMetadataRetriever with bounded in-memory cache (device testing pending).
 - [ ] Multi-track UI: independent draggable video/audio/image/text lanes, lock/mute/solo, visible layer selection.
 - [ ] Native audio waveform generation, caching, zoom and snapping gesture accuracy.
 - [ ] Shared composited video preview and exported video output for all supported layer types.
