@@ -6,7 +6,8 @@ data class DraftClip(
     val label: String,
     val durationMs: Long,
     val inMs: Long = 0,
-    val outMs: Long = durationMs
+    val outMs: Long = durationMs,
+    val sourceAudioMuted: Boolean = false
 ) {
     init {
         require(sourceUri.isNotBlank()) { "Missing source" }
@@ -25,7 +26,7 @@ data class DraftClip(
         require(replacementDurationMs >= 100) { "Replacement video is too short" }
         val safeStart = inMs.coerceIn(0L, replacementDurationMs - 100)
         val safeEnd = outMs.coerceIn(safeStart + 100, replacementDurationMs)
-        return DraftClip(uri, name, replacementDurationMs, safeStart, safeEnd)
+        return DraftClip(uri, name, replacementDurationMs, safeStart, safeEnd, sourceAudioMuted)
     }
 
     /** Splits on the SOURCE timeline. Each result must keep at least 100 ms. */
