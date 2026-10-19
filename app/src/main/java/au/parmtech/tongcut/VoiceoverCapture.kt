@@ -15,6 +15,9 @@ internal class VoiceoverCapture(private val context: Context) {
     private var destination: File? = null
     val isRecording: Boolean get() = recorder != null
 
+    @Suppress("DEPRECATION")
+    private fun legacyRecorder(): MediaRecorder = MediaRecorder()
+
     fun start() {
         check(!isRecording) { "A voiceover recording is already active" }
         val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
@@ -23,9 +26,10 @@ internal class VoiceoverCapture(private val context: Context) {
         val file = File(directory, "TongCut-voice-${UUID.randomUUID()}.m4a")
         var initialized: MediaRecorder? = null
         try {
-            initialized = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context)
-                else @Suppress("DEPRECATION") MediaRecorder()
-            initialized.apply {
+            val active = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(context)
+                else legacyRecorder()
+            initialized = active
+            active.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
@@ -70,8 +74,8 @@ internal class VoiceoverCapture(private val context: Context) {
             file.delete()
             throw IllegalStateException("Voiceover could not be saved: ${failure.message}", failure)
         } finally {
-            active.reset()
-            active.release()
+            runCatching { active.reset() }
+            runCatching { active.release() }
         }
     }
 
