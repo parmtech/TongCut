@@ -61,12 +61,14 @@ data class TimelineTrack(
     val order: Int,
     val locked: Boolean = false,
     val hidden: Boolean = false,
-    val muted: Boolean = false
+    val muted: Boolean = false,
+    val gain: Float = 1f
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
         require(name.isNotBlank() && name.length <= 120)
         require(order >= 0)
+        require(gain.isFinite() && gain in 0f..1f) { "Audio gain must be 0–100%" }
     }
 }
 

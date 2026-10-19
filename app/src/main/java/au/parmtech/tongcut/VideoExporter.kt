@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import androidx.media3.common.C
+import androidx.media3.common.audio.GainProcessor
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
@@ -120,11 +121,21 @@ class VideoExporter(private val context: Context) {
                                         .setEndPositionMs(endMs)
                                         .build()
                                 ).build()
-                            audioOnly.addItem(
-                                EditedMediaItem.Builder(media)
-                                    .setRemoveVideo(true)
-                                    .build()
-                            )
+                            val edited = EditedMediaItem.Builder(media)
+                                .setRemoveVideo(true)
+                            if (lane.gain < 1f) {
+                                val processor = GainProcessor(object : GainProcessor.GainProvider {
+                                    override fun getGainFactorAtSamplePosition(
+                                        samplePosition: Long, sampleRate: Int
+                                    ): Float = lane.gain
+
+                                    override fun isUnityUntil(
+                                        samplePosition: Long, sampleRate: Int
+                                    ): Long = C.TIME_UNSET
+                                })
+                                edited.setEffects(Effects(listOf(processor), emptyList()))
+                            }
+                            audioOnly.addItem(edited.build())
                         }
                     }
                 }

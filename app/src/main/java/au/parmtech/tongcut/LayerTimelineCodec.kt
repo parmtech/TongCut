@@ -22,6 +22,7 @@ object LayerTimelineCodec {
                     put("locked", track.locked)
                     put("hidden", track.hidden)
                     put("muted", track.muted)
+                    put("gain", track.gain.toDouble())
                 })
             }
         })
@@ -62,7 +63,8 @@ object LayerTimelineCodec {
                 order = track.getInt("order"),
                 locked = track.optBoolean("locked", false),
                 hidden = track.optBoolean("hidden", false),
-                muted = track.optBoolean("muted", false)
+                muted = track.optBoolean("muted", false),
+                gain = track.optDouble("gain", 1.0).toFloat()
             )
         }
         val clips = (0 until itemsJson.length()).map { i ->

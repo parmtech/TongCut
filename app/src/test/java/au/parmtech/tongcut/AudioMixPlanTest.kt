@@ -61,4 +61,17 @@ class AudioMixPlanTest {
     @Test fun noAudioKeepsVideoUntouched() {
         assertEquals(emptyList<AudioLanePlan>(), AudioMixPlan.from(LayerTimeline(),videoUs))
     }
+
+    @Test fun gainTransfersToSequencePlan() {
+        val data = LayerTimeline(
+            tracks=listOf(lane.copy(gain = 0.5f)),
+            layers=listOf(clip("voice",0,1_000_000))
+        )
+        assertEquals(0.5f, AudioMixPlan.from(data, videoUs).single().gain)
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun invalidGainRejected() {
+        lane.copy(gain = Float.NaN)
+    }
 }

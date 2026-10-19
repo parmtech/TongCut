@@ -62,6 +62,7 @@ class AudioOverlayEngine(private val context: Context) {
             val offsetMs = ((timeUs - layer.startUs) / 1_000L)
                 .coerceIn(0, (layer.durationUs / 1_000L).coerceAtLeast(0L))
             val decoder = entry.player
+            decoder.volume = trackMap[layer.trackId]?.gain ?: 1f
             // Resynchronise after scrubbing / large drift, not every 90ms tick.
             if (abs(decoder.currentPosition - offsetMs) > 240L) {
                 decoder.seekTo(offsetMs)

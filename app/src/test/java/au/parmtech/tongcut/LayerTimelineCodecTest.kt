@@ -48,4 +48,19 @@ class LayerTimelineCodecTest {
         obj.getJSONArray("layers").getJSONObject(0).put("trackId","missing")
         LayerTimelineCodec.decode(obj)
     }
+
+    @Test fun olderProjectWithoutGainPreservesFullVolume() {
+        val encoded = LayerTimelineCodec.encode(timeline)
+        val tracks = encoded.getJSONArray("tracks")
+        for (index in 0 until tracks.length()) {
+            tracks.getJSONObject(index).remove("gain")
+        }
+        val decoded = LayerTimelineCodec.decode(encoded)
+        assertTrue(decoded.tracks.all { it.gain == 1f })
+    }
+
+    @Test fun gainSurvivesLayerSaveRoundtrip() {
+        val changed = timeline.copy(tracks = timeline.tracks.map { it.copy(gain = 0.35f) })
+        assertEquals(changed, LayerTimelineCodec.decode(LayerTimelineCodec.encode(changed)))
+    }
 }

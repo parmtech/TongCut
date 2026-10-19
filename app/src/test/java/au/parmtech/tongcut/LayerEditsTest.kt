@@ -82,4 +82,21 @@ class LayerEditsTest {
         assertEquals(6_000_000L, trimmed.layers.layers.single().startUs)
         assertEquals(1_000_000L, trimmed.layers.layers.single().durationUs)
     }
+
+    @Test fun audioGainEditsAreReversible() {
+        val original = LayerEdits.addAudio(base(),0,"content://audio",2_000)
+        val track = original.layers.tracks.single()
+        val adjusted = LayerEdits.setAudioGain(original,track.id,0.4f)
+        assertEquals(1f, original.layers.tracks.single().gain)
+        assertEquals(0.4f, adjusted.layers.tracks.single().gain)
+        val history = EditHistory(original)
+        history.apply(adjusted)
+        assertEquals(original,history.undo())
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun invalidAudioGainRejected() {
+        val original = LayerEdits.addAudio(base(),0,"content://audio",2_000)
+        LayerEdits.setAudioGain(original,original.layers.tracks.single().id,1.5f)
+    }
 }

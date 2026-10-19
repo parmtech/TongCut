@@ -100,6 +100,15 @@ internal fun LayerTools(
                         SmallLayerButton(if (track.muted) "Unmute" else "Mute") {
                             onChange(LayerEdits.setTrackMuted(draft, track.id, !track.muted))
                         }
+                        SmallLayerButton("Vol −") {
+                            onChange(LayerEdits.setAudioGain(draft, track.id,
+                                (track.gain - 0.1f).coerceAtLeast(0f)))
+                        }
+                        Text("${(track.gain * 100).toInt()}%", color = Color.LightGray, fontSize = 11.sp)
+                        SmallLayerButton("Vol +") {
+                            onChange(LayerEdits.setAudioGain(draft, track.id,
+                                (track.gain + 0.1f).coerceAtMost(1f)))
+                        }
                     }
                     SmallLayerButton("Delete") {
                         runCatching { LayerEdits.remove(draft, layer.id) }

@@ -89,6 +89,16 @@ object LayerEdits {
             if (it.id == trackId) it.copy(muted = muted) else it
         }))
 
+    fun setAudioGain(draft: EditorDraft, trackId: String, gain: Float): EditorDraft {
+        require(gain.isFinite() && gain in 0f..1f)
+        val lane = draft.layers.tracks.firstOrNull { it.id == trackId }
+            ?: throw IllegalArgumentException("Audio track not found")
+        require(lane.kind == LayerKind.AUDIO && !lane.locked) { "Not an editable audio track" }
+        return draft.copy(layers = draft.layers.copy(tracks = draft.layers.tracks.map {
+            if (it.id == trackId) it.copy(gain = gain) else it
+        }))
+    }
+
     fun trimLayer(draft: EditorDraft, id: String, durationUs: Long): EditorDraft =
         draft.copy(layers = draft.layers.resizeLayer(id, durationUs.coerceAtLeast(1_000L)))
 

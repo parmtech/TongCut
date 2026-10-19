@@ -26,8 +26,10 @@ sealed interface AudioPart {
 
 data class AudioLanePlan(
     val trackId: String,
-    val parts: List<AudioPart>
+    val parts: List<AudioPart>,
+    val gain: Float = 1f
 ) {
+    init { require(gain.isFinite() && gain in 0f..1f) }
     val totalUs: Long get() = parts.sumOf { it.durationUs }
 }
 
@@ -69,7 +71,7 @@ object AudioMixPlan {
                 cursor = layer.endUs
             }
             if (cursor < videoDurationUs) parts += AudioPart.Gap(videoDurationUs - cursor)
-            AudioLanePlan(track.id, parts).also { plan ->
+            AudioLanePlan(track.id, parts, track.gain).also { plan ->
                 check(plan.totalUs == videoDurationUs) { "Audio layer drift in schedule" }
             }
         }
