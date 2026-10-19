@@ -448,6 +448,20 @@ object LayerEdits {
         }))
     }
 
+    /** One undoable style edit; no changes to caption timing or other clips. */
+    fun changeCaptionStyle(
+        draft: EditorDraft, id: String, style: CaptionStyle
+    ): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull {
+            it.id == id && it.kind == LayerKind.TEXT
+        } ?: throw IllegalArgumentException("Text layer not found")
+        val track = draft.layers.tracks.first { it.id == layer.trackId }
+        require(!track.locked) { "Unlock this caption track before styling" }
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(captionStyle = style) else it
+        }))
+    }
+
     fun remove(draft: EditorDraft, id: String): EditorDraft =
         draft.copy(layers = draft.layers.removeLayer(id))
 
