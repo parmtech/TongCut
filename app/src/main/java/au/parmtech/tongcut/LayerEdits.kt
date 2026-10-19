@@ -175,6 +175,7 @@ object LayerEdits {
         val image = TimelineLayer(
             id = UUID.randomUUID().toString(),
             trackId = photoLaneId,
+            visualSlot = VisualOverlaySlots.slotFor(draft.layers,source),
             kind = LayerKind.IMAGE,
             startUs = actualCut,
             durationUs = freezeUs,

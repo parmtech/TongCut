@@ -128,7 +128,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(6,json.getInt("schema"))
+        assertEquals(7,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
     }
 
@@ -163,7 +163,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(6,serialized.getInt("schema"))
+        assertEquals(7,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")

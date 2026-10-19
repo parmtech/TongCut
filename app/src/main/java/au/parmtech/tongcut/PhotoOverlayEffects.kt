@@ -22,12 +22,8 @@ object PhotoOverlayEffects {
             it.kind == LayerKind.IMAGE && byTrack[it.trackId]?.hidden != true
         }.sortedWith(compareBy<TimelineLayer> { byTrack[it.trackId]!!.order }.thenBy { it.startUs })
 
-        return photos.mapIndexed { index, layer ->
-            val position = when (index % 3) {
-                0 -> 0.55f to -0.55f
-                1 -> -0.55f to -0.55f
-                else -> 0.55f to 0.55f
-            }
+        return photos.map { layer ->
+            val position = VisualOverlaySlots.position(timeline,layer)
             object : BitmapOverlay() {
                 private var image: Bitmap? = null
 

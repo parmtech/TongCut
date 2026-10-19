@@ -31,12 +31,6 @@ import androidx.media3.transformer.EditedMediaItemSequence
 object VisualComposition {
     private val base = StaticOverlaySettings.Builder().build()
 
-    private val locations = listOf(
-        0.55f to -0.55f,
-        -0.55f to -0.55f,
-        0.55f to 0.55f
-    )
-
     fun exportLanes(timeline: LayerTimeline, totalUs: Long): List<VisualLanePlan> =
         CompositorVideoPlan.from(timeline, totalUs).overlayLanes
 
@@ -123,7 +117,11 @@ object VisualComposition {
                     MotionCurve.at(layer.motion,
                         (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs))
                 } else MotionPose()
-                val position = locations[inputId.coerceIn(0, locations.lastIndex)]
+                // Stable slot from the global VIDEO/IMAGE track order; do not
+                // reposition a PiP when another layer starts or ends.
+                val position = (layer ?: timeline.layers.firstOrNull {
+                    it.trackId == plans[inputId].trackId
+                })?.let { VisualOverlaySlots.position(timeline,it) } ?: (0f to 0f)
                 return StaticOverlaySettings.Builder()
                     .setScale(0.42f * pose.scale, 0.42f * pose.scale)
                     .setBackgroundFrameAnchor(

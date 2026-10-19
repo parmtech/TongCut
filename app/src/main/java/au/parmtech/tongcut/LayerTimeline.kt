@@ -92,7 +92,9 @@ data class TimelineLayer(
     val sourceSpanUs: Long? = null,
     val speedRamp: List<SpeedKeyframe> = emptyList(),
     val photoEffects: PhotoEffects = PhotoEffects(),
-    val fade: LayerFade = LayerFade()
+    val fade: LayerFade = LayerFade(),
+    // An explicit PiP screen slot is required for a freeze still to cover its source video.
+    val visualSlot: Int? = null
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -101,6 +103,11 @@ data class TimelineLayer(
         require(durationUs >= 1_000L)
         require(startUs <= Long.MAX_VALUE - durationUs)
         require(sourceInUs >= 0)
+        require(visualSlot == null ||
+            (kind in setOf(LayerKind.VIDEO,LayerKind.IMAGE) &&
+                visualSlot in 0 until VisualOverlaySlots.MAX_SLOTS)) {
+            "Invalid video/photo screen slot"
+        }
         MotionCurve.validate(motion, durationUs)
         if (kind == LayerKind.AUDIO) require(fade == LayerFade()) {
             "Audio fading requires a separate sound envelope"
