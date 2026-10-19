@@ -449,4 +449,28 @@ class LayerEditsTest {
         LayerEdits.freezeVisualAt(locked,layer.id,2_000L,1_000L,"file:///frame.png")
     }
 
+    @Test fun freezingSpeedRampedPiPContinuesOnItsOriginalSourceClock() {
+        val first = LayerEdits.addVisual(
+            base(),0L,LayerKind.VIDEO,"content://ramped",4_000L
+        )
+        val id=first.layers.layers.single().id
+        val sped=LayerEdits.setSpeedKeyAt(first,id,1_000L,2f)
+        val original=sped.layers.layers.single()
+        val paused=LayerEdits.freezeVisualAt(
+            sped,id,1_500L,1_000L,"file:///frames/ramped.png"
+        )
+        val video=paused.layers.layers.filter { it.kind==LayerKind.VIDEO }
+            .sortedBy { it.startUs }
+        val still=paused.layers.layers.single { it.kind==LayerKind.IMAGE }
+        assertEquals(2,video.size)
+        assertEquals(original.consumedSourceUs,
+            video[0].consumedSourceUs+video[1].consumedSourceUs)
+        assertEquals(video[0].endUs,still.startUs)
+        assertEquals(still.endUs,video[1].startUs)
+        assertEquals(video[0].sourceInUs+video[0].consumedSourceUs,
+            video[1].sourceInUs)
+        assertEquals(1_000_000L,still.durationUs)
+    }
+
+
 }
