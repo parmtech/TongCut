@@ -11,7 +11,7 @@ Work branch: `development/capcut-parity`. Latest source verification: [CI 392018
 - [x] Lock/unlock, show/hide, mute and independent audio lane gain
 - [x] Multi-track audio planning, silence gaps, separate audio decoding and experimental Media3 mix export
 - [x] Time-gated text captions preview and experimental burn-in export
-- [x] Separate video/photo overlay import, timeline placement, PiP preview and experimental Media3 visual composition
+- [x] Separate video/photo overlay import, timeline placement and PiP preview; PHOTO post-composition export implemented experimentally. VIDEO PiP export is explicitly blocked until a correct layering compositor is implemented.
 - [x] Guard against unsupported sticker rendering instead of silently omitting it
 - [x] Unit tests for snapping, waveform bucket mathematics, visual/audio planning and serialization; Kotlin + Android Lint CI passed
 
@@ -38,3 +38,15 @@ Work branch: `development/capcut-parity`. Latest source verification: [CI 392018
 
 ## Release policy
 Any developer/test APK must remain a separately named **TongCut TEST** build, never overwrite the owner's older app and never be called Phase 2 completed merely because it installs. No full-featured CapCut equivalent is claimed at this milestone.
+
+## Visual compositor correction
+A source-level review of AndroidX Media3's `DefaultCompositorGlProgram.drawFrame` confirmed that input frames are drawn in reverse index order; primary input (index 0) is drawn **last**, obscuring secondary opaque streams. As a result, native multi-video sequence composition could silently omit picture-in-picture video overlays when primary footage is fully opaque. The editor therefore **blocks export** while any visible VIDEO PiP layer is present.
+
+Static IMAGE overlays are now applied via a separately time-gated `BitmapOverlay` as post-composition effects, on top of the opaque base, alongside captions. Images are decoded at bounded resolution to reduce memory use. This path still needs device testing for orientation, colour and timing.
+
+- [x] Verify compositor drawing-order behavior from AndroidX source
+- [x] Guard export against unsupported visible video/sticker overlays
+- [x] Add post-composition alpha-gated bitmap photo effects for still images
+- [x] Keep visual imports editable and previewable; do not claim mixed-video MP4 export works
+- [ ] Implement hardware-accelerated video PiP compositor with verified primary/secondary z-order
+- [ ] Verify actual photo + caption + mixed-audio MP4 export on a phone
