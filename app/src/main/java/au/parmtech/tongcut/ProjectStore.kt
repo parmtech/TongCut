@@ -6,49 +6,62 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** Crash-safe local storage. URI access requires an existing persistable SAF grant. */
-class ProjectStore(context: Context) {
-    private val file = AtomicFile(File(context.filesDir, "tongcut-current-project.json"))
+/** A versioned, atomic draft snapshot; legacy single-project format remains readable. */
+class ProjectStore(context: Context, projectId: String? = null) {
+    private val file: AtomicFile
+
+    init {
+        val filename = if (projectId == null) {
+            File(context.filesDir, "tongcut-current-project.json")
+        } else {
+            require(Regex("[a-zA-Z0-9_-]{1,80}").matches(projectId)) {
+                "Unsafe project identifier"
+            }
+            val folder = File(context.filesDir, "tongcut-projects")
+            if (!folder.isDirectory && !folder.mkdirs()) {
+                throw IllegalStateException("Cannot create project storage")
+            }
+            File(folder, "$projectId.json")
+        }
+        file = AtomicFile(filename)
+    }
 
     fun load(): EditorDraft? {
-        if (!file.baseFile.exists()) return null
+        if (!file.baseFile.exists() &&
+            !File(file.baseFile.path + ".bak").exists()) return null
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
-        require(root.optInt("schema", -1) == 1) { "Unsupported project format" }
+        require(root.optInt("schema", -1) == 1) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
-        require(array.length() <= 500) { "Project too large" }
+        require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
-            val obj = array.getJSONObject(index)
+            val clip = array.getJSONObject(index)
             DraftClip(
-                sourceUri = obj.getString("uri"),
-                label = obj.optString("label", "Video"),
-                durationMs = obj.getLong("durationMs"),
-                inMs = obj.getLong("inMs"),
-                outMs = obj.getLong("outMs")
+                sourceUri = clip.getString("uri"),
+                label = clip.optString("label", "Video"),
+                durationMs = clip.getLong("durationMs"),
+                inMs = clip.getLong("inMs"),
+                outMs = clip.getLong("outMs")
             )
         }
-        val look = enumValues<Look>().firstOrNull {
-            it.name == root.optString("look")
-        } ?: Look.ORIGINAL
-        val canvas = enumValues<CanvasRatio>().firstOrNull {
-            it.name == root.optString("canvas")
-        } ?: CanvasRatio.SOURCE
-        val resolution = root.optInt("shortSide", 1080).takeIf { it in listOf(720, 1080, 2160) } ?: 1080
         return EditorDraft(
             title = root.optString("title", "Untitled Project").take(120),
             clips = clips,
             selectedIndex = root.optInt("selected", 0),
-            look = look,
-            canvas = canvas,
-            shortSidePixels = resolution,
+            look = Look.entries.firstOrNull { it.name == root.optString("look") } ?: Look.ORIGINAL,
+            canvas = CanvasRatio.entries.firstOrNull { it.name == root.optString("canvas") } ?: CanvasRatio.SOURCE,
+            shortSidePixels = root.optInt("shortSide", 1080).takeIf {
+                it in listOf(720, 1080, 2160)
+            } ?: 1080,
             muteOriginalAudio = root.optBoolean("mute", false)
         ).normalized()
     }
 
     fun save(project: EditorDraft) {
+        require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
             put("schema", 1)
-            put("title", project.title)
+            put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
             put("canvas", project.canvas.name)
@@ -70,9 +83,11 @@ class ProjectStore(context: Context) {
         try {
             output.write(root.toString().toByteArray(Charsets.UTF_8))
             file.finishWrite(output)
-        } catch (failure: Exception) {
+        } catch (exception: Exception) {
             file.failWrite(output)
-            throw failure
+            throw exception
         }
     }
+
+    fun delete() { file.delete() }
 }

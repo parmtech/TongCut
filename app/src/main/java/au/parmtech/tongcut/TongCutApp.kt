@@ -40,63 +40,205 @@ private enum class Screen { HOME, GALLERY, EDITOR }
 @Composable
 fun TongCutApp(exporter: VideoExporter) {
     val context = LocalContext.current
-    val store = remember(context) { ProjectStore(context.applicationContext) }
+    val library = remember(context) { ProjectLibrary(context.applicationContext) }
     val history = remember { EditHistory(EditorDraft()) }
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf(EditorDraft()) }
+    var catalog by remember { mutableStateOf(ProjectCatalog()) }
+    var activeId by remember { mutableStateOf<String?>(null) }
     var screen by remember { mutableStateOf(Screen.HOME) }
     var loaded by remember { mutableStateOf(false) }
     var saveAllowed by remember { mutableStateOf(false) }
-    var banner by remember { mutableStateOf("Loading drafts…") }
+    var operationBusy by remember { mutableStateOf(false) }
+    var banner by remember { mutableStateOf("Opening projects…") }
     var dialogText by remember { mutableStateOf<String?>(null) }
     var galleryPhotos by remember { mutableStateOf(false) }
 
     fun commit(next: EditorDraft) {
-        if (!loaded || !saveAllowed) return
+        if (!loaded || !saveAllowed || operationBusy) return
         val stable = next.normalized()
         if (history.apply(stable)) draft = stable
     }
 
     LaunchedEffect(Unit) {
         try {
-            val recovered = withContext(Dispatchers.IO) { store.load() }
+            val current = withContext(Dispatchers.IO) {
+                val index = library.catalog()
+                index to index.activeId?.let { library.read(it) }
+            }
+            catalog = current.first
+            activeId = current.first.activeId
+            val recovered = current.second
             if (recovered != null) {
                 draft = recovered
                 history.reset(recovered)
-                banner = "Recovered draft · ${recovered.clips.size} clips"
-            } else banner = "Your edit stays on this device."
+                banner = "Recovered ${current.first.projects.size} saved project(s)."
+            } else banner = "Projects are saved privately on this device."
             saveAllowed = true
         } catch (failure: Exception) {
             saveAllowed = false
-            banner = "Draft recovery failed. Existing data is preserved."
-            dialogText = "Your saved project could not be loaded: ${failure.message}. It has not been overwritten."
+            banner = "Project recovery failed: original files remain untouched."
+            dialogText = "Cannot safely read projects: ${failure.message}. Files have not been overwritten."
         } finally { loaded = true }
     }
 
-    LaunchedEffect(draft, loaded, saveAllowed) {
-        if (loaded && saveAllowed) {
-            delay(700)
-            try { withContext(Dispatchers.IO) { store.save(draft) } }
-            catch (e: Exception) { banner = "Autosave failed: ${e.message}" }
+    // Capture the project ID together with the snapshot: do not save a switched draft
+    // under a previous project's identifier.
+    LaunchedEffect(draft, activeId, loaded, saveAllowed) {
+        val projectId = activeId
+        val snapshot = draft
+        if (loaded && saveAllowed && projectId != null) {
+            delay(750)
+            try {
+                val updated = withContext(Dispatchers.IO) { library.save(projectId, snapshot) }
+                if (activeId == projectId) catalog = updated
+            } catch (error: Exception) {
+                banner = "Autosave failed: ${error.message}"
+            }
+        }
+    }
+
+    fun createProject(photos: Boolean) {
+        if (!loaded || !saveAllowed || operationBusy) return
+        scope.launch {
+            operationBusy = true
+            try {
+                val previousId = activeId
+                val previous = draft
+                val result = withContext(Dispatchers.IO) {
+                    if (previousId != null) library.save(previousId, previous)
+                    library.create("New project")
+                }
+                catalog = result.first
+                activeId = result.first.activeId
+                draft = result.second
+                history.reset(result.second)
+                galleryPhotos = photos
+                screen = Screen.GALLERY
+                banner = "New project created"
+            } catch (error: Exception) {
+                dialogText = "Could not create project: ${error.message}"
+            } finally { operationBusy = false }
+        }
+    }
+
+    fun openProject(id: String) {
+        if (!loaded || !saveAllowed || operationBusy) return
+        scope.launch {
+            operationBusy = true
+            try {
+                val oldId = activeId
+                val oldDraft = draft
+                val result = withContext(Dispatchers.IO) {
+                    if (oldId != null) library.save(oldId, oldDraft)
+                    library.activate(id)
+                }
+                catalog = result.first
+                activeId = id
+                draft = result.second
+                history.reset(result.second)
+                screen = Screen.EDITOR
+                banner = "Opened ${result.second.title}"
+            } catch (error: Exception) {
+                dialogText = "Could not open project: ${error.message}"
+            } finally { operationBusy = false }
+        }
+    }
+
+    fun duplicateProject(id: String) {
+        if (!loaded || !saveAllowed || operationBusy) return
+        scope.launch {
+            operationBusy = true
+            try {
+                val oldId = activeId
+                val oldDraft = draft
+                val result = withContext(Dispatchers.IO) {
+                    if (oldId != null) library.save(oldId, oldDraft)
+                    library.duplicate(id)
+                }
+                catalog = result.first
+                activeId = result.first.activeId
+                draft = result.second
+                history.reset(result.second)
+                screen = Screen.EDITOR
+            } catch (error: Exception) {
+                dialogText = "Could not duplicate project: ${error.message}"
+            } finally { operationBusy = false }
+        }
+    }
+
+    fun renameProject(id: String, title: String) {
+        if (!loaded || !saveAllowed || operationBusy) return
+        scope.launch {
+            operationBusy = true
+            try {
+                val changed = withContext(Dispatchers.IO) { library.rename(id, title) }
+                catalog = changed
+                if (id == activeId) {
+                    val renamed = draft.copy(title = title.trim().take(120))
+                    if (history.apply(renamed)) draft = renamed
+                }
+            } catch (error: Exception) {
+                dialogText = "Could not rename project: ${error.message}"
+            } finally { operationBusy = false }
+        }
+    }
+
+    fun deleteProject(id: String) {
+        if (!loaded || !saveAllowed || operationBusy) return
+        scope.launch {
+            operationBusy = true
+            try {
+                val previousId = activeId
+                val previousDraft = draft
+                val result = withContext(Dispatchers.IO) {
+                    if (previousId != null && previousId != id) {
+                        library.save(previousId, previousDraft)
+                    }
+                    val nextCatalog = library.delete(id)
+                    nextCatalog to nextCatalog.activeId?.let { library.read(it) }
+                }
+                catalog = result.first
+                activeId = result.first.activeId
+                draft = result.second ?: EditorDraft()
+                history.reset(draft)
+                banner = "Project deleted"
+            } catch (error: Exception) {
+                dialogText = "Could not delete project: ${error.message}"
+            } finally { operationBusy = false }
         }
     }
 
     fun importMedia(uris: List<Uri>) {
-        if (!loaded || !saveAllowed || uris.isEmpty()) return
+        if (!loaded || !saveAllowed || operationBusy || uris.isEmpty()) return
         scope.launch {
-            val clips = withContext(Dispatchers.IO) {
-                uris.mapNotNull { uri ->
-                    runCatching { inspectMediaClip(context, uri) }.getOrNull()
+            operationBusy = true
+            try {
+                val clips = withContext(Dispatchers.IO) {
+                    uris.mapNotNull { uri ->
+                        runCatching { inspectMediaClip(context, uri) }.getOrNull()
+                    }
                 }
-            }
-            if (clips.isNotEmpty()) {
-                commit(draft.copy(
-                    clips = draft.clips + clips,
-                    selectedIndex = draft.clips.size
-                ))
-                screen = Screen.EDITOR
-                banner = "Added ${clips.size} clip(s)."
-            } else dialogText = "No supported videos found. Please use a playable video file."
+                if (clips.isNotEmpty()) {
+                    // The Home screen creates a project before importing.
+                    val id = activeId
+                    if (id == null) {
+                        dialogText = "Create a project before adding media."
+                    } else {
+                        val updated = draft.copy(
+                            clips = draft.clips + clips,
+                            selectedIndex = draft.clips.size
+                        )
+                        if (history.apply(updated)) draft = updated
+                        val index = withContext(Dispatchers.IO) { library.save(id, updated) }
+                        catalog = index
+                        screen = Screen.EDITOR
+                        banner = "Added ${clips.size} clip(s)."
+                    }
+                } else dialogText = "No supported videos found. Choose a playable media file."
+            } catch (error: Exception) {
+                dialogText = "Unable to import media: ${error.message}"
+            } finally { operationBusy = false }
         }
     }
 
@@ -116,13 +258,19 @@ fun TongCutApp(exporter: VideoExporter) {
     when (screen) {
         Screen.HOME -> HomeScreen(
             draft = draft,
+            projects = catalog.projects,
+            activeId = activeId,
             banner = banner,
-            canResume = draft.clips.isNotEmpty() && saveAllowed,
-            onNew = { galleryPhotos = false; screen = Screen.GALLERY },
-            onPhotos = { galleryPhotos = true; screen = Screen.GALLERY },
-            onResume = { screen = Screen.EDITOR },
+            canResume = saveAllowed && !operationBusy,
+            onNew = { createProject(false) },
+            onPhotos = { createProject(true) },
+            onResume = { activeId?.let(::openProject) },
+            onOpen = ::openProject,
+            onDuplicate = ::duplicateProject,
+            onRename = ::renameProject,
+            onDelete = ::deleteProject,
             onFeature = { name ->
-                dialogText = "$name is on the TongCut development roadmap. This feature is not enabled until it works on real media."
+                dialogText = "$name is planned but not functional yet."
             }
         )
         Screen.GALLERY -> GalleryScreen(
@@ -142,7 +290,7 @@ fun TongCutApp(exporter: VideoExporter) {
             canRedo = history.canRedo,
             onUndo = { history.undo()?.let { draft = it } },
             onRedo = { history.redo()?.let { draft = it } },
-            onUnavailable = { dialogText = "$it is in development. It will be enabled only when preview and export both work." },
+            onUnavailable = { dialogText = "$it is in development. It will only be enabled once preview and export both work." },
             onInfo = { banner = it }
         )
     }
@@ -152,9 +300,7 @@ fun TongCutApp(exporter: VideoExporter) {
             onDismissRequest = { dialogText = null },
             title = { Text("TongCut") },
             text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = { dialogText = null }) { Text("OK") }
-            }
+            confirmButton = { TextButton(onClick = { dialogText = null }) { Text("OK") } }
         )
     }
 }
@@ -174,10 +320,24 @@ private fun inspectMediaClip(context: android.content.Context, uri: Uri): DraftC
 
 @Composable
 private fun HomeScreen(
-    draft: EditorDraft, banner: String, canResume: Boolean,
-    onNew: () -> Unit, onPhotos: () -> Unit, onResume: () -> Unit,
+    draft: EditorDraft,
+    projects: List<ProjectCard>,
+    activeId: String?,
+    banner: String,
+    canResume: Boolean,
+    onNew: () -> Unit,
+    onPhotos: () -> Unit,
+    onResume: () -> Unit,
+    onOpen: (String) -> Unit,
+    onDuplicate: (String) -> Unit,
+    onRename: (String, String) -> Unit,
+    onDelete: (String) -> Unit,
     onFeature: (String) -> Unit
 ) {
+    var projectToRename by remember { mutableStateOf<ProjectCard?>(null) }
+    var projectToDelete by remember { mutableStateOf<ProjectCard?>(null) }
+    var nameText by remember { mutableStateOf("") }
+
     val actions = listOf(
         Triple("AutoCut", Icons.Default.Movie, false),
         Triple("AI clipper", Icons.Default.ContentCut, false),
@@ -222,39 +382,84 @@ private fun HomeScreen(
                     Modifier.fillMaxWidth().background(Color.White).padding(bottom = 22.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    if (canResume) {
-                        Text("Recent projects", color = HomeInk, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 16.dp))
+                    Text("Recent projects", color = HomeInk, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 16.dp))
+                    if (projects.isEmpty()) {
+                        Text("Projects you create will appear here.",
+                            color = Color.DarkGray, modifier = Modifier.padding(horizontal = 16.dp))
+                    } else {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            item {
-                                Column(Modifier.width(132.dp).clickable(onClick = onResume)) {
-                                    Box(Modifier.size(132.dp).background(Color(0xFFE5F5FA),
-                                        RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                                        draft.clips.firstOrNull()?.let {
-                                            GalleryThumbnail(it.sourceUri.toUri(), Modifier.fillMaxSize())
-                                        } ?: Icon(Icons.Default.Movie, "Project", tint = HomeInk)
+                            items(projects, key = { it.id }) { project ->
+                                var menuOpen by remember(project.id) { mutableStateOf(false) }
+                                Column(Modifier.width(138.dp)) {
+                                    Box(
+                                        Modifier.fillMaxWidth().height(132.dp)
+                                            .background(Color(0xFFE5F5FA), RoundedCornerShape(15.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (project.id == activeId && draft.clips.isNotEmpty()) {
+                                            GalleryThumbnail(draft.clips.first().sourceUri.toUri(),
+                                                Modifier.fillMaxSize().clickable { if (canResume) onOpen(project.id) })
+                                        } else {
+                                            Icon(Icons.Default.Movie, "Open project", tint = HomeInk,
+                                                modifier = Modifier.size(34.dp).clickable { if (canResume) onOpen(project.id) })
+                                        }
                                         Surface(
                                             color = Color(0xD9000000),
-                                            shape = RoundedCornerShape(10.dp),
-                                            modifier = Modifier.align(Alignment.BottomEnd).padding(7.dp)
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)
                                         ) {
-                                            Text("${draft.clips.size} clips", color = Color.White,
+                                            Text("${project.clipCount} clips", color = Color.White,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp))
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+                                        }
+                                        Box(Modifier.align(Alignment.TopEnd)) {
+                                            IconButton(onClick = { menuOpen = true }) {
+                                                Icon(Icons.Default.MoreVert, "Project options", tint = HomeInk)
+                                            }
+                                            DropdownMenu(
+                                                expanded = menuOpen,
+                                                onDismissRequest = { menuOpen = false }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Open") },
+                                                    onClick = { menuOpen = false; onOpen(project.id) }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Rename") },
+                                                    onClick = {
+                                                        menuOpen = false
+                                                        projectToRename = project
+                                                        nameText = project.title
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Duplicate") },
+                                                    onClick = { menuOpen = false; onDuplicate(project.id) }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Delete") },
+                                                    onClick = {
+                                                        menuOpen = false
+                                                        projectToDelete = project
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
-                                    Text(draft.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        color = HomeInk, modifier = Modifier.padding(top = 6.dp))
+                                    Text(project.title, maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = HomeInk,
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clickable { if (canResume) onOpen(project.id) }
+                                            .padding(top = 6.dp))
                                 }
                             }
                         }
-                    } else {
-                        Text("Projects you create will appear here.",
-                            color = Color.DarkGray, modifier = Modifier.padding(horizontal = 16.dp))
                     }
 
                     actions.chunked(3).forEach { chunk ->
@@ -307,6 +512,48 @@ private fun HomeScreen(
                 )
             }
         }
+    }
+    projectToRename?.let { project ->
+        AlertDialog(
+            onDismissRequest = { projectToRename = null },
+            title = { Text("Rename project") },
+            text = {
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { nameText = it.take(120) },
+                    singleLine = true,
+                    label = { Text("Project name") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = nameText.isNotBlank(),
+                    onClick = {
+                        onRename(project.id, nameText.trim())
+                        projectToRename = null
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { projectToRename = null }) { Text("Cancel") }
+            }
+        )
+    }
+    projectToDelete?.let { project ->
+        AlertDialog(
+            onDismissRequest = { projectToDelete = null },
+            title = { Text("Delete project?") },
+            text = { Text("Delete '${project.title}'? This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(project.id)
+                    projectToDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { projectToDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
