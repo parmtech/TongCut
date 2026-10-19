@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 7)
+        put("schema", 8)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -38,6 +38,11 @@ object LayerTimelineCodec {
                     put("sourceInUs", item.sourceInUs)
                     put("sourceDurationUs", item.sourceDurationUs ?: JSONObject.NULL)
                     put("text", item.text ?: JSONObject.NULL)
+                    put("captionStyle", JSONObject().apply {
+                        put("tone", item.captionStyle.tone.name)
+                        put("size", item.captionStyle.size.toDouble())
+                        put("bold", item.captionStyle.bold)
+                    })
                     put("playbackSpeed", item.playbackSpeed.toDouble())
                     put("visualSlot", item.visualSlot ?: JSONObject.NULL)
                     put("sourceSpanUs", item.sourceSpanUs ?: JSONObject.NULL)
@@ -92,7 +97,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..7) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..8) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -128,6 +133,13 @@ object LayerTimelineCodec {
                 sourceDurationUs = if (item.has("sourceDurationUs") &&
                     !item.isNull("sourceDurationUs")) item.getLong("sourceDurationUs") else null,
                 text = item.takeNullableString("text"),
+                captionStyle = item.optJSONObject("captionStyle")?.let { style ->
+                    CaptionStyle(
+                        tone = CaptionTone.valueOf(style.optString("tone", "PEARL")),
+                        size = style.optDouble("size", 1.0).toFloat(),
+                        bold = style.optBoolean("bold", true)
+                    )
+                } ?: CaptionStyle(),
                 fade = item.optJSONObject("fade")?.let { fx ->
                     LayerFade(
                         inUs = fx.optLong("inUs",0L),
