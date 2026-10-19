@@ -142,8 +142,8 @@ object LayerEdits {
         draft: EditorDraft,
         id: String,
         playheadMs: Long,
-        mutate: (MotionPose) -> MotionPose,
-        interpolation: MotionInterpolation = MotionInterpolation.LINEAR
+        interpolation: MotionInterpolation = MotionInterpolation.LINEAR,
+        mutate: (MotionPose) -> MotionPose
     ): EditorDraft {
         val layer = draft.layers.layers.firstOrNull { it.id == id }
             ?: throw IllegalArgumentException("Missing visual layer")
