@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.net.Uri
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -921,13 +923,35 @@ fun VideoEditorScreen(
                                 if (clip.sourceAudioMuted) {
                                     Text("Clip audio is on an editable track", color = Color.LightGray)
                                 } else ToolPill("Detach selected clip audio") {
-                                    runCatching {
-                                        LayerEdits.detachSourceAudio(active, active.selectedIndex)
-                                    }.onSuccess {
-                                        onChange(it)
-                                        onInfo("Clip sound moved to an editable audio lane.")
-                                    }.onFailure {
-                                        onInfo(it.message ?: "Could not detach this clip's audio")
+                                    val clipIndex = active.selectedIndex
+                                    val sourceUri = clip.sourceUri
+                                    scope.launch {
+                                        runCatching {
+                                            val hasAudio = withContext(Dispatchers.IO) {
+                                                val extractor = MediaExtractor()
+                                                try {
+                                                    extractor.setDataSource(context, sourceUri.toUri(), null)
+                                                    (0 until extractor.trackCount).any { track ->
+                                                        extractor.getTrackFormat(track)
+                                                            .getString(MediaFormat.KEY_MIME)
+                                                            ?.startsWith("audio/") == true
+                                                    }
+                                                } finally {
+                                                    extractor.release()
+                                                }
+                                            }
+                                            require(hasAudio) { "This video has no audio track to detach" }
+                                            val latest = currentDraft.value
+                                            require(latest.clips.getOrNull(clipIndex)?.sourceUri == sourceUri) {
+                                                "The selected clip changed; select it again and retry"
+                                            }
+                                            LayerEdits.detachSourceAudio(latest, clipIndex)
+                                        }.onSuccess {
+                                            onChange(it)
+                                            onInfo("Clip sound moved to an editable audio lane.")
+                                        }.onFailure {
+                                            onInfo(it.message ?: "Could not detach this clip's audio")
+                                        }
                                     }
                                 }
                             }
@@ -1203,3 +1227,4 @@ private fun <T> ToolChips(
         }
     }
 }
+
