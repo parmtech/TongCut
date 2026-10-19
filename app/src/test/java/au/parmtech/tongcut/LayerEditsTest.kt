@@ -369,4 +369,84 @@ class LayerEditsTest {
     }
 
 
+    @Test fun oneSecondFreezeInsertsStillAndResumesFromSameVideoFrame() {
+        val source = LayerEdits.addVisual(
+            base(),1_000L,LayerKind.VIDEO,"content://video",4_000L
+        )
+        val original = source.layers.layers.single()
+        val frozen = LayerEdits.freezeVisualAt(
+            source,original.id,2_000L,1_000L,"file:///app/frames/freeze.png"
+        )
+        assertEquals(source.clips,frozen.clips)
+        val video = frozen.layers.layers.filter { it.kind == LayerKind.VIDEO }
+            .sortedBy { it.startUs }
+        val photo = frozen.layers.layers.single { it.kind == LayerKind.IMAGE }
+        assertEquals(2,video.size)
+        assertEquals(1_000_000L,video[0].durationUs)
+        assertEquals(2_000_000L,photo.startUs)
+        assertEquals(1_000_000L,photo.durationUs)
+        assertEquals(3_000_000L,video[1].startUs)
+        assertEquals(1_000_000L,video[1].sourceInUs)
+        assertEquals(4_000_000L,video.sumOf { it.durationUs })
+        assertEquals(5_000_000L,video.last().endUs - video.first().startUs)
+        val history = EditHistory(source)
+        history.apply(frozen)
+        assertEquals(source,history.undo())
+        assertEquals(frozen,history.redo())
+    }
+
+    @Test fun freezingMidLaneRipplesFollowingVideoClipsWithoutCollisions() {
+        val first=LayerEdits.addVisual(
+            base(),0L,LayerKind.VIDEO,"content://first",3_000L
+        )
+        val later=LayerEdits.addVisual(
+            first,4_000L,LayerKind.VIDEO,"content://later",3_000L
+        )
+        val id=first.layers.layers.single().id
+        val after=LayerEdits.freezeVisualAt(
+            later,id,1_000L,1_000L,"file:///app/frames/freeze.png"
+        )
+        val video=after.layers.layers.filter { it.kind == LayerKind.VIDEO }
+            .sortedBy { it.startUs }
+        assertEquals(3,video.size)
+        assertEquals(5_000_000L,video.last().startUs)
+        assertEquals(8_000_000L,video.last().endUs)
+    }
+
+    @Test fun freezeCapturesVisualPoseAtOriginalCut() {
+        val original = LayerEdits.addVisual(
+            base(),0L,LayerKind.VIDEO,"content://first",4_000L
+        )
+        val id=original.layers.layers.single().id
+        val animated=LayerEdits.setMotionAt(original,id,2_000L) {
+            it.copy(scale=1.5f, x=0.3f)
+        }
+        val frozen=LayerEdits.freezeVisualAt(
+            animated,id,2_000L,1_000L,"file:///app/frames/freeze.png"
+        )
+        val photo=frozen.layers.layers.single { it.kind == LayerKind.IMAGE }
+        assertEquals(1.5f,photo.motion.single().pose.scale,0.0001f)
+        assertEquals(0.3f,photo.motion.single().pose.x,0.0001f)
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun freezeThatOverrunsPrimaryVideoIsRejected() {
+        val input=LayerEdits.addVisual(
+            base(),7_000L,LayerKind.VIDEO,"content://late",3_000L
+        )
+        LayerEdits.freezeVisualAt(
+            input,input.layers.layers.single().id,8_000L,1_000L,"file:///frame.png"
+        )
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun freezeOnLockedVideoTrackIsRejected() {
+        val input=LayerEdits.addVisual(
+            base(),1_000L,LayerKind.VIDEO,"content://video",4_000L
+        )
+        val layer=input.layers.layers.single()
+        val locked=LayerEdits.setTrackLocked(input,layer.trackId,true)
+        LayerEdits.freezeVisualAt(locked,layer.id,2_000L,1_000L,"file:///frame.png")
+    }
+
 }

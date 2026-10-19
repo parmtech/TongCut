@@ -20,7 +20,7 @@ object LayerEdits {
     private fun laneFor(timeline: LayerTimeline, kind: LayerKind, startUs: Long, endUs: Long): Pair<LayerTimeline, String> {
         // Place on an existing unlocked lane without collision; otherwise create a new lane.
         val available = timeline.tracks.firstOrNull { lane ->
-            lane.kind == kind && !lane.locked && timeline.layers.none {
+            lane.kind == kind && !lane.locked && !lane.hidden && timeline.layers.none {
                 it.trackId == lane.id && it.startUs < endUs && startUs < it.endUs
             }
         }
@@ -95,6 +95,95 @@ object LayerEdits {
                 sourceDurationUs = if (kind == LayerKind.VIDEO) requested else null
             )
         ))
+    }
+
+    /**
+     * Inserts a genuine paused VIDEO PiP segment: the left source finishes at the
+     * playhead, a captured still IMAGE occupies the requested freeze interval,
+     * and the right source resumes at the original next source frame.
+     *
+     * The main video clock and other independent audio/photo tracks do NOT ripple;
+     * subsequent clips on this VIDEO lane shift to avoid collisions. All changes
+     * live in one immutable project snapshot for undo/redo.
+     *
+     * [frameUri] is a persistent app-owned snapshot created by FreezeFrameCapture.
+     */
+    fun freezeVisualAt(
+        draft: EditorDraft,
+        id: String,
+        playheadMs: Long,
+        freezeDurationMs: Long,
+        frameUri: String
+    ): EditorDraft {
+        require(playheadMs >= 0L && playheadMs <= Long.MAX_VALUE / 1_000L)
+        require(freezeDurationMs in 100L..5_000L)
+        require(frameUri.isNotBlank())
+        val source = draft.layers.layers.firstOrNull {
+            it.id == id && it.kind == LayerKind.VIDEO
+        } ?: throw IllegalArgumentException("Select a video overlay to freeze")
+        val track = draft.layers.tracks.first { it.id == source.trackId }
+        require(!track.locked) { "Unlock this video lane first" }
+        val cut = playheadMs * 1_000L
+        require(cut >= source.startUs + 100_000L &&
+            cut <= source.endUs - 100_000L) {
+            "Move playhead at least 0.1s inside the video overlay"
+        }
+        val freezeUs = freezeDurationMs * 1_000L
+        val videoDurationUs = clock(draft)
+        val following = draft.layers.layers.filter {
+            it.trackId == source.trackId && it.id != id && it.startUs >= source.endUs
+        }
+        require(source.endUs <= videoDurationUs - freezeUs &&
+            following.all { it.endUs <= videoDurationUs - freezeUs }) {
+            "Freeze needs more space before the end of the primary video"
+        }
+        val graph = draft.layers.splitLayer(id,cut)
+        val left = graph.layers.firstOrNull { it.id == id }
+            ?: throw IllegalStateException("Freeze split lost the source")
+        val right = graph.layers.first {
+            it.trackId == source.trackId && it.id != id &&
+                it.sourceInUs >= source.sourceInUs &&
+                it.startUs >= cut && it.startUs < source.endUs
+        }
+        val actualCut = left.endUs
+        // If a speed-ramp split snaps by 1ms, anchor the frozen image to the
+        // actual rendered boundary rather than opening a pixel-sized gap.
+        val followingIds = following.map { it.id }.toSet()
+        val movedVideo = graph.copy(layers = graph.layers.map { layer ->
+            when {
+                layer.id == right.id -> layer.copy(startUs = actualCut + freezeUs)
+                layer.id in followingIds ->
+                    layer.copy(startUs = layer.startUs + freezeUs)
+                else -> layer
+            }
+        })
+        val snapshotPose = MotionCurve.at(
+            source.motion, (actualCut - source.startUs).coerceIn(0L,source.durationUs)
+        )
+        val frozenAlpha = source.fade.alphaAt(
+            (actualCut - source.startUs).coerceIn(0L,source.durationUs),
+            source.durationUs
+        )
+        val (withTrack, photoLaneId) = laneFor(
+            movedVideo, LayerKind.IMAGE, actualCut, actualCut + freezeUs
+        )
+        require(withTrack.tracks.count {
+            it.kind in setOf(LayerKind.VIDEO,LayerKind.IMAGE) && !it.hidden
+        } <= VisualMixPlan.MAX_VISUAL_LANES) {
+            "Freezing would exceed the three visible-overlay lane limit"
+        }
+        val image = TimelineLayer(
+            id = UUID.randomUUID().toString(),
+            trackId = photoLaneId,
+            kind = LayerKind.IMAGE,
+            startUs = actualCut,
+            durationUs = freezeUs,
+            sourceUri = frameUri,
+            motion = listOf(MotionKeyframe(
+                0L,snapshotPose.copy(opacity = snapshotPose.opacity * frozenAlpha)
+            ))
+        )
+        return draft.copy(layers = withTrack.addLayer(image))
     }
 
     /** Constant-speed part of P3 speed work; ramp curves need a separate source clock. */

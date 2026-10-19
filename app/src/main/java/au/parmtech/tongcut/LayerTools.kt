@@ -21,6 +21,7 @@ internal fun LayerTools(
     onChange: (EditorDraft) -> Unit,
     onAddAudio: () -> Unit,
     onAddVisual: (LayerKind) -> Unit = {},
+    onFreezeVideo: (String, Long) -> Unit = { _, _ -> },
     onError: (String) -> Unit
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
@@ -214,6 +215,9 @@ internal fun LayerTools(
                         }
                     }
                     if (kind == LayerKind.VIDEO) {
+                        SmallLayerButton("Freeze 1s") {
+                            onFreezeVideo(layer.id,playheadMs)
+                        }
                         SmallLayerButton("Speed −") {
                             runCatching {
                                 LayerEdits.setVisualSpeed(

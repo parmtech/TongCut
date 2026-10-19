@@ -84,6 +84,8 @@ fun VideoEditorScreen(
     var audioWarning by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
+    val currentDraft = rememberUpdatedState(draft)
+    var capturingFreeze by remember { mutableStateOf(false) }
     val missingMedia = remember { mutableStateListOf<Int>() }
     var relinkIndex by remember { mutableIntStateOf(-1) }
     val relinkPicker = rememberLauncherForActivityResult(
@@ -230,6 +232,60 @@ fun VideoEditorScreen(
     fun chooseOverlay(kind: LayerKind) {
         overlayKind = kind
         overlayPicker.launch(arrayOf(if (kind == LayerKind.IMAGE) "image/*" else "video/*"))
+    }
+
+    fun freezeVideoOverlay(id: String, positionMs: Long) {
+        if (capturingFreeze) {
+            onInfo("Wait until the previous freeze frame is saved")
+            return
+        }
+        val initial = currentDraft.value
+        val sourceLayer = initial.layers.layers.firstOrNull {
+            it.id == id && it.kind == LayerKind.VIDEO
+        }
+        if (sourceLayer == null) {
+            onInfo("Select a video overlay to freeze")
+            return
+        }
+        val sourcePositionUs = runCatching {
+            // Validate timeline space, editability and existing layer collisions
+            // BEFORE expensive decoding or permanent frame creation.
+            LayerEdits.freezeVisualAt(
+                initial,id,positionMs,1_000L,"file:///dry-run-frame.png"
+            )
+            sourceLayer.sourceAt(Math.multiplyExact(positionMs, 1_000L))
+        }.getOrElse {
+            onInfo("Cannot freeze video: ${it.message}")
+            return
+        }
+        capturingFreeze = true
+        scope.launch {
+            var generated: Uri? = null
+            var saved = false
+            try {
+                generated = FreezeFrameCapture.capture(
+                    context,Uri.parse(requireNotNull(sourceLayer.sourceUri)),
+                    sourcePositionUs
+                )
+                // An async decoder may finish after another edit. Never apply an
+                // old snapshot over a newer project or silently discard user edits.
+                val latest = currentDraft.value
+                require(latest.layers.layers.firstOrNull { it.id == id } == sourceLayer) {
+                    "The clip changed while capturing; please freeze again"
+                }
+                val updated = LayerEdits.freezeVisualAt(
+                    latest,id,positionMs,1_000L,generated.toString()
+                )
+                onChange(updated)
+                saved = true
+                onInfo("1-second freeze inserted; the overlay resumes from the same source frame.")
+            } catch (error: Exception) {
+                onInfo("Freeze failed: ${error.message ?: "unknown error"}")
+            } finally {
+                if (!saved) generated?.let { FreezeFrameCapture.discard(context,it) }
+                capturingFreeze = false
+            }
+        }
     }
 
     LaunchedEffect(draft.layers.layers) {
@@ -660,7 +716,8 @@ fun VideoEditorScreen(
                         LayerTools(
                             active, playMs, LayerKind.VIDEO, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                            onAddVisual = ::chooseOverlay, onError = onInfo
+                            onAddVisual = ::chooseOverlay,
+                            onFreezeVideo = ::freezeVideoOverlay, onError = onInfo
                         )
                         LayerTools(
                             active, playMs, LayerKind.IMAGE, onChange,
