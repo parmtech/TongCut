@@ -61,6 +61,17 @@ class ProjectLibrary(private val context: Context) {
     fun catalog(): ProjectCatalog {
         val index = indexFile
         if (!index.baseFile.exists() && !File(index.baseFile.path + ".bak").exists()) {
+            // A process may crash after saving a draft but before the index.
+            // Prefer rescuing existing project files rather than reimporting legacy data.
+            val orphans = discoverFiles()
+            if (orphans.isNotEmpty()) {
+                val recovered = ProjectCatalog(
+                    projects = orphans.sortedByDescending { it.updatedMs },
+                    activeId = orphans.maxBy { it.updatedMs }.id
+                )
+                saveIndex(recovered)
+                return recovered
+            }
             val legacy = ProjectStore(context).load() ?: return ProjectCatalog()
             val migratedId = UUID.randomUUID().toString()
             ProjectStore(context, migratedId).save(legacy)
@@ -149,6 +160,39 @@ class ProjectLibrary(private val context: Context) {
         saveIndex(result)
         ProjectStore(context, id).delete()
         return result
+    }
+
+    /** Explicit recovery tool: preserves a corrupted index before regenerating metadata. */
+    @Synchronized
+    fun recoverFromFiles(): ProjectCatalog {
+        val recovered = discoverFiles()
+        require(recovered.isNotEmpty()) { "No readable draft files found" }
+        val index = indexFile
+        if (index.baseFile.exists()) {
+            val backup = File(root, "index-corrupt-${System.currentTimeMillis()}.json")
+            index.baseFile.copyTo(backup, overwrite = false)
+        }
+        val catalog = ProjectCatalog(
+            projects = recovered.sortedByDescending { it.updatedMs },
+            activeId = recovered.maxBy { it.updatedMs }.id
+        )
+        saveIndex(catalog)
+        return catalog
+    }
+
+    private fun discoverFiles(): List<ProjectCard> {
+        val files = root.listFiles { file ->
+            file.isFile && file.extension == "json" &&
+                Regex("[a-zA-Z0-9_-]{1,80}").matches(file.nameWithoutExtension) &&
+                file.name != "index.json"
+        } ?: return emptyList()
+
+        return files.mapNotNull { file ->
+            val id = file.nameWithoutExtension
+            val draft = runCatching { ProjectStore(context, id).load() }.getOrNull()
+                ?: return@mapNotNull null
+            ProjectCard(id, draft.title, draft.clips.size, file.lastModified())
+        }
     }
 
     private fun saveIndex(catalog: ProjectCatalog) {

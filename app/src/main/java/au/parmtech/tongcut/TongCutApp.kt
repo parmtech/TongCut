@@ -305,7 +305,32 @@ fun TongCutApp(exporter: VideoExporter) {
             onDismissRequest = { dialogText = null },
             title = { Text("TongCut") },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { dialogText = null }) { Text("OK") } }
+            confirmButton = {
+                Row {
+                    if (loaded && !saveAllowed) {
+                        TextButton(onClick = {
+                            scope.launch {
+                                try {
+                                    val recovered = withContext(Dispatchers.IO) {
+                                        val index = library.recoverFromFiles()
+                                        index to index.activeId?.let { library.read(it) }
+                                    }
+                                    catalog = recovered.first
+                                    activeId = recovered.first.activeId
+                                    draft = recovered.second ?: EditorDraft()
+                                    history.reset(draft)
+                                    saveAllowed = true
+                                    banner = "Recovered ${catalog.projects.size} project(s)"
+                                    dialogText = null
+                                } catch (error: Exception) {
+                                    dialogText = "Recovery failed: ${error.message}. Files remain untouched."
+                                }
+                            }
+                        }) { Text("Recover projects") }
+                    }
+                    TextButton(onClick = { dialogText = null }) { Text("Close") }
+                }
+            }
         )
     }
 }
