@@ -55,6 +55,33 @@ class LayerEditsTest {
         assertEquals(9_000_000L, item.sourceDurationUs)
     }
 
+    @Test fun detachingPrimaryAudioPreservesTrimAndPlacesAtSequentialClipTime() {
+        val first = DraftClip("content://first", "First", 8_000, 1_000, 7_000)
+        val second = DraftClip("content://second", "Second", 10_000, 2_000, 9_000)
+        val original = EditorDraft(clips = listOf(first, second))
+
+        val detached = LayerEdits.detachSourceAudio(original, 1)
+        val audio = detached.layers.layers.single()
+
+        assertFalse(original.clips[1].sourceAudioMuted)
+        assertTrue(detached.clips[1].sourceAudioMuted)
+        assertEquals(6_000_000L, audio.startUs)
+        assertEquals(7_000_000L, audio.durationUs)
+        assertEquals(2_000_000L, audio.sourceInUs)
+        assertEquals(10_000_000L, audio.sourceDurationUs)
+        assertEquals("content://second", audio.sourceUri)
+        assertEquals(1, AudioMixPlan.from(detached.layers, 13_000_000L).tracks.size)
+    }
+
+    @Test fun detachingAudioIsImmutableAndCannotDuplicateSameClip() {
+        val original = base()
+        val detached = LayerEdits.detachSourceAudio(original, 0)
+        assertEquals(0, original.layers.layers.size)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.detachSourceAudio(detached, 0)
+        }
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun cannotAddBlankText() {
         LayerEdits.addText(base(), 0, "   ")
@@ -640,3 +667,4 @@ class LayerEditsTest {
     }
 
 }
+
