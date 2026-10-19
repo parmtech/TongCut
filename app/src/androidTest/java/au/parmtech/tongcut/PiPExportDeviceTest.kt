@@ -169,4 +169,92 @@ class PiPExportDeviceTest {
         context.contentResolver.delete(uri,null,null)
     }
 
+
+    @Test fun speedRampPiPUsesTwoDifferentSpeedsAndKeepsBlueMain() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        fun asset(name: String): File {
+            val file = File(context.cacheDir, "ramp-$name")
+            InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { input ->
+                file.outputStream().use { input.copyTo(it) }
+            }
+            return file
+        }
+        val mainVideo = asset("main_blue.mp4")
+        val inset = asset("overlay_red.mp4")
+        // First 500ms of source slowed to 0.5× = 1 second on output,
+        // next 1500ms sped up to 2× = 750ms on output.
+        val curve = listOf(
+            SpeedKeyframe(0L, 0.5f),
+            SpeedKeyframe(500_000L, 2f)
+        )
+        assertEquals(1_750_000L, SpeedRamp.durationUs(2_000_000L, curve))
+        val graph = LayerTimeline(
+            tracks = listOf(TimelineTrack("pip", "Speed ramp", LayerKind.VIDEO, 0)),
+            layers = listOf(TimelineLayer(
+                id = "ramped", trackId = "pip", kind = LayerKind.VIDEO,
+                startUs = 500_000L,
+                durationUs = 1_750_000L,
+                sourceUri = Uri.fromFile(inset).toString(),
+                sourceInUs = 0L, sourceSpanUs = 2_000_000L,
+                sourceDurationUs = 3_000_000L, speedRamp = curve
+            ))
+        )
+        val complete = CountDownLatch(1)
+        var result: Uri? = null
+        var error: String? = null
+        Handler(Looper.getMainLooper()).post {
+            VideoExporter(context).start(
+                clips = listOf(Clip(Uri.fromFile(mainVideo), "Blue main", 3_000)),
+                options = ExportOptions(shortSidePixels = 720, mute = true),
+                overlayLayers = graph,
+                onProgress = {},
+                onSuccess = { result = it; complete.countDown() },
+                onError = { error = it; complete.countDown() }
+            )
+        }
+        assertTrue("Ramped PiP export did not finish", complete.await(180, TimeUnit.SECONDS))
+        assertNull("Ramped PiP export failure: $error", error)
+        val uri = result ?: throw AssertionError("No ramp MP4")
+        try {
+            MediaMetadataRetriever().use { retriever ->
+                retriever.setDataSource(context, uri)
+                fun redPixels(timestampUs: Long): Int {
+                    val frame = retriever.getFrameAtTime(
+                        timestampUs, MediaMetadataRetriever.OPTION_CLOSEST
+                    ) ?: throw AssertionError("Cannot decode $timestampUs")
+                    var red = 0
+                    for (y in 0 until frame.height step 8) {
+                        for (x in 0 until frame.width step 8) {
+                            val pixel = frame.getPixel(x, y)
+                            val r = android.graphics.Color.red(pixel)
+                            val g = android.graphics.Color.green(pixel)
+                            val b = android.graphics.Color.blue(pixel)
+                            if (r > 100 && r > g * 1.7 && r > b * 1.7) red++
+                        }
+                    }
+                    frame.recycle()
+                    return red
+                }
+                val before = redPixels(250_000)
+                val slowed = redPixels(1_250_000)
+                val spedUp = redPixels(2_050_000)
+                val after = redPixels(2_750_000)
+                assertTrue(
+                    "Ramp PiP missing while slow: before=$before slow=$slowed",
+                    slowed > before + 100
+                )
+                assertTrue(
+                    "Ramp PiP missing in fast segment: fast=$spedUp after=$after",
+                    spedUp > after + 100
+                )
+                assertTrue(
+                    "Overlay leaked past its correct 2.25s end: after=$after before=$before",
+                    after <= before + 80
+                )
+            }
+        } finally {
+            context.contentResolver.delete(uri, null, null)
+        }
+    }
+
 }
