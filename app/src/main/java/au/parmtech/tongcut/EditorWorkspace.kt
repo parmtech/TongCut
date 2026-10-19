@@ -203,13 +203,18 @@ fun VideoEditorScreen(
         }
     }
     LaunchedEffect(player, editTimeline, active.layers) {
+        var lastAudioWarning: String? = null
         while (true) {
             if (player.mediaItemCount > 0 && player.currentMediaItemIndex in editTimeline.clips.indices) {
                 val index = player.currentMediaItemIndex
                 playMs = editTimeline.timeOf(index, player.currentPosition)
             }
             playing = player.isPlaying
-            audioMonitor.sync(active.layers, playMs, playing)
+            val warning = runCatching {
+                audioMonitor.sync(active.layers, playMs, playing)
+            }.getOrElse { "Audio preview unavailable: ${it.message ?: "decoder failed"}" }
+            if (warning != null && warning != lastAudioWarning) onInfo(warning)
+            lastAudioWarning = warning
             delay(90)
         }
     }

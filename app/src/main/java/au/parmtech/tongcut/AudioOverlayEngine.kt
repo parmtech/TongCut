@@ -20,7 +20,7 @@ class AudioOverlayEngine(private val context: Context) {
     private val active = LinkedHashMap<String, Entry>()
 
     /** Called on Android's main thread with the main video playhead. */
-    fun sync(graph: LayerTimeline, globalPositionMs: Long, playing: Boolean) {
+    fun sync(graph: LayerTimeline, globalPositionMs: Long, playing: Boolean): String? {
         check(Looper.myLooper() == Looper.getMainLooper())
         val timeUs = globalPositionMs.coerceAtLeast(0L) * 1_000L
         val trackMap = graph.tracks.associateBy { it.id }
@@ -29,10 +29,11 @@ class AudioOverlayEngine(private val context: Context) {
                 trackMap[layer.trackId]?.muted == false &&
                 layer.startUs <= timeUs && timeUs < layer.endUs
         }.sortedWith(compareBy<TimelineLayer> { trackMap[it.trackId]?.order ?: 0 }.thenBy { it.id })
-        require(audible.size <= AudioMixPlan.MAX_MIXED_LANES) {
-            "Too many simultaneous audio clips to preview"
+        if (audible.size > AudioMixPlan.MAX_MIXED_LANES) {
+            // Do not crash when a previously saved project has too many active lanes.
+            release()
+            return "Audio preview requires at most ${AudioMixPlan.MAX_MIXED_LANES} tracks"
         }
-        val wanted = audible.mapTo(HashSet()) { it.id }
         val old = active.iterator()
         while (old.hasNext()) {
             val item = old.next()
@@ -69,6 +70,7 @@ class AudioOverlayEngine(private val context: Context) {
                 if (!decoder.isPlaying) decoder.play()
             } else decoder.pause()
         }
+        return null
     }
 
     fun release() {
