@@ -122,6 +122,9 @@ fun VideoEditorScreen(
     var exportAudioBitrate by remember(draft.exportAudioBitrateBps) {
         mutableIntStateOf(draft.exportAudioBitrateBps)
     }
+    var exportMaxFrameRate by remember(draft.exportMaxFrameRate) {
+        mutableIntStateOf(draft.exportMaxFrameRate)
+    }
     val supportedExportCodecs by produceState(
         initialValue = emptyList<ExportVideoCodec>(), context
     ) {
@@ -1251,6 +1254,11 @@ fun VideoEditorScreen(
                                 exportBitrate = bitrate
                                 onChange(active.copy(exportVideoBitrateBps = bitrate))
                             }) { "${it / 1_000_000} Mbps" }
+                        Text("Maximum video frame rate (lower-rate sources are not upscaled)")
+                        ToolChips(ExportFrameRate.choices, exportMaxFrameRate, { fps ->
+                            exportMaxFrameRate = fps
+                            onChange(active.copy(exportMaxFrameRate = fps))
+                        }) { "${it} FPS max" }
                         Text("AAC audio bitrate (encoder may vary)")
                         ToolChips(listOf(96_000, 128_000, 192_000, 256_000),
                             exportAudioBitrate, { bitrate ->
@@ -1301,7 +1309,8 @@ fun VideoEditorScreen(
                                 mute = muteOriginal,
                                 videoCodec = exportCodec,
                                 videoBitrateBps = exportBitrate,
-                                audioBitrateBps = exportAudioBitrate
+                                audioBitrateBps = exportAudioBitrate,
+                                maxFrameRate = exportMaxFrameRate
                             ),
                             onProgress = { progress = it },
                             onSuccess = {
@@ -1384,4 +1393,3 @@ private fun <T> ToolChips(
         }
     }
 }
-

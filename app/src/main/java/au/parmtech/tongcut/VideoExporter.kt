@@ -137,6 +137,7 @@ class VideoExporter(private val context: Context) {
                             .build()
                     ).build()
                 EditedMediaItem.Builder(source)
+                    .setFrameRate(options.maxFrameRate)
                     .setRemoveAudio(options.mute || clip.removeAudio)
                     .setEffects(Effects(emptyList(), clipEffects))
                     .build()
@@ -152,7 +153,9 @@ class VideoExporter(private val context: Context) {
             val allSequences = mutableListOf<EditedMediaItemSequence>()
             // Media3 composites in reverse sequence order, so PiP video lanes MUST
             // be registered before the fully opaque main video, then audio-only lanes.
-            allSequences.addAll(VisualComposition.sequences(videoLanes, baseVideoDurationUs, overlayLayers))
+            allSequences.addAll(VisualComposition.sequences(
+                videoLanes, baseVideoDurationUs, overlayLayers, options.maxFrameRate
+            ))
             allSequences += sequence
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
@@ -378,4 +381,3 @@ class VideoExporter(private val context: Context) {
         }
     }
 }
-

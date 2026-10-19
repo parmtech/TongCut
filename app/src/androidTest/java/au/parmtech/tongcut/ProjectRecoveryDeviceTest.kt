@@ -19,7 +19,8 @@ class ProjectRecoveryDeviceTest {
         var draft = EditorDraft(
             title="Recover P2 layers",
             clips=listOf(DraftClip("content://synthetic/main","Main",10_000)),
-            exportAudioBitrateBps=192_000
+            exportAudioBitrateBps=192_000,
+            exportMaxFrameRate=60
         )
         draft = LayerEdits.addText(draft, 1_000L, "Offline title")
         draft = LayerEdits.addAudio(draft,2_000L,"content://synthetic/audio",5_000L)
@@ -51,6 +52,30 @@ class ProjectRecoveryDeviceTest {
             legacy.put("schema",6).put("exportAudioBitrateBps",900_000)
             jsonFile.writeText(legacy.toString())
             assertEquals(128_000, ProjectStore(app,id).load()!!.exportAudioBitrateBps)
+        } finally { store.delete() }
+    }
+
+    @Test fun projectSchemaSevenPersistsFrameRateAndLegacyDefaultsToThirty() {
+        val id="p7-frame-rate-migration"
+        val store=ProjectStore(app,id)
+        store.delete()
+        val jsonFile=File(File(app.filesDir,"tongcut-projects"),"$id.json")
+        try {
+            store.save(layeredProject())
+            val current=JSONObject(jsonFile.readText())
+            assertEquals(7,current.getInt("schema"))
+            assertEquals(60,current.getInt("exportMaxFrameRate"))
+            assertEquals(60,ProjectStore(app,id).load()!!.exportMaxFrameRate)
+
+            current.put("schema",6).remove("exportMaxFrameRate")
+            jsonFile.writeText(current.toString())
+            assertEquals(ExportFrameRate.DEFAULT,
+                ProjectStore(app,id).load()!!.exportMaxFrameRate)
+
+            current.put("schema",7).put("exportMaxFrameRate",120)
+            jsonFile.writeText(current.toString())
+            assertEquals(ExportFrameRate.DEFAULT,
+                ProjectStore(app,id).load()!!.exportMaxFrameRate)
         } finally { store.delete() }
     }
 
@@ -96,4 +121,3 @@ class ProjectRecoveryDeviceTest {
         } finally { store.delete() }
     }
 }
-

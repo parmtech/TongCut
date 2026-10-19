@@ -49,13 +49,15 @@ data class EditorDraft(
     val muteOriginalAudio: Boolean = false,
     // Secondary audio/video/text/image lanes; legacy primary clips stay unchanged.
     val layers: LayerTimeline = LayerTimeline(),
-    val exportAudioBitrateBps: Int = 128_000
+    val exportAudioBitrateBps: Int = 128_000,
+    val exportMaxFrameRate: Int = ExportFrameRate.DEFAULT
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
     init {
         require(exportVideoBitrateBps in 1_000_000..50_000_000)
         require(exportAudioBitrateBps in 64_000..320_000)
+        require(exportMaxFrameRate in ExportFrameRate.choices)
     }
 
     fun normalized(): EditorDraft =
@@ -117,7 +119,8 @@ data class EditorDraft(
         colorGrade = colorGrade,
         videoCodec = exportVideoCodec,
         videoBitrateBps = exportVideoBitrateBps,
-        audioBitrateBps = exportAudioBitrateBps
+        audioBitrateBps = exportAudioBitrateBps,
+        maxFrameRate = exportMaxFrameRate
     )
 }
 
@@ -166,4 +169,3 @@ class EditHistory<T>(initial: T, private val maxUndo: Int = 80) {
         return current
     }
 }
-

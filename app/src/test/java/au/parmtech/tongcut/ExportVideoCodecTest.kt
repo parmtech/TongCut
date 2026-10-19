@@ -2,6 +2,7 @@ package au.parmtech.tongcut
 
 import androidx.media3.common.MimeTypes
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,6 +24,15 @@ class ExportVideoCodecTest {
         assertEquals(ExportVideoCodec.H264, options.videoCodec)
         assertEquals(8_000_000, options.videoBitrateBps)
         assertEquals(128_000, options.audioBitrateBps)
+        assertEquals(ExportFrameRate.DEFAULT, options.maxFrameRate)
+    }
+
+    @Test fun exportFrameRateMaximumFlowsFromDraftAndRejectsUnsupportedValues() {
+        assertEquals(60, EditorDraft(exportMaxFrameRate = 60).exportOptions().maxFrameRate)
+        assertEquals(listOf(24, 30, 60), ExportFrameRate.choices)
+        assertThrows(IllegalArgumentException::class.java) {
+            EditorDraft(exportMaxFrameRate = 120)
+        }
     }
 
     @Test fun audioBitratePreferenceFlowsIntoExportAndEnforcesBounds() {
@@ -67,4 +77,3 @@ class ExportVideoCodecTest {
         ) { _, _ -> true })
     }
 }
-

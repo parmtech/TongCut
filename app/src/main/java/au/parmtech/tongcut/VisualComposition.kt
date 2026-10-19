@@ -37,7 +37,8 @@ object VisualComposition {
 
     /** Audio/video media sources with a full-length black (transparent) gap tail. */
     fun sequences(
-        plans: List<VisualLanePlan>, totalUs: Long, timeline: LayerTimeline
+        plans: List<VisualLanePlan>, totalUs: Long, timeline: LayerTimeline,
+        maxFrameRate: Int = ExportFrameRate.DEFAULT
     ): List<EditedMediaItemSequence> =
         plans.map { lane ->
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
@@ -60,7 +61,9 @@ object VisualComposition {
                                     .setEndPositionMs(start + sourceSpanMs)
                                     .build()
                             ).build()
-                        val edited = EditedMediaItem.Builder(item).setRemoveAudio(true)
+                        val edited = EditedMediaItem.Builder(item)
+                            .setFrameRate(maxFrameRate)
+                            .setRemoveAudio(true)
                         val effects = timeline.layers.firstOrNull {
                             it.id == part.layerId
                         }?.photoEffects ?: PhotoEffects()

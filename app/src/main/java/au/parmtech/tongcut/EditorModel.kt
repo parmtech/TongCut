@@ -38,16 +38,24 @@ data class ExportOptions(
     val colorGrade: ColorGrade = ColorGrade(),
     val videoCodec: ExportVideoCodec = ExportVideoCodec.H264,
     val videoBitrateBps: Int = 8_000_000,
-    val audioBitrateBps: Int = 128_000
+    val audioBitrateBps: Int = 128_000,
+    /** Maximum output frame rate; never up-converts slower source video. */
+    val maxFrameRate: Int = ExportFrameRate.DEFAULT
 ) {
     init {
         require(videoBitrateBps in 1_000_000..50_000_000)
         require(audioBitrateBps in 64_000..320_000)
+        require(maxFrameRate in ExportFrameRate.choices)
     }
+}
+
+/** User-facing CFR ceilings supported by the current Media3 item pipeline. */
+object ExportFrameRate {
+    const val DEFAULT = 30
+    val choices = listOf(24, 30, 60)
 }
 
 fun Long.asTimestamp(): String {
     val total = this.coerceAtLeast(0) / 1000
     return "%02d:%02d".format(total / 60, total % 60)
 }
-
