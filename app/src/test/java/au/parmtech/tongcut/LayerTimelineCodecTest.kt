@@ -29,6 +29,25 @@ class LayerTimelineCodecTest {
         assertFalse(result.activeAt(2_000_000).any { it.kind == LayerKind.TEXT })
     }
 
+    @Test fun captionStylesSurviveSchema8AndSchema7Defaults() {
+        val textLayer = timeline.layers.first { it.kind == LayerKind.TEXT }
+        val styled = textLayer.copy(
+            captionStyle = CaptionStyle(CaptionTone.CORAL, size = 1.8f, bold = false)
+        )
+        val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
+        val encoded = LayerTimelineCodec.encode(project)
+        assertEquals(8, encoded.getInt("schema"))
+        assertEquals(project, LayerTimelineCodec.decode(encoded))
+        val legacy = LayerTimelineCodec.encode(timeline)
+        legacy.put("schema", 7)
+        for (index in 0 until legacy.getJSONArray("layers").length()) {
+            legacy.getJSONArray("layers").getJSONObject(index).remove("captionStyle")
+        }
+        val migrated = LayerTimelineCodec.decode(legacy)
+        assertEquals(CaptionStyle(),
+            migrated.layers.first { it.kind == LayerKind.TEXT }.captionStyle)
+    }
+
     @Test fun emptyLayerTimelineRoundtrip() {
         val result = LayerTimelineCodec.decode(LayerTimelineCodec.encode(LayerTimeline()))
         assertEquals(LayerTimeline(), result)
@@ -128,7 +147,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(7,json.getInt("schema"))
+        assertEquals(8,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
     }
 
@@ -163,7 +182,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(7,serialized.getInt("schema"))
+        assertEquals(8,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
