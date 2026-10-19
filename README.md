@@ -6,7 +6,7 @@
 
 - Offline source selection/import, main-sequence trim/split/reorder and preview with project persistence, undo/redo and relink support.
 - Multiple typed VIDEO, PHOTO, AUDIO and TEXT overlay tracks; timeline gestures, keyframe motion, speed editing, PiP and image/title compositing.
-- Experimental Media3 GPU video/photo masks, chroma key and despill, source-colour picker, source-aware audio speed ramps with pitch preservation, basic fades and overlay crossfades.
+- Experimental Media3 GPU video/photo masks (including adjustable ellipse, diamond, positional wipe, shape rotation and inversion), chroma key and despill, source-colour picker, source-aware audio speed ramps with pitch preservation, basic fades and overlay crossfades.
 - Export experiments include H.264 MP4, filters/cropping, progress/cancel, gallery saving and mixed-media composition subject to device codec support.
 - Pure JVM model/regression tests and instrumented synthetic-media tests, with past CI evidence recorded in the temporary checklist.
 
