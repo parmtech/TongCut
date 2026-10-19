@@ -91,14 +91,14 @@ internal fun ClipContextBar(
         ) {
             Text(
                 "TONGCUT  /  $type",
-                color = Color(0xFF83E5E3),
+                color = TongCutPalette.AquaSoft,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 11.sp
             )
             Spacer(Modifier.weight(1f))
             Text(
                 "${(layer.durationUs / 1_000_000f)}s",
-                color = Color(0xFFB4BDC1),
+                color = TongCutPalette.SecondaryText,
                 fontSize = 11.sp
             )
         }
@@ -112,8 +112,8 @@ internal fun ClipContextBar(
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = if (action == ClipAction.DELETE) Color(0xFF3C2227)
-                        else Color(0xFF262B30),
-                    border = BorderStroke(1.dp, Color(0xFF3E5056)),
+                        else TongCutPalette.Raised,
+                    border = BorderStroke(1.dp, TongCutPalette.Stroke),
                     modifier = Modifier.width(75.dp).clickable { onAction(action) }
                 ) {
                     Column(
@@ -126,7 +126,7 @@ internal fun ClipContextBar(
                                 Icons.Default.VolumeUp else clipActionIcon(action),
                             contentDescription = label,
                             tint = if (action == ClipAction.DELETE) Color(0xFFFF939A)
-                                else Color(0xFFE5F7F6)
+                                else TongCutPalette.Pearl
                         )
                         Text(
                             label, fontSize = 10.sp, maxLines = 1,
