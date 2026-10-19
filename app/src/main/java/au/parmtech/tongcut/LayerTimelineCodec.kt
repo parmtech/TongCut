@@ -50,6 +50,10 @@ object LayerTimelineCodec {
                     put("photoFx", JSONObject().apply {
                         put("mask", item.photoEffects.mask.name)
                         put("feather", item.photoEffects.feather.toDouble())
+                        put("centerX", item.photoEffects.maskCenterX.toDouble())
+                        put("centerY", item.photoEffects.maskCenterY.toDouble())
+                        put("scaleX", item.photoEffects.maskScaleX.toDouble())
+                        put("scaleY", item.photoEffects.maskScaleY.toDouble())
                         put("chroma", item.photoEffects.chroma?.let { key ->
                             JSONObject().apply {
                                 put("color", key.keyArgb)
@@ -135,6 +139,10 @@ object LayerTimelineCodec {
                     PhotoEffects(
                         mask = PhotoMask.valueOf(fx.optString("mask","NONE")),
                         feather = fx.optDouble("feather",0.04).toFloat(),
+                        maskCenterX = fx.optDouble("centerX",0.0).toFloat(),
+                        maskCenterY = fx.optDouble("centerY",0.0).toFloat(),
+                        maskScaleX = fx.optDouble("scaleX",1.0).toFloat(),
+                        maskScaleY = fx.optDouble("scaleY",1.0).toFloat(),
                         chroma = fx.optJSONObject("chroma")?.let { c ->
                             PhotoChroma(
                                 keyArgb = c.optInt("color",0xFF00FF00.toInt()),
