@@ -26,6 +26,19 @@ class LayerTimelineTest {
         for (frame in 0L..1000L) assertEquals(frame, rate.frameAt(rate.atFrame(frame)))
     }
 
+    @Test fun extremePlayheadBeforeClipNeverWrapsToLastSourceFrame() {
+        val nearMax = videoClip(
+            start = Long.MAX_VALUE - 4_000_000L,
+            duration = 3_000_000L
+        )
+        assertEquals(1_000_000L, nearMax.sourceAt(Long.MIN_VALUE))
+        assertEquals(1_000_000L, nearMax.sourceAt(-1L))
+        assertEquals(1_000_000L, nearMax.sourceAt(0L))
+        assertEquals(1_000_000L, nearMax.sourceAt(nearMax.startUs))
+        assertEquals(2_500_000L, nearMax.sourceAt(nearMax.startUs + 1_500_000L))
+        assertEquals(4_000_000L, nearMax.sourceAt(Long.MAX_VALUE))
+    }
+
     @Test fun clipsCanOverlapOnDifferentLayersAndHaveZOrder() {
         val item = videoClip()
         val second = item.copy(id = "v-second", trackId = "v3")
