@@ -129,7 +129,31 @@ internal fun LayerTools(
                     modifier = Modifier.horizontalScroll(rememberScrollState())
                 ) {
                     if (kind == LayerKind.TEXT) {
-                        SmallLayerButton("Edit") { editingId = layer.id; entry = layer.text.orEmpty() }
+                        SmallLayerButton("Edit") {
+                            editingId = layer.id
+                            entry = layer.text.orEmpty()
+                        }
+                        fun style(next: CaptionStyle) {
+                            runCatching {
+                                LayerEdits.changeCaptionStyle(draft, layer.id, next)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Caption styling failed") }
+                        }
+                        val current = layer.captionStyle
+                        SmallLayerButton("Colour: ${current.tone.title}") {
+                            val tones = CaptionTone.entries
+                            val next = tones[(tones.indexOf(current.tone) + 1) % tones.size]
+                            style(current.copy(tone = next))
+                        }
+                        SmallLayerButton(if (current.bold) "Bold ✓" else "Bold") {
+                            style(current.copy(bold = !current.bold))
+                        }
+                        SmallLayerButton("Text −") {
+                            style(current.copy(size = (current.size - 0.1f).coerceAtLeast(0.5f)))
+                        }
+                        SmallLayerButton("Text +") {
+                            style(current.copy(size = (current.size + 0.1f).coerceAtMost(3f)))
+                        }
                     }
                     SmallLayerButton(
                         if (layer.id in validGroup) "✓ Group" else "+ Group"
