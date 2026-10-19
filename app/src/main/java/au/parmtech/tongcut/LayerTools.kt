@@ -291,6 +291,22 @@ internal fun LayerTools(
                                     .onFailure { onError(it.message ?: "Mask inversion failed") }
                             }
                         }
+                        if (fx.mask == PhotoMask.LINEAR_WIPE) {
+                            SmallLayerButton("Wipe ←") {
+                                runCatching {
+                                    applyMatte(fx.copy(maskCenterX =
+                                        (fx.maskCenterX - 0.1f).coerceAtLeast(-1f)))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Wipe change failed") }
+                            }
+                            SmallLayerButton("Wipe →") {
+                                runCatching {
+                                    applyMatte(fx.copy(maskCenterX =
+                                        (fx.maskCenterX + 0.1f).coerceAtMost(1f)))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Wipe change failed") }
+                            }
+                        }
                         if (fx.mask == PhotoMask.ELLIPSE ||
                             fx.mask == PhotoMask.DIAMOND) {
                             fun changeShape(next: PhotoEffects) {
