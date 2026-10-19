@@ -33,4 +33,16 @@ class PhotoOverlaySizingTest {
     fun rejectsNonFiniteCanvasAspectRatio() {
         PhotoOverlaySizing.outputWidth(1080,Float.NaN)
     }
+
+    @Test fun mixedPortraitAndLandscapeVideoFitTheSamePiPBoxAsPhotos() {
+        val baseWidth=720
+        val portraitSource=PhotoOverlaySizing.fitScale(180,320,baseWidth)
+        val wideSource=PhotoOverlaySizing.fitScale(320,180,baseWidth)
+        val targetWidth=720f * 0.42f
+        val targetHeight=targetWidth / (16f/9f)
+        assertEquals(targetHeight,320f*portraitSource,0.001f)
+        assertEquals(targetHeight,180f*wideSource,0.001f)
+        assertTrue(portraitSource < wideSource)
+    }
+
 }

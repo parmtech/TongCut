@@ -40,6 +40,7 @@ jobs:
           mkdir -p app/src/androidTest/assets
           ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/main_blue.mp4
           ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=red:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_red.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=180x320:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/main_blue_portrait.mp4
           ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=green:s=128x128:d=1 -vf "drawbox=x=40:y=40:w=48:h=48:color=red:t=fill" -frames:v 1 -y app/src/androidTest/assets/matte_green_red.png
       - name: Grant Linux KVM access
         run: |

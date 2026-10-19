@@ -327,6 +327,36 @@ fun VideoEditorScreen(
     DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
     val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
 
+    // Read once per primary source, on an IO dispatcher; never block Compose
+    // recomposition on slow gallery/content-provider metadata.
+    val mainCanvasUri = active.clips.firstOrNull()?.sourceUri
+    val sourceAspect by produceState(16f / 9f, mainCanvasUri) {
+        value = if (mainCanvasUri == null) 16f / 9f else
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    MediaMetadataRetriever().use { media ->
+                        media.setDataSource(context, Uri.parse(mainCanvasUri))
+                        var width = media.extractMetadata(
+                            MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+                        )?.toIntOrNull() ?: error("Unknown source width")
+                        var height = media.extractMetadata(
+                            MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+                        )?.toIntOrNull() ?: error("Unknown source height")
+                        val orientation = media.extractMetadata(
+                            MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
+                        )?.toIntOrNull() ?: 0
+                        if (orientation == 90 || orientation == 270) {
+                            val prior = width
+                            width = height
+                            height = prior
+                        }
+                        require(width > 0 && height > 0)
+                        width.toFloat() / height.toFloat()
+                    }
+                }.getOrDefault(16f / 9f)
+            }
+    }
+
     // A single ExoPlayer playlist plays trimmed media clips consecutively.
     // source URI and clipping window are the same values sent to Transformer.
     LaunchedEffect(active.clips, active.selectedIndex) {
@@ -465,11 +495,21 @@ fun VideoEditorScreen(
             }
         }
 
-        // Immersive player uses source aspect ratio; export/preview parity is tracked separately.
-        Box(
+        // The preview must use the exported VIDEO canvas, not the entire phone
+        // screen's letterboxed player container. Otherwise corner PiPs and text
+        // appear over black space on portrait / wide / square videos.
+        BoxWithConstraints(
             Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ) {
+            val stageAspect = (active.canvas.ratio ?: sourceAspect)
+                .coerceIn(0.1f, 10f)
+            val stageWidth = minOf(maxWidth, maxHeight * stageAspect)
+            val stageHeight = stageWidth / stageAspect
+            Box(
+                modifier = Modifier.align(Alignment.Center)
+                    .size(stageWidth, stageHeight)
+            ) {
             if (clip == null) {
                 Text("Add a video to begin editing", color = Color.LightGray)
             } else {
@@ -481,7 +521,12 @@ fun VideoEditorScreen(
                             setShutterBackgroundColor(android.graphics.Color.BLACK)
                         }
                     },
-                    update = { view -> view.player = player },
+                    update = { view ->
+                        view.player = player
+                        view.resizeMode = if (active.canvas == CanvasRatio.SOURCE)
+                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -511,6 +556,38 @@ fun VideoEditorScreen(
                     val density = LocalDensity.current
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val viewportHeightPx = with(density) { maxHeight.toPx() }
+                    visibleText.forEach { layer ->
+                        val motion = MotionCurve.at(
+                            layer.motion,
+                            (playMs * 1_000L - layer.startUs).coerceIn(0L, layer.durationUs)
+                        )
+                        Text(
+                            text = layer.text.orEmpty(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 21.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center)
+                                .fillMaxWidth(0.88f)
+                                .graphicsLayer {
+                                    translationX = motion.x * viewportWidthPx / 2f
+                                    translationY = -motion.y * viewportHeightPx / 2f
+                                    scaleX = motion.scale
+                                    scaleY = motion.scale
+                                    rotationZ = motion.rotation
+                                    alpha = motion.opacity * layer.fade.alphaAt(
+                                        (playMs * 1_000L-layer.startUs)
+                                            .coerceIn(0L,layer.durationUs),
+                                        layer.durationUs
+                                    )
+                                }
+                        )
+                    }
+                }
+            }
+            }
+        }
+ht.toPx() }
                     visibleText.forEach { layer ->
                         val motion = MotionCurve.at(
                             layer.motion,

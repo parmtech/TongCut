@@ -86,7 +86,7 @@ class VideoExporter(private val context: Context) {
                 layer.kind == LayerKind.IMAGE &&
                     overlayLayers.tracks.firstOrNull { it.id == layer.trackId }?.hidden != true
             }
-            val photoOutputWidth = if (hasVisiblePhoto) {
+            val photoCanvas = if (hasVisiblePhoto) {
                 val ratio = options.ratio.ratio ?: MediaMetadataRetriever().use { media ->
                     media.setDataSource(context, original.first().uri)
                     var videoWidth = media.extractMetadata(
@@ -106,12 +106,14 @@ class VideoExporter(private val context: Context) {
                     require(videoWidth > 0 && videoHeight > 0)
                     videoWidth.toFloat() / videoHeight.toFloat()
                 }
-                PhotoOverlaySizing.outputWidth(options.shortSidePixels, ratio)
-            } else 0
+                PhotoOverlaySizing.outputWidth(options.shortSidePixels, ratio) to ratio
+            } else 0 to (16f / 9f)
 
             // Post-composition overlays draw photos first, titles last.
             val visibleOverlays = (if (hasVisiblePhoto) {
-                PhotoOverlayEffects.overlays(context, overlayLayers, photoOutputWidth)
+                PhotoOverlayEffects.overlays(
+                    context, overlayLayers, photoCanvas.first, photoCanvas.second
+                )
             } else emptyList()) + TimedTextEffects.overlays(overlayLayers)
             if (visibleOverlays.isNotEmpty()) {
                 compositionEffects += OverlayEffect(visibleOverlays)

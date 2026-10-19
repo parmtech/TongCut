@@ -15,15 +15,19 @@ import androidx.media3.effect.TextureOverlay
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 object PhotoOverlayEffects {
-    fun overlays(context: Context, timeline: LayerTimeline, outputWidthPx: Int): List<TextureOverlay> {
+    fun overlays(
+        context: Context, timeline: LayerTimeline,
+        outputWidthPx: Int, canvasAspect: Float
+    ): List<TextureOverlay> {
         require(outputWidthPx > 0)
+        require(canvasAspect.isFinite() && canvasAspect in 0.1f..10f)
         val byTrack = timeline.tracks.associateBy { it.id }
         val photos = timeline.layers.filter {
             it.kind == LayerKind.IMAGE && byTrack[it.trackId]?.hidden != true
         }.sortedWith(compareBy<TimelineLayer> { byTrack[it.trackId]!!.order }.thenBy { it.startUs })
 
         return photos.map { layer ->
-            val position = VisualOverlaySlots.position(timeline,layer)
+            val position = VisualOverlaySlots.canvasPosition(timeline, layer, canvasAspect)
             object : BitmapOverlay() {
                 private var image: Bitmap? = null
 

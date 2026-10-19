@@ -76,4 +76,24 @@ class VisualOverlaySlotsTest {
         assertEquals(1,VisualOverlaySlots.slotFor(hiddenVideo,still))
     }
 
+
+    @Test fun portraitCanvasAnchorsPiPNearPhysicalCorners() {
+        val landscape = VisualOverlaySlots.canvasAnchor(0,16f/9f)
+        val portrait = VisualOverlaySlots.canvasAnchor(0,9f/16f)
+        assertEquals(0.58f,landscape.first,0.0001f)
+        assertEquals(-0.58f,landscape.second,0.0001f)
+        assertEquals(0.58f,portrait.first,0.0001f)
+        assertEquals(-0.867125f,portrait.second,0.001f)
+        val lowerLeft = VisualOverlaySlots.canvasAnchor(1,9f/16f)
+        assertEquals(-portrait.first,lowerLeft.first,0.0001f)
+        assertEquals(portrait.second,lowerLeft.second,0.0001f)
+        val topRight = VisualOverlaySlots.canvasAnchor(2,9f/16f)
+        assertEquals(-portrait.second,topRight.second,0.0001f)
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun canvasAnchorRejectsInvalidAspect() {
+        VisualOverlaySlots.canvasAnchor(0,Float.NaN)
+    }
+
 }

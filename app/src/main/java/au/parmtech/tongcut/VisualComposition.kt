@@ -100,9 +100,16 @@ object VisualComposition {
         val schedule = CompositorVideoPlan(videoDurationUs, plans)
         val byId = timeline.layers.associateBy { it.id }
         return object : VideoCompositorSettings {
+            private var measuredInputs: List<Size> = emptyList()
+            private var canvasAspect = 16f / 9f
+
             override fun getOutputSize(inputSizes: List<Size>): Size {
                 require(inputSizes.size >= plans.size + 1) { "Base video input missing" }
-                return inputSizes[plans.size]
+                val baseSize = inputSizes[plans.size]
+                require(baseSize.width > 0 && baseSize.height > 0)
+                measuredInputs = inputSizes.toList()
+                canvasAspect = baseSize.width.toFloat() / baseSize.height
+                return baseSize
             }
 
             override fun getOverlaySettings(
@@ -121,9 +128,19 @@ object VisualComposition {
                 // reposition a PiP when another layer starts or ends.
                 val position = (layer ?: timeline.layers.firstOrNull {
                     it.trackId == plans[inputId].trackId
-                })?.let { VisualOverlaySlots.position(timeline,it) } ?: (0f to 0f)
+                })?.let {
+                    VisualOverlaySlots.canvasPosition(timeline, it, canvasAspect)
+                } ?: (0f to 0f)
+                // A 320x180 PiP over a 180x320 main video must not be
+                // stretched to 42% of its OWN pixels. Fit to a 42%-width,
+                // 16:9 stage box, exactly as for bitmap PiPs and preview.
+                val baseWidth = measuredInputs.getOrNull(plans.size)?.width ?: 320
+                val overlaySize = measuredInputs.getOrNull(inputId)
+                val fitted = overlaySize?.let {
+                    PhotoOverlaySizing.fitScale(it.width, it.height, baseWidth)
+                } ?: 0.42f
                 return StaticOverlaySettings.Builder()
-                    .setScale(0.42f * pose.scale, 0.42f * pose.scale)
+                    .setScale(fitted * pose.scale, fitted * pose.scale)
                     .setBackgroundFrameAnchor(
                         (position.first + pose.x).coerceIn(-1f, 1f),
                         (position.second + pose.y).coerceIn(-1f, 1f)

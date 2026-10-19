@@ -257,4 +257,85 @@ class PiPExportDeviceTest {
         }
     }
 
+
+    @Test fun landscapePiPFitsBottomRightCornerOfPortraitVideo() {
+        val app = ApplicationProvider.getApplicationContext<Context>()
+        fun asset(name: String): File {
+            val file = File(app.cacheDir, "portrait-$name")
+            InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { source ->
+                file.outputStream().use { source.copyTo(it) }
+            }
+            return file
+        }
+        val base = asset("main_blue_portrait.mp4")
+        val overlay = asset("overlay_red.mp4")
+        val graph = LayerTimeline(
+            tracks = listOf(TimelineTrack("pip","Portrait PiP",LayerKind.VIDEO,0)),
+            layers = listOf(TimelineLayer(
+                id="red",trackId="pip",kind=LayerKind.VIDEO,
+                startUs=500_000L,durationUs=1_500_000L,
+                sourceUri=Uri.fromFile(overlay).toString(),
+                sourceDurationUs=3_000_000L
+            ))
+        )
+        val done = CountDownLatch(1)
+        var output: Uri? = null
+        var error: String? = null
+        Handler(Looper.getMainLooper()).post {
+            VideoExporter(app).start(
+                clips=listOf(Clip(Uri.fromFile(base),"Blue portrait",3_000L)),
+                options=ExportOptions(shortSidePixels=720,mute=true),
+                overlayLayers=graph,
+                onProgress={},
+                onSuccess={output=it;done.countDown()},
+                onError={error=it;done.countDown()}
+            )
+        }
+        assertTrue("Portrait PiP export timeout",done.await(180,TimeUnit.SECONDS))
+        assertNull("Portrait PiP export error: $error",error)
+        val outputUri=output ?: throw AssertionError("Portrait MP4 missing")
+        try {
+            MediaMetadataRetriever().use { media ->
+                media.setDataSource(app,outputUri)
+                val frame=media.getFrameAtTime(
+                    1_000_000L,MediaMetadataRetriever.OPTION_CLOSEST
+                ) ?: throw AssertionError("Cannot decode portrait PiP")
+                try {
+                    assertTrue("Expected portrait output",frame.height>frame.width)
+                    var redCount=0
+                    var minX=frame.width
+                    var maxX=0
+                    var minY=frame.height
+                    var maxY=0
+                    for(y in 0 until frame.height step 3) {
+                        for(x in 0 until frame.width step 3) {
+                            val c=frame.getPixel(x,y)
+                            if(android.graphics.Color.red(c)>130 &&
+                                android.graphics.Color.red(c)>android.graphics.Color.green(c)*1.5 &&
+                                android.graphics.Color.red(c)>android.graphics.Color.blue(c)*1.5) {
+                                redCount++
+                                minX=minOf(minX,x)
+                                maxX=maxOf(maxX,x)
+                                minY=minOf(minY,y)
+                                maxY=maxOf(maxY,y)
+                            }
+                        }
+                    }
+                    assertTrue("PiP invisible on portrait: $redCount",redCount>50)
+                    val centreX=(minX+maxX)/2f/frame.width
+                    val centreY=(minY+maxY)/2f/frame.height
+                    assertTrue("PiP should be right aligned: $centreX",centreX>0.65f)
+                    assertTrue("PiP should be bottom aligned: $centreY",centreY>0.72f)
+                    val relativeWidth=(maxX-minX).toFloat()/frame.width
+                    assertTrue("PiP width not fitted: $relativeWidth",
+                        relativeWidth>0.30f && relativeWidth<0.51f)
+                } finally {
+                    frame.recycle()
+                }
+            }
+        } finally {
+            app.contentResolver.delete(outputUri,null,null)
+        }
+    }
+
 }
