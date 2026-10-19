@@ -347,9 +347,18 @@ internal fun LayerTools(
                                 changeShape(fx.copy(maskScaleY =
                                     (fx.maskScaleY + 0.1f).coerceAtMost(1f)))
                             }
+                            SmallLayerButton("Rotate −15°") {
+                                changeShape(fx.copy(maskRotationDegrees =
+                                    (fx.maskRotationDegrees - 15f).coerceAtLeast(-180f)))
+                            }
+                            SmallLayerButton("Rotate +15°") {
+                                changeShape(fx.copy(maskRotationDegrees =
+                                    (fx.maskRotationDegrees + 15f).coerceAtMost(180f)))
+                            }
                             SmallLayerButton("Reset mask shape") {
                                 changeShape(fx.copy(maskCenterX = 0f,
-                                    maskCenterY = 0f, maskScaleX = 1f, maskScaleY = 1f))
+                                    maskCenterY = 0f, maskScaleX = 1f, maskScaleY = 1f,
+                                    maskRotationDegrees = 0f))
                             }
                         }
                         SmallLayerButton("Edge −") {
