@@ -46,18 +46,18 @@ import java.io.ByteArrayOutputStream
 
 private data class ProTool(val name: String, val icon: ImageVector)
 
-private fun exportAspectRatio(context: android.content.Context, draft: EditorDraft): Float {
-    draft.canvas.ratio?.let { return it }
+private fun exportAspectRatio(context: android.content.Context, draft: EditorDraft): Float? {
+    draft.canvas.ratio?.let { return it.takeIf { ratio -> ratio.isFinite() && ratio > 0f } }
     val first = draft.clips.firstOrNull() ?: return 16f / 9f
-    return runCatching {
+    return runCatching<Float?> {
         MediaMetadataRetriever().use { retriever ->
             retriever.setDataSource(context, Uri.parse(first.sourceUri))
             var width = retriever.extractMetadata(
                 MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
-            )?.toIntOrNull() ?: return@use 16f / 9f
+            )?.toIntOrNull() ?: return@use null
             var height = retriever.extractMetadata(
                 MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
-            )?.toIntOrNull() ?: return@use 16f / 9f
+            )?.toIntOrNull() ?: return@use null
             val rotation = retriever.extractMetadata(
                 MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
             )?.toIntOrNull() ?: 0
@@ -66,9 +66,9 @@ private fun exportAspectRatio(context: android.content.Context, draft: EditorDra
                 width = height
                 height = previousWidth
             }
-            if (width > 0 && height > 0) width.toFloat() / height else 16f / 9f
+            if (width > 0 && height > 0) width.toFloat() / height else null
         }
-    }.getOrDefault(16f / 9f)
+    }.getOrNull()
 }
 
 private val tools = listOf(
@@ -127,7 +127,7 @@ fun VideoEditorScreen(
         }
     }
     val exportAspect by produceState(
-        initialValue = draft.canvas.ratio ?: 16f / 9f,
+        initialValue = draft.canvas.ratio ?: if (draft.clips.isEmpty()) 16f / 9f else null,
         draft.canvas,
         draft.clips.firstOrNull()?.sourceUri
     ) {
@@ -137,9 +137,11 @@ fun VideoEditorScreen(
         initialValue = emptyList<Int>(), exportCodec, exportAspect
     ) {
         value = withContext(Dispatchers.IO) {
-            runCatching {
-                ExportVideoCodecSupport.supportedShortSides(exportCodec, exportAspect)
-            }.getOrDefault(emptyList())
+            exportAspect?.let { aspect ->
+                runCatching {
+                    ExportVideoCodecSupport.supportedShortSides(exportCodec, aspect)
+                }.getOrDefault(emptyList())
+            } ?: emptyList()
         }
     }
     val exportResolution = draft.shortSidePixels.takeIf { it in supportedResolutions }
@@ -1224,7 +1226,9 @@ fun VideoEditorScreen(
                     } else {
                         Text("Short-edge resolution (reported by selected encoder)")
                         if (supportedResolutions.isEmpty()) {
-                            Text("No supported output sizes reported for this codec.",
+                            Text(if (exportAspect == null)
+                                "Cannot verify output sizes; check source media access."
+                            else "No supported output sizes reported for this codec.",
                                 color = Color(0xFFFFB4AB))
                         } else {
                             ToolChips(supportedResolutions, exportResolution, { resolution ->
