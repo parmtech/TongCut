@@ -119,12 +119,25 @@ data class TimelineLayer(
             }
         }
         require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
-        if (kind != LayerKind.VIDEO) {
+        // Both VIDEO and AUDIO may consume source at a non-unit speed.
+        // Other layers are static and must never carry a source-time curve.
+        if (kind != LayerKind.VIDEO && kind != LayerKind.AUDIO) {
             require(playbackSpeed == 1f && sourceSpanUs == null && speedRamp.isEmpty())
         }
+        if (kind == LayerKind.AUDIO && sourceSpanUs != null && speedRamp.isEmpty()) {
+            require(sourceSpanUs > 0L && sourceSpanUs % 1_000L == 0L) {
+                "Pinned audio source span must align to complete milliseconds"
+            }
+            val nominal = (durationUs.toDouble() * playbackSpeed)
+            require(kotlin.math.abs(sourceSpanUs.toDouble() - nominal) <= 1_000.0) {
+                "Pinned audio source length must match its playback speed"
+            }
+        }
         if (speedRamp.isNotEmpty()) {
-            require(kind == LayerKind.VIDEO)
-            val span = requireNotNull(sourceSpanUs) { "Ramped video needs a fixed source span" }
+            require(kind == LayerKind.VIDEO || kind == LayerKind.AUDIO)
+            val span = requireNotNull(sourceSpanUs) {
+                "Speed-ramped media needs a fixed source span"
+            }
             SpeedRamp.validate(span, speedRamp)
             val expected = SpeedRamp.durationUs(span, speedRamp)
             // Independently quantized halves of a split may differ by one
@@ -142,9 +155,7 @@ data class TimelineLayer(
             require(!sourceUri.isNullOrBlank())
             require(text == null)
             if (kind == LayerKind.VIDEO || kind == LayerKind.AUDIO) {
-                val consumedUs = if (kind == LayerKind.VIDEO) {
-                    sourceSpanUs ?: (durationUs.toDouble() * playbackSpeed).toLong()
-                } else durationUs
+                val consumedUs = consumedSourceUs
                 require(sourceInUs <= Long.MAX_VALUE - consumedUs)
                 require(sourceDurationUs == null || sourceInUs + consumedUs <= sourceDurationUs)
             }
@@ -238,7 +249,8 @@ data class LayerTimeline(
             "Split too close to clip edge"
         }
         val requestedLeft = atUs - layer.startUs
-        if (layer.kind == LayerKind.VIDEO && layer.speedRamp.isNotEmpty()) {
+        if (layer.kind in setOf(LayerKind.VIDEO, LayerKind.AUDIO) &&
+            layer.speedRamp.isNotEmpty()) {
             val fullSpan = requireNotNull(layer.sourceSpanUs)
             val splitSource = (
                 SpeedRamp.sourceAtOutput(requestedLeft, fullSpan, layer.speedRamp) / 1_000L
@@ -254,7 +266,9 @@ data class LayerTimeline(
             require(rightDuration >= 1_000L) { "Split too close to ramp edge" }
             val (leftMotion, rightMotion) =
                 MotionCurve.split(layer.motion, leftDuration, layer.durationUs)
-            val (leftFade, rightFade) = layer.fade.split(leftDuration, layer.durationUs)
+            val (leftFade, rightFade) = if (layer.kind == LayerKind.AUDIO) {
+                LayerFade() to LayerFade()
+            } else layer.fade.split(leftDuration, layer.durationUs)
             val left = layer.copy(
                 durationUs = leftDuration, sourceSpanUs = splitSource,
                 speedRamp = leftRamp, motion = leftMotion, fade = leftFade
