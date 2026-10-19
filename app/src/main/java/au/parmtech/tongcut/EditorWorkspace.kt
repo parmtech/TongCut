@@ -2,6 +2,10 @@ package au.parmtech.tongcut
 
 import android.content.Intent
 import android.net.Uri
+import android.media.MediaMetadataRetriever
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
@@ -28,6 +32,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class ProTool(val name: String, val icon: ImageVector)
 private val tools = listOf(
@@ -70,6 +77,66 @@ fun VideoEditorScreen(
     var muteOriginal by remember { mutableStateOf(draft.muteOriginalAudio) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
+
+    val scope = rememberCoroutineScope()
+    val missingMedia = remember { mutableStateListOf<Int>() }
+    var relinkIndex by remember { mutableIntStateOf(-1) }
+    val relinkPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && relinkIndex in draft.clips.indices) {
+            val targetIndex = relinkIndex
+            relinkIndex = -1
+            scope.launch {
+                try {
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    val candidate = withContext(Dispatchers.IO) {
+                        val name = context.contentResolver.query(
+                            uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) cursor.getString(0) else null
+                        } ?: "Relinked video"
+                        val duration = MediaMetadataRetriever().use { retriever ->
+                            retriever.setDataSource(context, uri)
+                            retriever.extractMetadata(
+                                MediaMetadataRetriever.METADATA_KEY_DURATION
+                            )?.toLongOrNull()
+                        } ?: throw IllegalArgumentException("Unreadable replacement media")
+                        Triple(uri.toString(), name, duration)
+                    }
+                    val oldClip = draft.clips.getOrNull(targetIndex)
+                        ?: throw IllegalStateException("Selected clip is no longer available")
+                    val next = oldClip.relink(
+                        candidate.first, candidate.second, candidate.third
+                    )
+                    onChange(draft.withReplacedClip(targetIndex, next))
+                    onInfo("Reconnected media without deleting your edits.")
+                } catch (failure: Exception) {
+                    onInfo("Relink failed: ${failure.message}")
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(draft.clips) {
+        val missing = withContext(Dispatchers.IO) {
+            draft.clips.mapIndexedNotNull { index, item ->
+                val accessible = runCatching {
+                    context.contentResolver.openFileDescriptor(
+                        Uri.parse(item.sourceUri), "r"
+                    )?.use { true } ?: false
+                }.getOrDefault(false)
+                if (accessible) null else index
+            }
+        }
+        missingMedia.clear()
+        missingMedia.addAll(missing)
+    }
+
 
     val active = previewDraft ?: draft
     val clip = active.selectedClip
@@ -148,6 +215,25 @@ fun VideoEditorScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp)
             ) {
                 Text("Export", color = Color.Black, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        if (missingMedia.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().height(43.dp).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Warning, "Media warning", tint = Color(0xFFFFCC60))
+                Spacer(Modifier.width(6.dp))
+                Text("${missingMedia.size} missing media file(s)",
+                    color = Color(0xFFFFCC60), fontSize = 12.sp,
+                    modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    relinkIndex = if (draft.selectedIndex in missingMedia) {
+                        draft.selectedIndex
+                    } else missingMedia.first()
+                    relinkPicker.launch(arrayOf("video/*"))
+                }) { Text("Relink", color = ProCyan) }
             }
         }
 
@@ -262,6 +348,10 @@ fun VideoEditorScreen(
                             }
                             ToolPill("Delete") {
                                 if (active.selectedClip != null) onChange(active.withRemovedClip(active.selectedIndex))
+                            }
+                            ToolPill("Relink") {
+                                relinkIndex = active.selectedIndex
+                                relinkPicker.launch(arrayOf("video/*"))
                             }
                         }
                         if (clip != null) {

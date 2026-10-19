@@ -19,6 +19,15 @@ data class DraftClip(
     fun withStart(value: Long): DraftClip = copy(inMs = value.coerceIn(0, outMs - 100))
     fun withEnd(value: Long): DraftClip = copy(outMs = value.coerceIn(inMs + 100, durationMs))
 
+    /** Reconnects moved media. Retain the edit where possible, clamp to new duration. */
+    fun relink(uri: String, name: String, replacementDurationMs: Long): DraftClip {
+        require(uri.isNotBlank()) { "Missing replacement source" }
+        require(replacementDurationMs >= 100) { "Replacement video is too short" }
+        val safeStart = inMs.coerceIn(0L, replacementDurationMs - 100)
+        val safeEnd = outMs.coerceIn(safeStart + 100, replacementDurationMs)
+        return DraftClip(uri, name, replacementDurationMs, safeStart, safeEnd)
+    }
+
     /** Splits on the SOURCE timeline. Each result must keep at least 100 ms. */
     fun split(sourcePositionMs: Long): Pair<DraftClip, DraftClip>? {
         if (sourcePositionMs < inMs + 100 || sourcePositionMs > outMs - 100) return null

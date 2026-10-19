@@ -59,4 +59,18 @@ class EditorDraftTest {
         history.record(before, preview)
         assertEquals(0, history.undo())
     }
+
+    @Test fun relinkClampsTrimSafely() {
+        val clip = item().copy(inMs = 5_000, outMs = 9_000)
+        val replacement = clip.relink("content://recovered/video", "recovered.mp4", 6_000)
+        assertEquals(5_000L, replacement.inMs)
+        assertEquals(6_000L, replacement.outMs)
+        assertEquals("content://recovered/video", replacement.sourceUri)
+        assertEquals("content://sample/one", clip.sourceUri)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectUnusableReplacement() {
+        item().relink("content://bad", "bad", 50)
+    }
 }

@@ -172,7 +172,12 @@ fun TongCutApp(exporter: VideoExporter) {
         scope.launch {
             operationBusy = true
             try {
-                val changed = withContext(Dispatchers.IO) { library.rename(id, title) }
+                val latestSnapshot = if (id == activeId) draft else null
+                val changed = withContext(Dispatchers.IO) {
+                    // Rename must not load an older snapshot over unsaved in-memory edits.
+                    if (latestSnapshot != null) library.save(id, latestSnapshot)
+                    library.rename(id, title)
+                }
                 catalog = changed
                 if (id == activeId) {
                     val renamed = draft.copy(title = title.trim().take(120))
