@@ -45,6 +45,32 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 private data class ProTool(val name: String, val icon: ImageVector)
+
+private fun exportAspectRatio(context: android.content.Context, draft: EditorDraft): Float {
+    draft.canvas.ratio?.let { return it }
+    val first = draft.clips.firstOrNull() ?: return 16f / 9f
+    return runCatching {
+        MediaMetadataRetriever().use { retriever ->
+            retriever.setDataSource(context, Uri.parse(first.sourceUri))
+            var width = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+            )?.toIntOrNull() ?: return@use 16f / 9f
+            var height = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+            )?.toIntOrNull() ?: return@use 16f / 9f
+            val rotation = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
+            )?.toIntOrNull() ?: 0
+            if (rotation == 90 || rotation == 270) {
+                val previousWidth = width
+                width = height
+                height = previousWidth
+            }
+            if (width > 0 && height > 0) width.toFloat() / height else 16f / 9f
+        }
+    }.getOrDefault(16f / 9f)
+}
+
 private val tools = listOf(
     ProTool("Edit", Icons.Default.ContentCut),
     ProTool("Audio", Icons.Default.MusicNote),
@@ -89,14 +115,35 @@ fun VideoEditorScreen(
     var exportDialog by remember { mutableStateOf(false) }
     var processing by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
-    var exportResolution by remember { mutableIntStateOf(draft.shortSidePixels) }
     var exportCodec by remember(draft.exportVideoCodec) { mutableStateOf(draft.exportVideoCodec) }
     var exportBitrate by remember(draft.exportVideoBitrateBps) {
         mutableIntStateOf(draft.exportVideoBitrateBps)
     }
-    val supportedExportCodecs = remember {
-        runCatching { ExportVideoCodecSupport.available() }.getOrDefault(emptyList())
+    val supportedExportCodecs by produceState(
+        initialValue = emptyList<ExportVideoCodec>(), context
+    ) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { ExportVideoCodecSupport.available() }.getOrDefault(emptyList())
+        }
     }
+    val exportAspect by produceState(
+        initialValue = draft.canvas.ratio ?: 16f / 9f,
+        draft.canvas,
+        draft.clips.firstOrNull()?.sourceUri
+    ) {
+        value = withContext(Dispatchers.IO) { exportAspectRatio(context, draft) }
+    }
+    val supportedResolutions by produceState(
+        initialValue = emptyList<Int>(), exportCodec, exportAspect
+    ) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                ExportVideoCodecSupport.supportedShortSides(exportCodec, exportAspect)
+            }.getOrDefault(emptyList())
+        }
+    }
+    val exportResolution = draft.shortSidePixels.takeIf { it in supportedResolutions }
+        ?: supportedResolutions.firstOrNull() ?: draft.shortSidePixels
     var exportWarning by remember { mutableStateOf<String?>(null) }
     var muteOriginal by remember { mutableStateOf(draft.muteOriginalAudio) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
@@ -1175,9 +1222,15 @@ fun VideoEditorScreen(
                             modifier = Modifier.fillMaxWidth())
                         Text("$progress% · Keep TongCut open")
                     } else {
-                        Text("Short-edge resolution (device dependent)")
-                        ToolChips(listOf(720, 1080, 2160), exportResolution,
-                            { exportResolution = it }) { "${it}p" }
+                        Text("Short-edge resolution (reported by selected encoder)")
+                        if (supportedResolutions.isEmpty()) {
+                            Text("No supported output sizes reported for this codec.",
+                                color = Color(0xFFFFB4AB))
+                        } else {
+                            ToolChips(supportedResolutions, exportResolution, { resolution ->
+                                onChange(active.copy(shortSidePixels = resolution))
+                            }) { "${it}p" }
+                        }
                         Text("Video codec")
                         ToolChips(supportedExportCodecs, exportCodec, { codec ->
                             exportCodec = codec
@@ -1212,7 +1265,8 @@ fun VideoEditorScreen(
             confirmButton = {
                 if (!processing) Button(
                     enabled = active.clips.isNotEmpty() && active.canExportWithLegacyRenderer &&
-                        exportCodec in supportedExportCodecs,
+                        exportCodec in supportedExportCodecs &&
+                        exportResolution in supportedResolutions,
                     onClick = {
                         val inputs = runCatching {
                             active.clips.map {
