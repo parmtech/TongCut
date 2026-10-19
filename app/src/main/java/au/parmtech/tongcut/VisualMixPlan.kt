@@ -29,7 +29,8 @@ sealed interface VisualPart {
             if (speedRamp.isNotEmpty()) {
                 val span = requireNotNull(sourceSpanUs)
                 SpeedRamp.validate(span, speedRamp)
-                require(durationUs == SpeedRamp.durationUs(span, speedRamp))
+                require((durationUs - SpeedRamp.durationUs(span, speedRamp))
+                    in -1_000L..1_000L)
             }
 
         }

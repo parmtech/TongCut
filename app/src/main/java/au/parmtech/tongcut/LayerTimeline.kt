@@ -112,7 +112,10 @@ data class TimelineLayer(
             require(kind == LayerKind.VIDEO)
             val span = requireNotNull(sourceSpanUs) { "Ramped video needs a fixed source span" }
             SpeedRamp.validate(span, speedRamp)
-            require(durationUs == SpeedRamp.durationUs(span, speedRamp)) {
+            val expected = SpeedRamp.durationUs(span, speedRamp)
+            // Independently quantized halves of a split may differ by one
+            // millisecond. Preserve the original project clock exactly.
+            require((durationUs - expected) in -1_000L..1_000L) {
                 "Ramped output duration disagrees with its source speed curve"
             }
         }
@@ -143,6 +146,9 @@ data class TimelineLayer(
     /** Relative source position, not project position. */
     fun sourceAt(positionUs: Long): Long {
         val output = (positionUs - startUs).coerceIn(0L, durationUs)
+        if (speedRamp.isNotEmpty() && output >= durationUs) {
+            return sourceInUs + requireNotNull(sourceSpanUs)
+        }
         return sourceInUs + if (speedRamp.isEmpty()) {
             (output.toDouble() * playbackSpeed).toLong()
         } else SpeedRamp.sourceAtOutput(output, requireNotNull(sourceSpanUs), speedRamp)
@@ -228,7 +234,10 @@ data class LayerTimeline(
             )
             val leftDuration = SpeedRamp.durationUs(splitSource, leftRamp)
             val rightSpan = fullSpan - splitSource
-            val rightDuration = SpeedRamp.durationUs(rightSpan, rightRamp)
+            // Round only the left boundary and give the rest to the right.
+            // Rounding each half separately can create or remove 1ms at a cut.
+            val rightDuration = layer.durationUs - leftDuration
+            require(rightDuration >= 1_000L) { "Split too close to ramp edge" }
             val (leftMotion, rightMotion) =
                 MotionCurve.split(layer.motion, leftDuration, layer.durationUs)
             val left = layer.copy(

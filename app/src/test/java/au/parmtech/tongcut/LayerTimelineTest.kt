@@ -147,4 +147,30 @@ class LayerTimelineTest {
         videoClip().copy(photoEffects=PhotoEffects(PhotoMask.CIRCLE))
     }
 
+    @Test fun rampCutNeverChangesProjectLengthDueToMillisecondRounding() {
+        val ramp = listOf(SpeedKeyframe(0L, 0.7f))
+        val duration = SpeedRamp.durationUs(2_000_000L,ramp)
+        assertEquals(2_857_000L,duration)
+        val first = TimelineLayer(
+            "original","v2",LayerKind.VIDEO,0,duration,
+            sourceUri="content://video", sourceInUs=0,
+            sourceDurationUs=4_000_000,
+            sourceSpanUs=2_000_000, speedRamp=ramp
+        )
+        val next = TimelineLayer(
+            "next","v2",LayerKind.VIDEO,duration,1_000_000,
+            sourceUri="content://next",sourceDurationUs=1_000_000
+        )
+        val graph = LayerTimeline(tracks=listOf(video),layers=listOf(first,next))
+        val split = graph.splitLayer(first.id,1_429_000L,"right")
+        val left = split.layers.first { it.id == "original" }
+        val right = split.layers.first { it.id == "right" }
+        val neighbour = split.layers.first { it.id == "next" }
+        assertEquals(duration,left.durationUs+right.durationUs)
+        assertEquals(left.endUs,right.startUs)
+        assertEquals(right.endUs,neighbour.startUs)
+        assertEquals(first.sourceInUs+2_000_000L,right.sourceAt(right.endUs))
+        assertEquals(1_000_000L,right.sourceInUs)
+    }
+
 }
