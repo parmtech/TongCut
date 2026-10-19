@@ -691,9 +691,10 @@ fun VideoEditorScreen(
                         )
                         Text(
                             text = layer.text.orEmpty(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
+                            color = Color(layer.captionStyle.tone.argb),
+                            fontWeight = if (layer.captionStyle.bold)
+                                FontWeight.Bold else FontWeight.Normal,
+                            fontSize = (21f * layer.captionStyle.size).sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             modifier = Modifier.align(Alignment.Center)
                                 .fillMaxWidth(0.88f)
