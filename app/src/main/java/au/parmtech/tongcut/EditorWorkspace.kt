@@ -510,6 +510,8 @@ fun VideoEditorScreen(
             val selected = active.selectedIndex.coerceIn(0, mediaItems.lastIndex)
             player.seekTo(selected, 0)
             playMs = editTimeline.startOf(selected)
+            player.volume = if (active.muteOriginalAudio ||
+                active.clips[selected].sourceAudioMuted) 0f else 1f
             if (resume) player.play()
         }
     }
@@ -518,6 +520,10 @@ fun VideoEditorScreen(
             if (player.mediaItemCount > 0 && player.currentMediaItemIndex in editTimeline.clips.indices) {
                 val index = player.currentMediaItemIndex
                 playMs = editTimeline.timeOf(index, player.currentPosition)
+                val sourceMuted = active.muteOriginalAudio ||
+                    editTimeline.clips[index].sourceAudioMuted
+                val sourceVolume = if (sourceMuted) 0f else 1f
+                if (player.volume != sourceVolume) player.volume = sourceVolume
             }
             playing = player.isPlaying
             val warning = runCatching {
@@ -907,6 +913,25 @@ fun VideoEditorScreen(
                             )
                             Text("Mute original audio", color = Color.White)
                         }
+                        active.selectedClip?.let { clip ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (clip.sourceAudioMuted) {
+                                    Text("Clip audio is on an editable track", color = Color.LightGray)
+                                } else ToolPill("Detach selected clip audio") {
+                                    runCatching {
+                                        LayerEdits.detachSourceAudio(active, active.selectedIndex)
+                                    }.onSuccess {
+                                        onChange(it)
+                                        onInfo("Clip sound moved to an editable audio lane.")
+                                    }.onFailure {
+                                        onInfo(it.message ?: "Could not detach this clip's audio")
+                                    }
+                                }
+                            }
+                        }
                         LayerTools(
                             active, playMs, LayerKind.AUDIO, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
@@ -1111,7 +1136,7 @@ fun VideoEditorScreen(
                         val inputs = runCatching {
                             active.clips.map {
                                 Clip(Uri.parse(it.sourceUri), it.label, it.durationMs,
-                                    it.inMs, it.outMs)
+                                    it.inMs, it.outMs, it.sourceAudioMuted)
                             }
                         }
                         if (inputs.isFailure) {
