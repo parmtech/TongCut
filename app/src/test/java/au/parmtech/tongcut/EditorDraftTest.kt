@@ -69,8 +69,15 @@ class EditorDraftTest {
         assertEquals("content://sample/one", clip.sourceUri)
     }
 
+    @Test fun selectedColorGradeFlowsIntoExportOptions() {
+        val grade = ColorGrade(exposure = 0.5f, contrast = 1.2f,
+            saturation = 0.7f, temperature = 0.3f)
+        assertEquals(grade, EditorDraft(colorGrade = grade).exportOptions().colorGrade)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectUnusableReplacement() {
         item().relink("content://bad", "bad", 50)
     }
 }
+
