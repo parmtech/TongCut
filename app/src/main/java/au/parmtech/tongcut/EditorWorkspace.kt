@@ -123,6 +123,35 @@ fun VideoEditorScreen(
         }
     }
 
+    val audioPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    val duration = withContext(Dispatchers.IO) {
+                        MediaMetadataRetriever().use { retriever ->
+                            retriever.setDataSource(context, uri)
+                            retriever.extractMetadata(
+                                MediaMetadataRetriever.METADATA_KEY_DURATION
+                            )?.toLongOrNull()
+                        }
+                    } ?: throw IllegalArgumentException("Audio duration not available")
+                    onChange(LayerEdits.addAudio(draft, playMs, uri.toString(), duration))
+                    panel = "Audio"
+                    onInfo("Audio layer added as editable draft. Audio preview/export mixing is still in development.")
+                } catch (error: Exception) {
+                    onInfo("Audio import failed: ${error.message}")
+                }
+            }
+        }
+    }
+
     LaunchedEffect(draft.clips) {
         val missing = withContext(Dispatchers.IO) {
             draft.clips.mapIndexedNotNull { index, item ->
@@ -261,6 +290,27 @@ fun VideoEditorScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            val visibleText = active.layers.activeAt(playMs * 1_000L)
+                .filter { it.kind == LayerKind.TEXT }
+                .mapNotNull { it.text }
+            if (visibleText.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center)
+                        .fillMaxWidth(0.88f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    visibleText.forEach { line ->
+                        Text(
+                            line,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 21.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
         }
         Row(
             Modifier.fillMaxWidth().height(47.dp).padding(horizontal = 13.dp),
@@ -313,6 +363,9 @@ fun VideoEditorScreen(
                     panel = "Edit"
                 },
                 onAddMedia = onMedia,
+                onAddText = { panel = "Text" },
+                onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                onLayerSelect = { panel = if (it == LayerKind.TEXT) "Text" else "Audio" },
                 onUnavailable = onUnavailable
             )
         }
@@ -399,13 +452,25 @@ fun VideoEditorScreen(
                     }
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,
                         { onChange(active.copy(canvas = it)) }) { it.label }
-                    "Audio" -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = active.muteOriginalAudio,
-                            onCheckedChange = { onChange(active.copy(muteOriginalAudio = it)) }
+                    "Audio" -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = active.muteOriginalAudio,
+                                onCheckedChange = { onChange(active.copy(muteOriginalAudio = it)) }
+                            )
+                            Text("Mute original audio", color = Color.White)
+                        }
+                        LayerTools(
+                            active, playMs, LayerKind.AUDIO, onChange,
+                            onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                            onError = onInfo
                         )
-                        Text("Mute original audio", color = Color.White)
                     }
+                    "Text" -> LayerTools(
+                        active, playMs, LayerKind.TEXT, onChange,
+                        onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                        onError = onInfo
+                    )
                     else -> Text("$opened tools are being implemented. No nonfunctional editing buttons.",
                         color = Color.LightGray)
                 }
@@ -423,7 +488,7 @@ fun VideoEditorScreen(
                     modifier = Modifier.width(65.dp).fillMaxHeight()
                         .clickable {
                             panel = if (panel == item.name) null else item.name
-                            if (item.name in listOf("Text", "Effects", "Overlay", "Captions", "Adjust", "AI"))
+                            if (item.name in listOf("Effects", "Overlay", "Captions", "Adjust", "AI"))
                                 onUnavailable(item.name)
                         },
                     horizontalAlignment = Alignment.CenterHorizontally,

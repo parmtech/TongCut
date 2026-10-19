@@ -38,6 +38,9 @@ internal fun SequenceStrip(
     onSeek: (TimelinePosition) -> Unit,
     onSelect: (Int) -> Unit,
     onAddMedia: () -> Unit,
+    onAddText: () -> Unit,
+    onAddAudio: () -> Unit,
+    onLayerSelect: (LayerKind) -> Unit,
     onUnavailable: (String) -> Unit
 ) {
     val timeline = remember(draft.clips) { SequentialTimeline(draft.clips) }
@@ -156,26 +159,66 @@ internal fun SequenceStrip(
                             }
                         }
                     }
-                    Spacer(Modifier.height(5.dp))
-                    Surface(
-                        color = Color(0xFF262626),
-                        modifier = Modifier.fillMaxWidth().height(38.dp),
-                        onClick = { onUnavailable("Audio timeline layers") }
+                    Spacer(Modifier.height(4.dp))
+                    Column(
+                        Modifier.fillMaxWidth().height(89.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        Box(contentAlignment = Alignment.CenterStart) {
-                            Text("+ Add audio", color = Color.Gray, fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 9.dp))
-                        }
-                    }
-                    Spacer(Modifier.height(5.dp))
-                    Surface(
-                        color = Color(0xFF262626),
-                        modifier = Modifier.fillMaxWidth().height(38.dp),
-                        onClick = { onUnavailable("Text timeline layers") }
-                    ) {
-                        Box(contentAlignment = Alignment.CenterStart) {
-                            Text("+ Add text", color = Color.Gray, fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 9.dp))
+                        listOf(LayerKind.AUDIO, LayerKind.TEXT).forEach { kind ->
+                            val relevant = draft.layers.tracks
+                                .filter { it.kind == kind }.sortedBy { it.order }
+                            val lanes = if (relevant.isEmpty()) listOf<TimelineTrack?>(null)
+                                else relevant
+                            lanes.forEach { lane ->
+                                Box(
+                                    Modifier.fillMaxWidth().height(40.dp)
+                                        .background(Color(0xFF262626), RoundedCornerShape(3.dp))
+                                        .clickable {
+                                            if (kind == LayerKind.TEXT) onAddText() else onAddAudio()
+                                        }
+                                ) {
+                                    if (lane == null) {
+                                        Text(
+                                            if (kind == LayerKind.AUDIO) "+ Add audio" else "+ Add text",
+                                            color = Color.Gray,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.align(Alignment.CenterStart)
+                                                .padding(start = 9.dp)
+                                        )
+                                    } else {
+                                        draft.layers.layers.filter { it.trackId == lane.id }
+                                            .forEach { layer ->
+                                                val start = layer.startUs / 1_000_000f * pxPerSecond
+                                                val length = layer.durationUs / 1_000_000f * pxPerSecond
+                                                Surface(
+                                                    color = if (kind == LayerKind.TEXT)
+                                                        Color(0xFF6D469E) else Color(0xFF315A67),
+                                                    shape = RoundedCornerShape(3.dp),
+                                                    modifier = Modifier.offset(x = start.dp)
+                                                        .width(length.coerceAtLeast(8f).dp)
+                                                        .height(38.dp).clickable {
+                                                            onLayerSelect(kind)
+                                                        }
+                                                ) {
+                                                    Box(contentAlignment = Alignment.CenterStart) {
+                                                        Text(
+                                                            if (kind == LayerKind.TEXT)
+                                                                layer.text.orEmpty()
+                                                            else "♪ Audio",
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            color = if (lane.hidden) Color.Gray
+                                                                else Color.White,
+                                                            fontSize = 11.sp,
+                                                            modifier = Modifier.padding(horizontal = 6.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

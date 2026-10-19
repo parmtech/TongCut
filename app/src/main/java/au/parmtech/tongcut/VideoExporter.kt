@@ -39,11 +39,13 @@ class VideoExporter(private val context: Context) {
         options: ExportOptions,
         onProgress: (Int) -> Unit,
         onSuccess: (Uri) -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        overlayLayers: LayerTimeline = LayerTimeline()
     ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
+        require(TimedTextEffects.supported(overlayLayers)) { "Some track types still need a compositor" }
         val original = clips.toList()
         val file = File(
             context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.cacheDir,
@@ -71,6 +73,7 @@ class VideoExporter(private val context: Context) {
                 )
             }
             compositionEffects += Presentation.createForShortSide(options.shortSidePixels)
+            TimedTextEffects.create(overlayLayers)?.let { compositionEffects += it }
 
             val editedClips = original.map { clip ->
                 val source = MediaItem.Builder().setUri(clip.uri)

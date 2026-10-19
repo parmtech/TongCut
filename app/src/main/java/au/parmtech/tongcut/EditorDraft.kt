@@ -82,7 +82,7 @@ data class EditorDraft(
     }
 
     /** Prevent silent omission of layered content by the older sequential renderer. */
-    val canExportWithLegacyRenderer: Boolean get() = !layers.hasUnrenderedLayers
+    val canExportWithLegacyRenderer: Boolean get() = layers.layers.all { it.kind == LayerKind.TEXT }
 
     fun exportOptions() = ExportOptions(look, canvas, shortSidePixels, muteOriginalAudio)
 }
