@@ -1,6 +1,6 @@
 package au.parmtech.tongcut
 
-import android.util.Size
+import androidx.media3.common.util.Size
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.OverlaySettings
