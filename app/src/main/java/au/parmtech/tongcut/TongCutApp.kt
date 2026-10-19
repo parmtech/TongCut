@@ -30,7 +30,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal val ProCyan = Color(0xFF00C9DE)
+internal val ProCyan = TongCutPalette.AuroraAqua
 internal val ProBlack = Color(0xFF151515)
 private val HomeInk = Color(0xFF14161A)
 
