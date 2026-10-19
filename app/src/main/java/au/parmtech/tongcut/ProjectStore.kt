@@ -32,7 +32,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema == 1 || schema == 2) { "Unsupported project schema" }
+        require(schema in 1..3) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -42,7 +42,8 @@ class ProjectStore(context: Context, projectId: String? = null) {
                 label = clip.optString("label", "Video"),
                 durationMs = clip.getLong("durationMs"),
                 inMs = clip.getLong("inMs"),
-                outMs = clip.getLong("outMs")
+                outMs = clip.getLong("outMs"),
+                sourceAudioMuted = clip.optBoolean("sourceAudioMuted", false)
             )
         }
         return EditorDraft(
@@ -64,7 +65,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 2)
+            put("schema", 3)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -80,6 +81,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
                         put("durationMs", clip.durationMs)
                         put("inMs", clip.inMs)
                         put("outMs", clip.outMs)
+                        put("sourceAudioMuted", clip.sourceAudioMuted)
                     })
                 }
             })
