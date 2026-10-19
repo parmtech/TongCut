@@ -58,7 +58,12 @@ internal object ChromaSampleMath {
     fun safeSeekUs(requestedUs: Long, durationMs: Long?): Long {
         require(requestedUs >= 0L)
         if (durationMs == null || durationMs <= 0L) return requestedUs
-        val endUs = Math.multiplyExact(durationMs - 1L, 1_000L)
+        // Duration is untrusted media metadata. Clamp before converting ms
+        // to µs; a malformed container must not crash the colour picker.
+        val lastMs = durationMs - 1L
+        val endUs = if (lastMs > Long.MAX_VALUE / 1_000L) {
+            Long.MAX_VALUE
+        } else lastMs * 1_000L
         return requestedUs.coerceAtMost(endUs)
     }
 

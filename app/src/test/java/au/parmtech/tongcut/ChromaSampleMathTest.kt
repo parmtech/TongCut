@@ -43,6 +43,10 @@ class ChromaSampleMathTest {
             ChromaSampleMath.safeSeekUs(2_000_000L, null))
         assertEquals(0L,
             ChromaSampleMath.safeSeekUs(4_000_000L, 1L))
+        assertEquals(Long.MAX_VALUE - 10L,
+            ChromaSampleMath.safeSeekUs(Long.MAX_VALUE - 10L, Long.MAX_VALUE))
+        assertEquals(0L,
+            ChromaSampleMath.safeSeekUs(0L, Long.MAX_VALUE))
         assertThrows(IllegalArgumentException::class.java) {
             ChromaSampleMath.safeSeekUs(-1L, 3_000L)
         }
