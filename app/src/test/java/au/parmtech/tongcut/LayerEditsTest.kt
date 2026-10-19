@@ -70,7 +70,7 @@ class LayerEditsTest {
         assertEquals(2_000_000L, audio.sourceInUs)
         assertEquals(10_000_000L, audio.sourceDurationUs)
         assertEquals("content://second", audio.sourceUri)
-        assertEquals(1, AudioMixPlan.from(detached.layers, 13_000_000L).tracks.size)
+        assertEquals(1, AudioMixPlan.from(detached.layers, 13_000_000L).size)
     }
 
     @Test fun detachingAudioIsImmutableAndCannotDuplicateSameClip() {
