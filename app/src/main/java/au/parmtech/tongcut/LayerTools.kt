@@ -127,6 +127,39 @@ internal fun LayerTools(
                             LayerEdits.placeLayer(draft, layer.id, layer.startUs / 1000L + 500)
                         }.onSuccess(onChange).onFailure { onError(it.message ?: "Move failed") }
                     }
+                    // P3: non-destructive clip clipboard and source-/timeline-clock edits.
+                    SmallLayerButton("Duplicate here") {
+                        runCatching {
+                            AdvancedClipEdits.duplicateAt(draft, layer.id, playheadMs)
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Duplicate failed") }
+                    }
+                    if (kind == LayerKind.VIDEO || kind == LayerKind.AUDIO) {
+                        SmallLayerButton("Slip source ◀") {
+                            runCatching {
+                                AdvancedClipEdits.slipSourceBy(draft, layer.id, -250L)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Cannot slip source earlier") }
+                        }
+                        SmallLayerButton("Slip source ▶") {
+                            runCatching {
+                                AdvancedClipEdits.slipSourceBy(draft, layer.id, 250L)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Cannot slip source later") }
+                        }
+                    }
+                    SmallLayerButton("Ripple lane ◀") {
+                        runCatching {
+                            AdvancedClipEdits.rippleLaneBy(draft, layer.id, -500L)
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Cannot ripple earlier") }
+                    }
+                    SmallLayerButton("Ripple lane ▶") {
+                        runCatching {
+                            AdvancedClipEdits.rippleLaneBy(draft, layer.id, 500L)
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Cannot ripple later") }
+                    }
                     SmallLayerButton("− Duration") {
                         runCatching { LayerEdits.trimLayer(draft, layer.id, layer.durationUs - 500_000L) }
                             .onSuccess(onChange).onFailure { onError(it.message ?: "Cannot trim") }
