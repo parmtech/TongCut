@@ -42,6 +42,8 @@ data class EditorDraft(
     val selectedIndex: Int = 0,
     val look: Look = Look.ORIGINAL,
     val colorGrade: ColorGrade = ColorGrade(),
+    val exportVideoCodec: ExportVideoCodec = ExportVideoCodec.H264,
+    val exportVideoBitrateBps: Int = 8_000_000,
     val canvas: CanvasRatio = CanvasRatio.SOURCE,
     val shortSidePixels: Int = 1080,
     val muteOriginalAudio: Boolean = false,
@@ -49,6 +51,10 @@ data class EditorDraft(
     val layers: LayerTimeline = LayerTimeline()
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
+
+    init {
+        require(exportVideoBitrateBps in 1_000_000..50_000_000)
+    }
 
     fun normalized(): EditorDraft =
         copy(selectedIndex = if (clips.isEmpty()) 0 else selectedIndex.coerceIn(0, clips.lastIndex))
@@ -102,7 +108,8 @@ data class EditorDraft(
             }.isSuccess
 
     fun exportOptions() = ExportOptions(
-        look, canvas, shortSidePixels, muteOriginalAudio, colorGrade
+        look, canvas, shortSidePixels, muteOriginalAudio, colorGrade,
+        exportVideoCodec, exportVideoBitrateBps
     )
 }
 
