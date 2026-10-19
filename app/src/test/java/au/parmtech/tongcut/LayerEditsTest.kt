@@ -602,7 +602,7 @@ class LayerEditsTest {
         assertEquals(initial, restored)
     }
 
-    @Test fun extendingAudioHeadMovesAuthoredEnvelopeAndOmitsGeneratedUnityPoints() {
+    @Test fun extendingAudioHeadMovesAuthoredEnvelopeToPreserveSourceTiming() {
         val initial = LayerEdits.addAudio(base(), 1_000L, "content://music", 5_000L)
         val id = initial.layers.layers.single().id
         val authored = initial.copy(layers = initial.layers.copy(layers =
