@@ -19,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -367,21 +369,32 @@ fun VideoEditorScreen(
 
             val visibleText = active.layers.activeAt(playMs * 1_000L)
                 .filter { it.kind == LayerKind.TEXT }
-                .mapNotNull { it.text }
             if (visibleText.isNotEmpty()) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center)
-                        .fillMaxWidth(0.88f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    visibleText.forEach { line ->
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val density = LocalDensity.current
+                    val viewportWidthPx = with(density) { maxWidth.toPx() }
+                    val viewportHeightPx = with(density) { maxHeight.toPx() }
+                    visibleText.forEach { layer ->
+                        val motion = MotionCurve.at(
+                            layer.motion,
+                            (playMs * 1_000L - layer.startUs).coerceIn(0L, layer.durationUs)
+                        )
                         Text(
-                            line,
+                            text = layer.text.orEmpty(),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 21.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center)
+                                .fillMaxWidth(0.88f)
+                                .graphicsLayer {
+                                    translationX = motion.x * viewportWidthPx / 2f
+                                    translationY = -motion.y * viewportHeightPx / 2f
+                                    scaleX = motion.scale
+                                    scaleY = motion.scale
+                                    rotationZ = motion.rotation
+                                    alpha = motion.opacity
+                                }
                         )
                     }
                 }

@@ -48,12 +48,8 @@ class VideoExporter(private val context: Context) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
-        require(overlayLayers.layers.none { layer ->
-            layer.kind == LayerKind.STICKER ||
-                (layer.kind == LayerKind.VIDEO &&
-                    overlayLayers.tracks.firstOrNull { it.id == layer.trackId }?.hidden != true)
-        }) {
-            "Video PiP layers need a post-composition renderer. Export blocked to prevent missing overlays."
+        require(overlayLayers.layers.none { it.kind == LayerKind.STICKER }) {
+            "Sticker compositor has not been implemented"
         }
         val original = clips.toList()
         val file = File(
@@ -109,11 +105,12 @@ class VideoExporter(private val context: Context) {
             }
             val baseVideoDurationUs = original.sumOf { it.trimmedDurationMs * 1_000L }
             val audioPlans = AudioMixPlan.from(overlayLayers, baseVideoDurationUs)
-            val visualPlans = VisualMixPlan.from(overlayLayers, baseVideoDurationUs)
-            require(visualPlans.none { lane ->
-                lane.items.any { it is VisualPart.Clip && it.kind == LayerKind.VIDEO }
-            }) { "Video overlays are not supported by the export compositor yet" }
-            val allSequences = mutableListOf(sequence)
+            val videoLanes = VisualComposition.exportLanes(overlayLayers, baseVideoDurationUs)
+            val allSequences = mutableListOf<EditedMediaItemSequence>()
+            // Media3 composites in reverse sequence order, so PiP video lanes MUST
+            // be registered before the fully opaque main video, then audio-only lanes.
+            allSequences.addAll(VisualComposition.sequences(videoLanes, baseVideoDurationUs))
+            allSequences += sequence
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
                 lane.parts.forEach { part ->
@@ -155,9 +152,14 @@ class VideoExporter(private val context: Context) {
                 }
                 allSequences += audioOnly.build()
             }
-            val composition = Composition.Builder(allSequences)
+            val compositionBuilder = Composition.Builder(allSequences)
                 .setEffects(Effects(emptyList(), compositionEffects))
-                .build()
+            if (videoLanes.isNotEmpty()) {
+                compositionBuilder.setVideoCompositorSettings(
+                    VisualComposition.settings(videoLanes, overlayLayers)
+                )
+            }
+            val composition = compositionBuilder.build()
             transformer = Transformer.Builder(context)
                 .setVideoMimeType(MimeTypes.VIDEO_H264)
                 .addListener(object : Transformer.Listener {

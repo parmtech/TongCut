@@ -83,15 +83,20 @@ data class EditorDraft(
 
     /** Prevent silent omission of layered content by the older sequential renderer. */
     val canExportWithLegacyRenderer: Boolean get() =
-        layers.layers.none { layer ->
-            layer.kind == LayerKind.STICKER ||
-                (layer.kind == LayerKind.VIDEO &&
-                    layers.tracks.firstOrNull { it.id == layer.trackId }?.hidden != true)
-        } &&
+        layers.layers.none { it.kind == LayerKind.STICKER } &&
             runCatching {
                 val totalUs = SequentialTimeline(clips).totalMs * 1_000L
+                require(totalUs > 0)
                 AudioMixPlan.from(layers, totalUs)
-                VisualMixPlan.from(layers, totalUs)
+                val visual = VisualMixPlan.from(layers, totalUs)
+                visual.filter { lane -> lane.items.any {
+                    it is VisualPart.Clip && it.kind == LayerKind.VIDEO
+                } }.forEach { lane ->
+                    lane.items.filterIsInstance<VisualPart.Clip>().forEach { item ->
+                        require(item.sourceInUs % 1_000L == 0L &&
+                            item.durationUs % 1_000L == 0L)
+                    }
+                }
             }.isSuccess
 
     fun exportOptions() = ExportOptions(look, canvas, shortSidePixels, muteOriginalAudio)

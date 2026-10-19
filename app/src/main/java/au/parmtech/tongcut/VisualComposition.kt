@@ -1,72 +1,138 @@
 package au.parmtech.tongcut
 
-import androidx.media3.common.util.Size
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.OverlaySettings
 import androidx.media3.common.VideoCompositorSettings
+import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 
 /**
- * Experimental native Media3 layered video/image composition, with primary
- * sequence first and at most 3 secondary PiP lanes.
+ * Frame-order-aware Media3 compositor for VIDEO PiP.
+ *
+ * IMPORTANT: Media3 draws compositor inputs in REVERSE order: input 0 is FRONT.
+ * The first VIDEO-only lane therefore drives presentation timestamps; the main
+ * full-frame footage is deliberately registered LAST, and drawn BEHIND overlays.
+ * The audio-only sequences are appended after all video sequences.
+ *
+ * Empty regions in each PiP lane generate black gap frames; those regions
+ * receive alpha=0 in getOverlaySettings to reveal the main video behind.
+ *
+ * This path still requires exported-pixel tests on actual Android hardware
+ * before it can be marked accepted. For unsupported codecs, export reports
+ * the failure rather than discarding overlays silently.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 object VisualComposition {
-    private val normal = StaticOverlaySettings.Builder().build()
-    private val locations = listOf(
-        0.55f to -0.55f, // bottom-right
-        -0.55f to -0.55f, // bottom-left
-        0.55f to 0.55f // top-right
-    )
-    val layout: VideoCompositorSettings = object : VideoCompositorSettings {
-        override fun getOutputSize(inputSizes: List<Size>): Size =
-            requireNotNull(inputSizes.firstOrNull()) { "No primary video frame" }
+    private val base = StaticOverlaySettings.Builder().build()
 
-        override fun getOverlaySettings(inputId: Int, presentationTimeUs: Long): OverlaySettings {
-            if (inputId == 0) return normal
-            val anchor = locations[(inputId - 1).coerceIn(0, locations.lastIndex)]
-            return StaticOverlaySettings.Builder()
-                .setScale(0.42f, 0.42f)
-                .setBackgroundFrameAnchor(anchor.first, anchor.second)
-                .setOverlayFrameAnchor(0f, 0f)
-                .build()
+    private val locations = listOf(
+        0.55f to -0.55f,
+        -0.55f to -0.55f,
+        0.55f to 0.55f
+    )
+
+    fun exportLanes(timeline: LayerTimeline, totalUs: Long): List<VisualLanePlan> {
+        val plans = VisualMixPlan.from(timeline, totalUs)
+            .filter { lane -> lane.items.any {
+                it is VisualPart.Clip && it.kind == LayerKind.VIDEO
+            } }
+        require(plans.size <= 3)
+        plans.forEach { lane ->
+            require(lane.items.all {
+                it is VisualPart.Gap || (it is VisualPart.Clip && it.kind == LayerKind.VIDEO)
+            })
+            require(lane.items.sumOf { it.durationUs } <= totalUs)
+            lane.items.filterIsInstance<VisualPart.Clip>().forEach {
+                require(it.durationUs % 1_000L == 0L &&
+                    it.sourceInUs % 1_000L == 0L) {
+                    "Video overlays require millisecond-aligned source timestamps"
+                }
+            }
         }
+        // Media3 draws input 0 on top. The highest-z video lane is first.
+        return plans.reversed()
     }
 
-    fun sequences(plans: List<VisualLanePlan>): List<EditedMediaItemSequence> =
-        plans.map { plan ->
+    /** Audio/video media sources with a full-length black (transparent) gap tail. */
+    fun sequences(plans: List<VisualLanePlan>, totalUs: Long): List<EditedMediaItemSequence> =
+        plans.map { lane ->
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
-            plan.items.forEach { part ->
+            var duration = 0L
+            for (part in lane.items) {
                 when (part) {
                     is VisualPart.Gap -> builder.addGap(part.durationUs)
                     is VisualPart.Clip -> {
-                        require(part.durationUs % 1_000L == 0L && part.sourceInUs % 1_000L == 0L) {
-                            "Overlay requires millisecond-aligned source points"
-                        }
-                        val item = if (part.kind == LayerKind.IMAGE) {
-                            MediaItem.Builder().setUri(part.uri)
-                                .setImageDurationMs(part.durationUs / 1_000L)
-                                .build()
-                        } else {
-                            val start = part.sourceInUs / 1_000L
-                            MediaItem.Builder().setUri(part.uri)
-                                .setClippingConfiguration(
-                                    MediaItem.ClippingConfiguration.Builder()
-                                        .setStartPositionMs(start)
-                                        .setEndPositionMs(start + part.durationUs / 1_000L)
-                                        .build()
-                                ).build()
-                        }
+                        require(part.kind == LayerKind.VIDEO)
+                        val start = part.sourceInUs / 1_000L
+                        val item = MediaItem.Builder().setUri(part.uri)
+                            .setClippingConfiguration(
+                                MediaItem.ClippingConfiguration.Builder()
+                                    .setStartPositionMs(start)
+                                    .setEndPositionMs(start + part.durationUs / 1_000L)
+                                    .build()
+                            ).build()
                         builder.addItem(EditedMediaItem.Builder(item)
-                            .setRemoveAudio(true)
-                            .build())
+                            .setRemoveAudio(true).build())
                     }
                 }
+                duration += part.durationUs
             }
+            require(duration <= totalUs) { "PiP lane runs longer than video" }
+            if (duration < totalUs) builder.addGap(totalUs - duration)
             builder.build()
         }
+
+    /**
+     * The base video occupies input index plans.size.
+     * For all other inputs, opaque video content is a 42% PiP rectangle.
+     */
+    fun settings(plans: List<VisualLanePlan>, timeline: LayerTimeline): VideoCompositorSettings {
+        require(plans.isNotEmpty())
+        val byId = timeline.layers.associateBy { it.id }
+        return object : VideoCompositorSettings {
+            override fun getOutputSize(inputSizes: List<Size>): Size {
+                require(inputSizes.size >= plans.size + 1) { "Base video input missing" }
+                return inputSizes[plans.size]
+            }
+
+            override fun getOverlaySettings(
+                inputId: Int,
+                presentationTimeUs: Long
+            ): OverlaySettings {
+                if (inputId == plans.size) return base
+                if (inputId !in plans.indices) return base
+                val plan = plans[inputId]
+                var cursor = 0L
+                var active: TimelineLayer? = null
+                for (part in plan.items) {
+                    if (presentationTimeUs >= cursor &&
+                        presentationTimeUs < cursor + part.durationUs) {
+                        if (part is VisualPart.Clip) active = byId[part.layerId]
+                        break
+                    }
+                    cursor += part.durationUs
+                }
+                val layer = active
+                val pose = if (layer != null) {
+                    MotionCurve.at(layer.motion,
+                        (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs))
+                } else MotionPose()
+                val position = locations[inputId.coerceIn(0, locations.lastIndex)]
+                return StaticOverlaySettings.Builder()
+                    .setScale(0.42f * pose.scale, 0.42f * pose.scale)
+                    .setBackgroundFrameAnchor(
+                        (position.first + pose.x).coerceIn(-1f, 1f),
+                        (position.second + pose.y).coerceIn(-1f, 1f)
+                    )
+                    .setOverlayFrameAnchor(0f, 0f)
+                    .setRotationDegrees(pose.rotation)
+                    .setAlphaScale(if (layer == null) 0f else pose.opacity)
+                    .build()
+            }
+        }
+    }
 }
