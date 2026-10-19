@@ -594,6 +594,23 @@ internal fun LayerTools(
                         }
                     }
                     if (kind == LayerKind.AUDIO) {
+                        SmallLayerButton(
+                            if (track.duckingSource) "Dialogue ducking: on"
+                            else "Dialogue ducking: off"
+                        ) {
+                            runCatching {
+                                LayerEdits.setAudioDuckingSource(
+                                    draft, track.id, !track.duckingSource
+                                )
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Dialogue ducking setting failed")
+                            }
+                        }
+                        Text(
+                            if (track.duckingSource) "Other audio dips to 25% around this lane"
+                            else "Set voice/dialogue lane to lower other tracks",
+                            color = Color.LightGray, fontSize = 10.sp
+                        )
                         SmallLayerButton("Fade in 0.5s") {
                             runCatching { LayerEdits.setAudioFades(draft, layer.id, 500L, 0L) }
                                 .onSuccess(onChange)
@@ -776,4 +793,3 @@ private fun SmallLayerButton(label: String, click: () -> Unit) {
         Text(label, color = ProCyan, fontSize = 11.sp)
     }
 }
-

@@ -61,6 +61,7 @@ object AudioMixPlan {
             .filter { it.kind == LayerKind.AUDIO && !it.muted }
             .sortedBy { it.order }
             .filter { track -> timeline.layers.any { it.trackId == track.id } }
+        val duckingWindows = AudioDucking.sourceWindows(timeline)
         require(activeTracks.size <= MAX_MIXED_LANES) {
             "More than $MAX_MIXED_LANES simultaneous audio tracks are not supported"
         }
@@ -85,7 +86,8 @@ object AudioMixPlan {
                     playbackSpeed = layer.playbackSpeed,
                     sourceSpanUs = layer.sourceSpanUs,
                     speedRamp = layer.speedRamp,
-                    envelope = layer.audioEnvelope
+                    envelope = if (track.duckingSource) layer.audioEnvelope
+                        else AudioDucking.envelopeFor(layer, duckingWindows)
                 )
                 cursor = layer.endUs
             }

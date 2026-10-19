@@ -520,6 +520,20 @@ object LayerEdits {
         }))
     }
 
+    /** Mark a dialogue/voiceover lane as the source that ducks other audio. */
+    fun setAudioDuckingSource(
+        draft: EditorDraft, trackId: String, enabled: Boolean
+    ): EditorDraft {
+        val lane = draft.layers.tracks.firstOrNull { it.id == trackId }
+            ?: throw IllegalArgumentException("Audio track not found")
+        require(lane.kind == LayerKind.AUDIO && !lane.locked) {
+            "Unlock the audio track first"
+        }
+        return draft.copy(layers = draft.layers.copy(tracks = draft.layers.tracks.map {
+            if (it.id == trackId) it.copy(duckingSource = enabled) else it
+        }))
+    }
+
     /** Adds or replaces one clip-local envelope point at the current project playhead. */
     fun setAudioEnvelopeAt(
         draft: EditorDraft, id: String, playheadMs: Long, gain: Float
@@ -806,4 +820,3 @@ object LayerEdits {
     }
 
 }
-

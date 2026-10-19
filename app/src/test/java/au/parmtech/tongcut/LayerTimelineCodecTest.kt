@@ -36,7 +36,7 @@ class LayerTimelineCodecTest {
         )
         val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
         val encoded = LayerTimelineCodec.encode(project)
-        assertEquals(10, encoded.getInt("schema"))
+        assertEquals(11, encoded.getInt("schema"))
         assertEquals(project, LayerTimelineCodec.decode(encoded))
         val legacy = LayerTimelineCodec.encode(timeline)
         legacy.put("schema", 7)
@@ -147,7 +147,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(10,json.getInt("schema"))
+        assertEquals(11,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
     }
 
@@ -182,7 +182,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(10,serialized.getInt("schema"))
+        assertEquals(11,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
@@ -202,5 +202,20 @@ class LayerTimelineCodecTest {
         assertEquals(ColorGrade(), LayerTimelineCodec.decode(legacy).layers.single().photoEffects.colorGrade)
     }
 
-}
+    @Test fun dialogueDuckingPersistsAndSchemaTenDefaultsOff() {
+        val audio = TimelineTrack("voice", "Voiceover", LayerKind.AUDIO, 0,
+            duckingSource = true)
+        val graph = LayerTimeline(tracks = listOf(audio), layers = listOf(
+            TimelineLayer("speech", "voice", LayerKind.AUDIO, 0, 2_000_000,
+                sourceUri = "content://voice")
+        ))
+        val encoded = LayerTimelineCodec.encode(graph)
+        assertEquals(11, encoded.getInt("schema"))
+        assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
+        val legacy = JSONObject(encoded.toString()).put("schema", 10)
+        legacy.getJSONArray("tracks").getJSONObject(0).remove("duckingSource")
+        assertFalse(LayerTimelineCodec.decode(legacy).tracks.single().duckingSource)
+    }
+
+}

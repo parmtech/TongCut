@@ -37,7 +37,7 @@ class VisualOverlaySlotsTest {
         val frozen=project.copy(layers=project.layers.map { if(it.kind==LayerKind.IMAGE)
             it.copy(visualSlot=0) else it })
         val encoded=LayerTimelineCodec.encode(frozen)
-        assertEquals(10,encoded.getInt("schema"))
+        assertEquals(11,encoded.getInt("schema"))
         assertEquals(frozen,LayerTimelineCodec.decode(encoded))
         val legacy=LayerTimelineCodec.encode(project)
         legacy.put("schema",6)
@@ -97,4 +97,3 @@ class VisualOverlaySlotsTest {
     }
 
 }
-

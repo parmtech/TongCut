@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 10)
+        put("schema", 11)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -23,6 +23,7 @@ object LayerTimelineCodec {
                     put("hidden", track.hidden)
                     put("muted", track.muted)
                     put("gain", track.gain.toDouble())
+                    put("duckingSource", track.duckingSource)
                 })
             }
         })
@@ -106,7 +107,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..10) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..11) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -126,7 +127,8 @@ object LayerTimelineCodec {
                 locked = track.optBoolean("locked", false),
                 hidden = track.optBoolean("hidden", false),
                 muted = track.optBoolean("muted", false),
-                gain = track.optDouble("gain", 1.0).toFloat()
+                gain = track.optDouble("gain", 1.0).toFloat(),
+                duckingSource = track.optBoolean("duckingSource", false)
             )
         }
         val clips = (0 until itemsJson.length()).map { i ->
@@ -231,4 +233,3 @@ object LayerTimelineCodec {
     private fun JSONObject.takeNullableString(key: String): String? =
         if (!has(key) || isNull(key)) null else getString(key)
 }
-

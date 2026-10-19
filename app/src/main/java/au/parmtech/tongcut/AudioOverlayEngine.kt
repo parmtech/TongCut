@@ -22,11 +22,19 @@ class AudioOverlayEngine(private val context: Context) {
     private data class Entry(val layer: TimelineLayer, val player: ExoPlayer)
     private val active = LinkedHashMap<String, Entry>()
     private val failures = AudioPreviewFailures()
+    private var cachedGraph: LayerTimeline? = null
+    private var duckingWindows: List<AudioDucking.Window> = emptyList()
+    private val duckingEnvelopes = HashMap<String, List<AudioGainKeyframe>>()
 
     /** Called on Android's main thread with the main video playhead. */
     fun sync(graph: LayerTimeline, globalPositionMs: Long, playing: Boolean): String? {
         check(Looper.myLooper() == Looper.getMainLooper())
         val timeUs = Math.multiplyExact(globalPositionMs.coerceAtLeast(0L), 1_000L)
+        if (cachedGraph !== graph) {
+            cachedGraph = graph
+            duckingWindows = AudioDucking.sourceWindows(graph)
+            duckingEnvelopes.clear()
+        }
         val tracks = graph.tracks.associateBy { it.id }
         val audible = graph.layers.filter { layer ->
             layer.kind == LayerKind.AUDIO &&
@@ -110,9 +118,20 @@ class AudioOverlayEngine(private val context: Context) {
                     player.setPlaybackSpeed(speed)
                 }
                 val trackGain = tracks[layer.trackId]?.gain ?: 1f
+                val track = tracks[layer.trackId]
+                val effectiveEnvelope = if (track?.duckingSource == true) layer.audioEnvelope
+                    else runCatching {
+                        duckingEnvelopes.getOrPut(layer.id) {
+                            AudioDucking.envelopeFor(layer, duckingWindows)
+                        }
+                    }.getOrElse { error ->
+                        if (warning == null) warning = error.message
+                            ?: "Audio ducking could not be previewed"
+                        layer.audioEnvelope
+                    }
                 val targetGain = trackGain * AudioEnvelope.gainAt(
                     (timeUs - layer.startUs).coerceIn(0L, layer.durationUs),
-                    layer.durationUs, layer.audioEnvelope
+                    layer.durationUs, effectiveEnvelope
                 )
                 if (player.volume != targetGain) player.volume = targetGain
                 // The seek threshold is in SOURCE time. Scale it by playback
@@ -139,6 +158,9 @@ class AudioOverlayEngine(private val context: Context) {
     private fun releaseActivePlayers() {
         active.values.forEach { it.player.release() }
         active.clear()
+        cachedGraph = null
+        duckingWindows = emptyList()
+        duckingEnvelopes.clear()
     }
 
     fun release() {
