@@ -142,9 +142,15 @@ class LayerTimelineTest {
         )
     }
 
-    @Test(expected=IllegalArgumentException::class)
-    fun photoMatteSettingsCannotAttachToAudioOrVideo() {
-        videoClip().copy(photoEffects=PhotoEffects(PhotoMask.CIRCLE))
+    @Test fun videoMatteIsValidButNonVisualMediaStillRejectsMatte() {
+        val settings = PhotoEffects(PhotoMask.CIRCLE)
+        assertEquals(settings, videoClip().copy(photoEffects = settings).photoEffects)
+        assertThrows(IllegalArgumentException::class.java) {
+            TimelineLayer(
+                "audio", "a1", LayerKind.AUDIO, 0L, 1_000_000L,
+                sourceUri = "content://audio", photoEffects = settings
+            )
+        }
     }
 
     @Test fun rampCutNeverChangesProjectLengthDueToMillisecondRounding() {
