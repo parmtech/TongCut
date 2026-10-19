@@ -325,6 +325,14 @@ internal fun LayerTools(
                             grade(fx.colorGrade.copy(saturation =
                                 (fx.colorGrade.saturation + 0.25f).coerceAtMost(2f)))
                         }
+                        SmallLayerButton("Contrast −") {
+                            grade(fx.colorGrade.copy(contrast =
+                                (fx.colorGrade.contrast - 0.25f).coerceAtLeast(0f)))
+                        }
+                        SmallLayerButton("Contrast +") {
+                            grade(fx.colorGrade.copy(contrast =
+                                (fx.colorGrade.contrast + 0.25f).coerceAtMost(2f)))
+                        }
                         SmallLayerButton("Warm") {
                             grade(fx.colorGrade.copy(temperature =
                                 (fx.colorGrade.temperature + 0.25f).coerceAtMost(1f)))
