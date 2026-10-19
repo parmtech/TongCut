@@ -384,6 +384,11 @@ fun VideoEditorScreen(
                 onAddText = { panel = "Text" },
                 onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                 onLayerSelect = { panel = if (it == LayerKind.TEXT) "Text" else "Audio" },
+                onMoveLayer = { id, startUs ->
+                    runCatching { LayerEdits.placeLayerAtFrame(active, id, startUs) }
+                        .onSuccess(onChange)
+                        .onFailure { onInfo("Cannot move layer: ${it.message}") }
+                },
                 onUnavailable = onUnavailable
             )
         }

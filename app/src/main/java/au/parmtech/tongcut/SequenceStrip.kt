@@ -3,6 +3,8 @@ package au.parmtech.tongcut
 import android.graphics.Paint
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +43,7 @@ internal fun SequenceStrip(
     onAddText: () -> Unit,
     onAddAudio: () -> Unit,
     onLayerSelect: (LayerKind) -> Unit,
+    onMoveLayer: (String, Long) -> Unit,
     onUnavailable: (String) -> Unit
 ) {
     val timeline = remember(draft.clips) { SequentialTimeline(draft.clips) }
@@ -56,7 +59,7 @@ internal fun SequenceStrip(
         }
     }
 
-    Column(Modifier.fillMaxWidth().height(249.dp).background(Color(0xFF171717))) {
+    Column(Modifier.fillMaxWidth().height(309.dp).background(Color(0xFF171717))) {
         Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -161,7 +164,7 @@ internal fun SequenceStrip(
                     }
                     Spacer(Modifier.height(4.dp))
                     Column(
-                        Modifier.fillMaxWidth().height(89.dp)
+                        Modifier.fillMaxWidth().height(149.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
@@ -191,17 +194,46 @@ internal fun SequenceStrip(
                                             .forEach { layer ->
                                                 val start = layer.startUs / 1_000_000f * pxPerSecond
                                                 val length = layer.durationUs / 1_000_000f * pxPerSecond
+                                                var dragPx by remember(layer.id) { mutableFloatStateOf(0f) }
                                                 Surface(
                                                     color = if (kind == LayerKind.TEXT)
                                                         Color(0xFF6D469E) else Color(0xFF315A67),
                                                     shape = RoundedCornerShape(3.dp),
-                                                    modifier = Modifier.offset(x = start.dp)
-                                                        .width(length.coerceAtLeast(8f).dp)
-                                                        .height(38.dp).clickable {
-                                                            onLayerSelect(kind)
+                                                    modifier = Modifier
+                                                        .offset {
+                                                            IntOffset(
+                                                                with(density) { start.dp.roundToPx() } +
+                                                                    dragPx.roundToInt(),
+                                                                0
+                                                            )
                                                         }
+                                                        .width(length.coerceAtLeast(8f).dp)
+                                                        .height(38.dp)
+                                                        .pointerInput(layer.id, layer.startUs, pxPerSecond) {
+                                                            detectDragGestures(
+                                                                onDragStart = { dragPx = 0f },
+                                                                onDragCancel = { dragPx = 0f },
+                                                                onDragEnd = {
+                                                                    val offsetUs = ((dragPx / density.density) /
+                                                                        pxPerSecond * 1_000_000f).toLong()
+                                                                    onMoveLayer(layer.id, layer.startUs + offsetUs)
+                                                                    dragPx = 0f
+                                                                },
+                                                                onDrag = { change, amount ->
+                                                                    change.consume()
+                                                                    dragPx += amount.x
+                                                                }
+                                                            )
+                                                        }
+                                                        .clickable { onLayerSelect(kind) }
                                                 ) {
                                                     Box(contentAlignment = Alignment.CenterStart) {
+                                                        if (kind == LayerKind.AUDIO) {
+                                                            AudioWaveform(
+                                                                layer = layer,
+                                                                modifier = Modifier.fillMaxSize().padding(3.dp)
+                                                            )
+                                                        }
                                                         Text(
                                                             if (kind == LayerKind.TEXT)
                                                                 layer.text.orEmpty()

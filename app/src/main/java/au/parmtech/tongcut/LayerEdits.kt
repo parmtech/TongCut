@@ -112,4 +112,16 @@ object LayerEdits {
         val track = draft.layers.layers.first { it.id == id }.trackId
         return draft.copy(layers = draft.layers.moveLayer(id, track, pos))
     }
+    /** Single gesture commit, snapped to the project's rational-frame timebase. */
+    fun placeLayerAtFrame(draft: EditorDraft, id: String, requestedStartUs: Long): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Missing layer")
+        val total = clock(draft)
+        require(layer.durationUs <= total) { "Layer does not fit the video" }
+        val maximum = total - layer.durationUs
+        val bounded = requestedStartUs.coerceIn(0L, maximum)
+        val snapped = draft.layers.rate.nearestFrameUs(bounded).coerceIn(0L, maximum)
+        return draft.copy(layers = draft.layers.moveLayer(id, layer.trackId, snapped))
+    }
+
 }

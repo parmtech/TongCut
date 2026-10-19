@@ -99,4 +99,25 @@ class LayerEditsTest {
         val original = LayerEdits.addAudio(base(),0,"content://audio",2_000)
         LayerEdits.setAudioGain(original,original.layers.tracks.single().id,1.5f)
     }
+    @Test fun frameSnappedDragIsUndoable() {
+        val before = LayerEdits.addText(base(),0,"Drag")
+        val id = before.layers.layers.single().id
+        val updated = LayerEdits.placeLayerAtFrame(before,id,1_025_000L)
+        val start = updated.layers.layers.single().startUs
+        assertEquals(updated.layers.rate.nearestFrameUs(1_025_000L), start)
+        val history = EditHistory(before)
+        history.apply(updated)
+        assertEquals(before,history.undo())
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun frameDragPreventsOverlapsOnSameLane() {
+        val first = LayerEdits.addText(base(),0,"One")
+        val second = LayerEdits.addText(first,5_000,"Two")
+        val a = first.layers.layers.single()
+        val b = second.layers.layers.last()
+        // They share a free lane, so moving second into first must be rejected.
+        LayerEdits.placeLayerAtFrame(second,b.id,a.startUs)
+    }
+
 }
