@@ -136,9 +136,16 @@ internal fun SequenceStrip(
                                 Box {
                                     Row(Modifier.fillMaxSize()) {
                                         val frames = (clip.editedDurationMs / 1200L).toInt().coerceIn(1, 8)
-                                        repeat(frames) {
-                                            GalleryThumbnail(clip.sourceUri.toUri(),
-                                                Modifier.weight(1f).fillMaxHeight())
+                                        repeat(frames) { frameIndex ->
+                                            // Sample evenly across the trimmed SOURCE interval.
+                                            val fraction = (frameIndex + 0.5) / frames.toDouble()
+                                            val sampledMs = clip.inMs +
+                                                (clip.editedDurationMs * fraction).toLong()
+                                            VideoFrameThumbnail(
+                                                uri = clip.sourceUri.toUri(),
+                                                sourceTimestampUs = sampledMs * 1_000L,
+                                                modifier = Modifier.weight(1f).fillMaxHeight()
+                                            )
                                         }
                                     }
                                     Text(clip.label, color = Color.White, fontSize = 10.sp, maxLines = 1,
