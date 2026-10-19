@@ -50,3 +50,14 @@ Static IMAGE overlays are now applied via a separately time-gated `BitmapOverlay
 - [x] Keep visual imports editable and previewable; do not claim mixed-video MP4 export works
 - [ ] Implement hardware-accelerated video PiP compositor with verified primary/secondary z-order
 - [ ] Verify actual photo + caption + mixed-audio MP4 export on a phone
+
+
+## 2026-10-19: Experimental native Media3 video PiP export and emulator pixel gate
+- [x] Source implementation: piP video lanes registered before the opaque main video (Media3 draws in reverse input order), project video base determines output size, generated VIDEO gap frames receive alpha 0, and photo/title post-effects are drawn after the videos.
+- [x] Source implementation: all-visible-lane scheduling handles overlay clip timing, per-frame keyframe pose, image/title alpha, and mixed audio with separate independent sources.
+- [x] New **CompositorVideoPlanTest** proves video lane ordering, transparent gap intervals, no photo-as-video registration, and range validation; source Kotlin compilation, JVM tests and Android Lint have passed.
+- [ ] Real Android output **must** show visible PiP pixels at the correct times and no opaque rectangle outside a layer. The experimental emulator test is [P2 Internal Emulator Pixel Acceptance](https://github.com/manbir6-ux/TongCut/actions/workflows/internal-device-pixel-test.yml); run this and fix any failure before accepting P2.
+- [ ] Multiple simultaneous videos, mixed portrait/landscape, audio+captions+photos, VFR and HDR codec matrices; seek/playback vs output pixel/timing parity.
+- [ ] Correct PiP location and z-order across all supported aspect ratios and screen sizes; performance on limited devices.
+
+**This update is not Phase 2 completion.** It increases coverage and explores the hardware path, but some acceptance steps depend on actual mobile codecs and exported video pixels. P3 acceptance is tracked in [issue #6](https://github.com/manbir6-ux/TongCut/issues/6).
