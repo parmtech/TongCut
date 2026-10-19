@@ -32,6 +32,22 @@ class ChromaSampleMathTest {
             ChromaSampleMath.opaqueArgb(0x000000FF))
     }
 
+    @Test fun pickerSeeksInsideMediaRatherThanPastFinalFrame() {
+        assertEquals(2_999_000L,
+            ChromaSampleMath.safeSeekUs(3_000_000L, 3_000L))
+        assertEquals(0L,
+            ChromaSampleMath.safeSeekUs(0L, 3_000L))
+        assertEquals(500_000L,
+            ChromaSampleMath.safeSeekUs(500_000L, 3_000L))
+        assertEquals(2_000_000L,
+            ChromaSampleMath.safeSeekUs(2_000_000L, null))
+        assertEquals(0L,
+            ChromaSampleMath.safeSeekUs(4_000_000L, 1L))
+        assertThrows(IllegalArgumentException::class.java) {
+            ChromaSampleMath.safeSeekUs(-1L, 3_000L)
+        }
+    }
+
     @Test fun invalidTapCoordinatesAndDimensionsAreRejected() {
         assertThrows(IllegalArgumentException::class.java) {
             ChromaSampleMath.pixelAt(Float.NaN, 10f, 640, 360, 512, 288)

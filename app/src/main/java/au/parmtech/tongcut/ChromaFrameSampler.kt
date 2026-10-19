@@ -33,10 +33,15 @@ internal object ChromaFrameSampler {
                 .roundToInt().coerceIn(1, MAX_EDGE_PX)
             val targetH = (height / divisor.coerceAtLeast(1.0))
                 .roundToInt().coerceIn(1, MAX_EDGE_PX)
-            // Closest sync is fast/bounded, and the picker explicitly displays
-            // the extracted image that the user's finger samples.
+            // At the very end of a trimmed clip, sourceAt(end) may equal
+            // the media's EOF (which does not contain a decodable frame).
+            // Clamp to a frame inside the file while keeping the picker frozen.
+            val durationMs = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION
+            )?.toLongOrNull()
+            val safeUs = ChromaSampleMath.safeSeekUs(sourceTimeUs, durationMs)
             retriever.getScaledFrameAtTime(
-                sourceTimeUs,
+                safeUs,
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                 targetW, targetH
             ) ?: throw IllegalArgumentException("Unable to decode source colour frame")
@@ -46,6 +51,17 @@ internal object ChromaFrameSampler {
 
 /** Coords and colour conversions are pure Kotlin; test without Android codecs. */
 internal object ChromaSampleMath {
+    /**
+     * Timestamp of the nearest safe millisecond inside a finite media file.
+     * Metadata may be absent or invalid; do not fabricate duration in that case.
+     */
+    fun safeSeekUs(requestedUs: Long, durationMs: Long?): Long {
+        require(requestedUs >= 0L)
+        if (durationMs == null || durationMs <= 0L) return requestedUs
+        val endUs = Math.multiplyExact(durationMs - 1L, 1_000L)
+        return requestedUs.coerceAtMost(endUs)
+    }
+
     fun pixelAt(
         tapX: Float, tapY: Float,
         viewWidth: Int, viewHeight: Int,

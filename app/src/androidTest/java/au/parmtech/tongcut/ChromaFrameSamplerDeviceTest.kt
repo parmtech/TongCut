@@ -42,6 +42,15 @@ class ChromaFrameSamplerDeviceTest {
                 Color.red(red) > Color.green(red) + 100 &&
                     Color.red(red) > Color.blue(red) + 100)
             assertEquals(255, Color.alpha(green))
+            val endFrame = ChromaFrameSampler.frameAt(
+                app, Uri.fromFile(fixture).toString(), 3_000_000L
+            )
+            try {
+                assertTrue("Colour frame must decode even exactly at EOF",
+                    endFrame.width > 0 && endFrame.height > 0)
+            } finally {
+                endFrame.recycle()
+            }
             // The selected pixel colour can be persisted as the chroma key.
             val preview = PhotoEffects(chroma = PhotoChroma(keyArgb=green))
             assertEquals(green, preview.chroma?.keyArgb)

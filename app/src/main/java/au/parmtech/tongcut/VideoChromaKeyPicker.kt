@@ -36,7 +36,10 @@ internal fun VideoChromaKeyPicker(
     require(layer.kind == LayerKind.VIDEO)
     val context = LocalContext.current
     // The picker is frozen at the OPEN time: do not run a decoder every 90ms.
-    val sourceUs = remember(layer.id, layer.sourceInUs, layer.speedRamp, frozenPlayheadMs) {
+    val sourceUs = remember(
+        layer.id, layer.sourceInUs, layer.startUs, layer.durationUs,
+        layer.playbackSpeed, layer.sourceSpanUs, layer.speedRamp, frozenPlayheadMs
+    ) {
         layer.sourceAt(Math.multiplyExact(frozenPlayheadMs, 1_000L))
     }
     val source = requireNotNull(layer.sourceUri)
