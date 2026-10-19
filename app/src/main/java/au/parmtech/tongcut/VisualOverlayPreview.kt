@@ -76,7 +76,8 @@ internal fun VisualOverlayPreview(
             DisposableEffect(player) {
                 onDispose { player.release() }
             }
-            LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs) {
+            LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs,
+                layer.sourceSpanUs, layer.playbackSpeed, layer.speedRamp) {
                 val fromMs = layer.sourceInUs / 1_000L
                 val toMs = (layer.sourceInUs + layer.consumedSourceUs) / 1_000L
                 player.setMediaItem(
@@ -90,7 +91,8 @@ internal fun VisualOverlayPreview(
                 )
                 player.prepare()
             }
-            LaunchedEffect(player, timelineMs, playing, layer.startUs) {
+            LaunchedEffect(player, timelineMs, playing, layer.startUs,
+                layer.playbackSpeed, layer.speedRamp, layer.sourceInUs) {
                 val absoluteProjectUs = Math.multiplyExact(timelineMs, 1_000L)
                 val withinClip = (
                     layer.sourceAt(absoluteProjectUs) - layer.sourceInUs
