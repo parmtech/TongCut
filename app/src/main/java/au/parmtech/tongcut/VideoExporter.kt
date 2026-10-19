@@ -1,0 +1,206 @@
+package au.parmtech.tongcut
+
+import android.content.ContentValues
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.Presentation
+import androidx.media3.effect.RgbAdjustment
+import androidx.media3.effect.RgbFilter
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.Effects
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.ProgressHolder
+import androidx.media3.transformer.Transformer
+import java.io.File
+import java.io.IOException
+
+/** Export stays in the foreground for the alpha build; cancelling leaves no partial MediaStore file. */
+@androidx.annotation.OptIn(UnstableApi::class)
+class VideoExporter(private val context: Context) {
+    private val main = Handler(Looper.getMainLooper())
+    private var transformer: Transformer? = null
+    private var poller: Runnable? = null
+    private var scratch: File? = null
+    private var active = false
+    private var saving = false
+
+    fun start(
+        clips: List<Clip>,
+        options: ExportOptions,
+        onProgress: (Int) -> Unit,
+        onSuccess: (Uri) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
+        require(!active) { "Export already in progress" }
+        require(clips.isNotEmpty()) { "Select at least one video" }
+        val original = clips.toList()
+        val file = File(
+            context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.cacheDir,
+            "TongCut-${System.currentTimeMillis()}.mp4"
+        )
+        scratch = file
+        active = true
+        try {
+            val clipEffects = mutableListOf<androidx.media3.common.Effect>()
+            when (options.look) {
+                Look.ORIGINAL -> Unit
+                Look.MONO -> clipEffects += RgbFilter.createGrayscaleFilter()
+                Look.INVERT -> clipEffects += RgbFilter.createInvertedFilter()
+                Look.WARM -> clipEffects += RgbAdjustment.Builder()
+                    .setRedScale(1.10f).setBlueScale(0.90f).build()
+                Look.COOL -> clipEffects += RgbAdjustment.Builder()
+                    .setRedScale(0.90f).setBlueScale(1.10f).build()
+            }
+            // Apply common framing after concatenation, not to each clip independently.
+            val compositionEffects = mutableListOf<androidx.media3.common.Effect>()
+            options.ratio.ratio?.let { ratio ->
+                compositionEffects += Presentation.createForAspectRatio(
+                    ratio,
+                    Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP
+                )
+            }
+            compositionEffects += Presentation.createForShortSide(options.shortSidePixels)
+
+            val editedClips = original.map { clip ->
+                val source = MediaItem.Builder().setUri(clip.uri)
+                    .setClippingConfiguration(
+                        MediaItem.ClippingConfiguration.Builder()
+                            .setStartPositionMs(clip.startMs)
+                            .setEndPositionMs(clip.endMs)
+                            .build()
+                    ).build()
+                EditedMediaItem.Builder(source)
+                    .setRemoveAudio(options.mute)
+                    .setEffects(Effects(emptyList(), clipEffects))
+                    .build()
+            }
+            val sequence = if (options.mute) {
+                EditedMediaItemSequence.withVideoFrom(editedClips)
+            } else {
+                EditedMediaItemSequence.withAudioAndVideoFrom(editedClips)
+            }
+            val composition = Composition.Builder(sequence)
+                .setEffects(Effects(emptyList(), compositionEffects))
+                .build()
+            transformer = Transformer.Builder(context)
+                .setVideoMimeType(MimeTypes.VIDEO_H264)
+                .addListener(object : Transformer.Listener {
+                    override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        stopPoll()
+                        transformer = null
+                        saving = true
+                        // MediaStore copy is I/O intensive; never block Android's UI thread.
+                        Thread {
+                            try {
+                                val savedUri = saveToGallery(file)
+                                main.post {
+                                    active = false
+                                    saving = false
+                                    scratch = null
+                                    onProgress(100)
+                                    onSuccess(savedUri)
+                                }
+                            } catch (t: Exception) {
+                                main.post {
+                                    active = false
+                                    saving = false
+                                    scratch = null
+                                    onError("Saving video failed: ${t.message ?: "unknown error"}")
+                                }
+                            } finally {
+                                file.delete()
+                            }
+                        }.start()
+                    }
+                    override fun onError(
+                        composition: Composition,
+                        exportResult: ExportResult,
+                        exportException: ExportException
+                    ) {
+                        stopPoll()
+                        transformer = null
+                        active = false
+                        scratch = null
+                        file.delete()
+                        onError("Export failed: ${exportException.message ?: "codec not supported"}")
+                    }
+                }).build()
+            transformer!!.start(composition, file.absolutePath)
+            val progressHolder = ProgressHolder()
+            val task = object : Runnable {
+                override fun run() {
+                    val job = transformer ?: return
+                    val state = job.getProgress(progressHolder)
+                    if (state == Transformer.PROGRESS_STATE_AVAILABLE) {
+                        onProgress(progressHolder.progress.coerceIn(0, 99))
+                    }
+                    main.postDelayed(this, 350)
+                }
+            }
+            poller = task
+            main.post(task)
+        } catch (t: Exception) {
+            stopPoll()
+            transformer?.cancel()
+            transformer = null
+            active = false
+            scratch = null
+            file.delete()
+            onError("Unable to start export: ${t.message ?: "unknown error"}")
+        }
+    }
+
+    fun cancel(): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (saving) return false
+        stopPoll()
+        transformer?.cancel()
+        transformer = null
+        active = false
+        scratch?.delete()
+        scratch = null
+        return true
+    }
+
+    private fun stopPoll() {
+        poller?.let(main::removeCallbacks)
+        poller = null
+    }
+
+    @Throws(IOException::class)
+    private fun saveToGallery(file: File): Uri {
+        if (!file.exists() || file.length() <= 0) throw IOException("Rendered file is empty")
+        val values = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, "TongCut_${System.currentTimeMillis()}.mp4")
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/TongCut")
+            put(MediaStore.Video.Media.IS_PENDING, 1)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IOException("Unable to create MediaStore video")
+        try {
+            resolver.openOutputStream(uri)?.use { out ->
+                file.inputStream().buffered().use { input -> input.copyTo(out) }
+            } ?: throw IOException("Unable to open gallery output")
+            resolver.update(uri, ContentValues().apply {
+                put(MediaStore.Video.Media.IS_PENDING, 0)
+            }, null, null)
+            return uri
+        } catch (t: Exception) {
+            resolver.delete(uri, null, null)
+            throw t
+        }
+    }
+}
