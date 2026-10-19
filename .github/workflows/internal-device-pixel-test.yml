@@ -33,11 +33,12 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg
-      - name: Prepare 2-second synthetic source videos (never upload user media)
+      - name: Prepare synthetic media and chroma matte fixture (never upload user media)
         run: |
           mkdir -p app/src/androidTest/assets
           ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/main_blue.mp4
           ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=red:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_red.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=green:s=128x128:d=1 -vf "drawbox=x=40:y=40:w=48:h=48:color=red:t=fill" -frames:v 1 -y app/src/androidTest/assets/matte_green_red.png
       - name: Grant Linux KVM access
         run: |
           sudo chmod 666 /dev/kvm || true
