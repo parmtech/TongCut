@@ -32,17 +32,25 @@ class PhotoMatteExportDeviceTest {
 
         val base = fixture("main_blue.mp4")
         val photo = fixture("matte_green_red.png")
+        // Regress the bounds-only null decoding bug before starting GLES export.
+        val effect = PhotoEffects(
+            mask=PhotoMask.CIRCLE, feather=0.035f,
+            chroma=PhotoChroma(tolerance=0.18f,feather=0.12f)
+        )
+        val decoded = PhotoBitmapDecoder.decode(app, Uri.fromFile(photo), effect)
+        assertTrue("Image dimensions missing",decoded.width>0 && decoded.height>0)
+        assertTrue("Red subject was wrongly removed by chroma",
+            Color.alpha(decoded.getPixel(decoded.width/2, decoded.height/2))>200)
+        assertEquals("Green corner must be transparent",
+            0, Color.alpha(decoded.getPixel(0,0)))
+        decoded.recycle()
         val graph = LayerTimeline(
             tracks=listOf(TimelineTrack("photo", "Keyed photo", LayerKind.IMAGE, 0)),
             layers=listOf(TimelineLayer(
                 id="red-square", trackId="photo", kind=LayerKind.IMAGE,
                 startUs=500_000L, durationUs=1_500_000L,
                 sourceUri=Uri.fromFile(photo).toString(),
-                photoEffects=PhotoEffects(
-                    mask=PhotoMask.CIRCLE,
-                    feather=0.035f,
-                    chroma=PhotoChroma(tolerance=0.18f,feather=0.12f)
-                )
+                photoEffects=effect
             ))
         )
         val done = CountDownLatch(1)
