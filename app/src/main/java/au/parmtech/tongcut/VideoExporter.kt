@@ -202,7 +202,13 @@ class VideoExporter(private val context: Context) {
                         active = false
                         scratch = null
                         file.delete()
-                        onError("Export failed: ${exportException.message ?: "codec not supported"}")
+                        // Preserve nested Media3/GL failures for actionable device reports.
+                        val causeSummary = generateSequence<Throwable>(exportException) {
+                            it.cause
+                        }.take(6).joinToString(" <- ") { cause ->
+                            "${cause.javaClass.simpleName}: ${cause.message ?: "no details"}"
+                        }
+                        onError("Export failed: ${causeSummary.take(700)}")
                     }
                 }).build()
             transformer!!.start(composition, file.absolutePath)
