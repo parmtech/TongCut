@@ -16,9 +16,10 @@ class TimelineSnapTest {
     }
     @Test fun alignsClipEndToAnotherLayerStart() {
         val a = LayerEdits.addText(base(),0,"A")
-        val b = LayerEdits.addText(a,7_000,"B")
-        val moved = b.layers.layers.last()
-        val start = TimelineSnap.move(b,moved.id,3_935_000)
+        val b = LayerEdits.addText(a,7_000,"B") // fixed alignment anchor at 7s
+        val c = LayerEdits.addText(b,5_000,"Moving") // independent overlapping lane
+        val moved = c.layers.layers.last()
+        val start = TimelineSnap.move(c,moved.id,3_935_000)
         assertEquals(4_000_000L,start)
     }
     @Test fun unsnappedMovesStillSnapToRationalFrame() {
