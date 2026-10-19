@@ -1,0 +1,65 @@
+package au.parmtech.tongcut
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+/**
+ * P3 user-selected video chroma key. Sampling is from the ORIGINAL SOURCE frame
+ * (before the key removes it), not from a composited blue/transparent preview.
+ *
+ * A bounded MediaMetadataRetriever decode is used only when the chooser opens.
+ * Never decode frames on the playhead's frequent UI polling loop.
+ */
+internal object ChromaFrameSampler {
+    const val MAX_EDGE_PX = 512
+
+    fun frameAt(context: Context, uri: String, sourceTimeUs: Long): Bitmap {
+        require(uri.isNotBlank() && sourceTimeUs >= 0L)
+        return MediaMetadataRetriever().use { retriever ->
+            retriever.setDataSource(context, Uri.parse(uri))
+            val width = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+            )?.toIntOrNull() ?: throw IllegalArgumentException("Video width unavailable")
+            val height = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+            )?.toIntOrNull() ?: throw IllegalArgumentException("Video height unavailable")
+            require(width > 0 && height > 0) { "Invalid source video frame dimensions" }
+            val divisor = max(width, height).toDouble() / MAX_EDGE_PX
+            val targetW = (width / divisor.coerceAtLeast(1.0))
+                .roundToInt().coerceIn(1, MAX_EDGE_PX)
+            val targetH = (height / divisor.coerceAtLeast(1.0))
+                .roundToInt().coerceIn(1, MAX_EDGE_PX)
+            // Closest sync is fast/bounded, and the picker explicitly displays
+            // the extracted image that the user's finger samples.
+            retriever.getScaledFrameAtTime(
+                sourceTimeUs,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                targetW, targetH
+            ) ?: throw IllegalArgumentException("Unable to decode source colour frame")
+        }
+    }
+}
+
+/** Coords and colour conversions are pure Kotlin; test without Android codecs. */
+internal object ChromaSampleMath {
+    fun pixelAt(
+        tapX: Float, tapY: Float,
+        viewWidth: Int, viewHeight: Int,
+        bitmapWidth: Int, bitmapHeight: Int
+    ): Pair<Int, Int> {
+        require(viewWidth > 0 && viewHeight > 0 &&
+            bitmapWidth > 0 && bitmapHeight > 0)
+        require(tapX.isFinite() && tapY.isFinite())
+        val x = ((tapX.coerceIn(0f, viewWidth.toFloat()) / viewWidth) *
+            bitmapWidth).toInt().coerceIn(0, bitmapWidth - 1)
+        val y = ((tapY.coerceIn(0f, viewHeight.toFloat()) / viewHeight) *
+            bitmapHeight).toInt().coerceIn(0, bitmapHeight - 1)
+        return x to y
+    }
+
+    fun opaqueArgb(argb: Int): Int = (argb and 0x00FF_FFFF) or 0xFF00_0000.toInt()
+}

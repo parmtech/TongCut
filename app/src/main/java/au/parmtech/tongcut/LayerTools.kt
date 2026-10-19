@@ -29,6 +29,8 @@ internal fun LayerTools(
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
     var entry by remember { mutableStateOf("") }
+    var pickerId by remember { mutableStateOf<String?>(null) }
+    var pickerAtMs by remember { mutableLongStateOf(0L) }
     val layers = draft.layers.layers
         .filter { it.kind == kind }
         .sortedWith(compareBy<TimelineLayer> { it.startUs }.thenBy { it.id })
@@ -297,8 +299,21 @@ internal fun LayerTools(
                                     chroma=if(fx.chroma==null) PhotoChroma() else null))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Chroma failed") }
                         }
+                        if (kind == LayerKind.VIDEO) {
+                            SmallLayerButton("Sample source key") {
+                                pickerId = layer.id
+                                pickerAtMs = playheadMs
+                            }
+                        }
                         fx.chroma?.let { key ->
-                            SmallLayerButton("Key: ${if(key.keyArgb==0xFF00FF00.toInt()) "Green" else "Blue"}") {
+                            val keyName = when (key.keyArgb) {
+                                0xFF00FF00.toInt() -> "Green"
+                                0xFF0000FF.toInt() -> "Blue"
+                                else -> "#" + Integer.toHexString(
+                                    key.keyArgb and 0x00FFFFFF
+                                ).padStart(6, '0').uppercase()
+                            }
+                            SmallLayerButton("Key: $keyName") {
                                 val colour = if(key.keyArgb==0xFF00FF00.toInt())
                                     0xFF0000FF.toInt() else 0xFF00FF00.toInt()
                                 onChange(applyMatte(fx.copy(
@@ -447,6 +462,28 @@ internal fun LayerTools(
                         runCatching { LayerEdits.remove(draft, layer.id) }
                             .onSuccess(onChange).onFailure { onError(it.message ?: "Delete failed") }
                     }
+                }
+                if (kind == LayerKind.VIDEO && pickerId == layer.id) {
+                    VideoChromaKeyPicker(
+                        layer = layer,
+                        frozenPlayheadMs = pickerAtMs,
+                        onPicked = { colour ->
+                            val current = layer.photoEffects
+                            val key = (current.chroma ?: PhotoChroma()).copy(
+                                keyArgb = colour
+                            )
+                            runCatching {
+                                LayerEdits.setVideoEffects(draft, layer.id,
+                                    current.copy(chroma = key))
+                            }.onSuccess {
+                                onChange(it)
+                                pickerId = null
+                            }.onFailure {
+                                onError(it.message ?: "Cannot set sampled colour")
+                            }
+                        },
+                        onCancel = { pickerId = null }
+                    )
                 }
                 if (kind in setOf(LayerKind.VIDEO, LayerKind.AUDIO) &&
                     layer.speedRamp.isNotEmpty()) {
