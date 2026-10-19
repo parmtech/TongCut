@@ -120,7 +120,7 @@ internal fun LayerTools(
                     if (kind != LayerKind.AUDIO && kind != LayerKind.STICKER) {
                         fun motion(update: (MotionPose) -> MotionPose) {
                             runCatching {
-                                LayerEdits.setMotionAt(draft, layer.id, playheadMs, update)
+                                LayerEdits.setMotionAt(draft, layer.id, playheadMs, mutate = update)
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Motion failed") }
                         }
                         SmallLayerButton("◆ Keyframe") { motion { it } }
