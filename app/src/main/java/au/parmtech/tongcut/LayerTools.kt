@@ -316,28 +316,60 @@ internal fun LayerTools(
                             SmallLayerButton("Key: $keyName") {
                                 val colour = if(key.keyArgb==0xFF00FF00.toInt())
                                     0xFF0000FF.toInt() else 0xFF00FF00.toInt()
-                                onChange(applyMatte(fx.copy(
-                                    chroma=key.copy(keyArgb=colour))))
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(keyArgb = colour)))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Key colour change failed") }
                             }
                             SmallLayerButton("Tolerance −") {
-                                onChange(applyMatte(fx.copy(
-                                    chroma=key.copy(tolerance=(key.tolerance-0.03f).coerceAtLeast(0f)))))
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(
+                                        tolerance = (key.tolerance - 0.03f).coerceAtLeast(0f)
+                                    )))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Tolerance change failed") }
                             }
                             SmallLayerButton("Tolerance +") {
-                                onChange(applyMatte(fx.copy(
-                                    chroma=key.copy(tolerance=(key.tolerance+0.03f).coerceAtMost(1f)))))
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(
+                                        tolerance = (key.tolerance + 0.03f).coerceAtMost(1f)
+                                    )))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Tolerance change failed") }
+                            }
+                            SmallLayerButton("Key edge −") {
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(
+                                        feather = (key.feather - 0.02f).coerceAtLeast(0f)
+                                    )))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Key edge change failed") }
+                            }
+                            Text("Key edge ${(key.feather * 100).toInt()}%",
+                                color = Color.LightGray, fontSize = 11.sp)
+                            SmallLayerButton("Key edge +") {
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(
+                                        feather = (key.feather + 0.02f).coerceAtMost(1f)
+                                    )))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Key edge change failed") }
                             }
                             SmallLayerButton("Despill −") {
-                                onChange(applyMatte(fx.copy(
-                                    chroma=key.copy(spillSuppression=
-                                        (key.spillSuppression-0.25f).coerceAtLeast(0f)))))
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(spillSuppression =
+                                        (key.spillSuppression - 0.25f).coerceAtLeast(0f))))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Despill change failed") }
                             }
                             Text("Despill ${(key.spillSuppression * 100).toInt()}%",
                                 color=Color.LightGray, fontSize=11.sp)
                             SmallLayerButton("Despill +") {
-                                onChange(applyMatte(fx.copy(
-                                    chroma=key.copy(spillSuppression=
-                                        (key.spillSuppression+0.25f).coerceAtMost(1f)))))
+                                runCatching {
+                                    applyMatte(fx.copy(chroma = key.copy(spillSuppression =
+                                        (key.spillSuppression + 0.25f).coerceAtMost(1f))))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Despill change failed") }
                             }
                         }
                     }
