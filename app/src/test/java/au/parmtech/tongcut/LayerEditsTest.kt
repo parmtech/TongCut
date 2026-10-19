@@ -147,4 +147,19 @@ class LayerEditsTest {
         LayerEdits.addVisual(base(),0,LayerKind.AUDIO,"content://x",1_000)
     }
 
+    @Test fun photoExportAllowedButVisibleVideoOverlayBlocked() {
+        val original = base()
+        val photo = LayerEdits.addVisual(
+            original, 0, LayerKind.IMAGE, "content://gallery/picture", 3_000
+        )
+        assertTrue(photo.canExportWithLegacyRenderer)
+        val movie = LayerEdits.addVisual(
+            photo, 1_000, LayerKind.VIDEO, "content://gallery/clip", 4_000
+        )
+        assertFalse(movie.canExportWithLegacyRenderer)
+        val videoTrack = movie.layers.tracks.first { it.kind == LayerKind.VIDEO }
+        val hidden = LayerEdits.setTrackVisibility(movie, videoTrack.id, true)
+        assertTrue(hidden.canExportWithLegacyRenderer)
+    }
+
 }

@@ -12,6 +12,7 @@ import androidx.media3.common.audio.GainProcessor
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbAdjustment
 import androidx.media3.effect.RgbFilter
@@ -47,8 +48,12 @@ class VideoExporter(private val context: Context) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
-        require(overlayLayers.layers.none { it.kind == LayerKind.STICKER }) {
-            "Sticker export is not implemented"
+        require(overlayLayers.layers.none { layer ->
+            layer.kind == LayerKind.STICKER ||
+                (layer.kind == LayerKind.VIDEO &&
+                    overlayLayers.tracks.firstOrNull { it.id == layer.trackId }?.hidden != true)
+        }) {
+            "Video PiP layers need a post-composition renderer. Export blocked to prevent missing overlays."
         }
         val original = clips.toList()
         val file = File(
@@ -77,7 +82,12 @@ class VideoExporter(private val context: Context) {
                 )
             }
             compositionEffects += Presentation.createForShortSide(options.shortSidePixels)
-            TimedTextEffects.create(overlayLayers)?.let { compositionEffects += it }
+            // Post-composition effects draw photos and titles on top of opaque base video.
+            val visibleOverlays = TimedTextEffects.overlays(overlayLayers) +
+                PhotoOverlayEffects.overlays(context, overlayLayers)
+            if (visibleOverlays.isNotEmpty()) {
+                compositionEffects += OverlayEffect(visibleOverlays)
+            }
 
             val editedClips = original.map { clip ->
                 val source = MediaItem.Builder().setUri(clip.uri)
@@ -100,8 +110,10 @@ class VideoExporter(private val context: Context) {
             val baseVideoDurationUs = original.sumOf { it.trimmedDurationMs * 1_000L }
             val audioPlans = AudioMixPlan.from(overlayLayers, baseVideoDurationUs)
             val visualPlans = VisualMixPlan.from(overlayLayers, baseVideoDurationUs)
+            require(visualPlans.none { lane ->
+                lane.items.any { it is VisualPart.Clip && it.kind == LayerKind.VIDEO }
+            }) { "Video overlays are not supported by the export compositor yet" }
             val allSequences = mutableListOf(sequence)
-            allSequences += VisualComposition.sequences(visualPlans)
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
                 lane.parts.forEach { part ->
@@ -144,7 +156,6 @@ class VideoExporter(private val context: Context) {
                 allSequences += audioOnly.build()
             }
             val composition = Composition.Builder(allSequences)
-                .setVideoCompositorSettings(VisualComposition.layout)
                 .setEffects(Effects(emptyList(), compositionEffects))
                 .build()
             transformer = Transformer.Builder(context)

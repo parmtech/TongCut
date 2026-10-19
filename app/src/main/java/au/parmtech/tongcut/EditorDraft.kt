@@ -83,7 +83,11 @@ data class EditorDraft(
 
     /** Prevent silent omission of layered content by the older sequential renderer. */
     val canExportWithLegacyRenderer: Boolean get() =
-        layers.layers.all { it.kind != LayerKind.STICKER } &&
+        layers.layers.none { layer ->
+            layer.kind == LayerKind.STICKER ||
+                (layer.kind == LayerKind.VIDEO &&
+                    layers.tracks.firstOrNull { it.id == layer.trackId }?.hidden != true)
+        } &&
             runCatching {
                 val totalUs = SequentialTimeline(clips).totalMs * 1_000L
                 AudioMixPlan.from(layers, totalUs)

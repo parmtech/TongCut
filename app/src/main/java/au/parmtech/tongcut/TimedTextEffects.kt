@@ -29,7 +29,7 @@ object TimedTextEffects {
             .filter { it.kind == LayerKind.TEXT }
             .mapNotNull { it.text }
 
-    fun create(timeline: LayerTimeline): OverlayEffect? {
+    fun overlays(timeline: LayerTimeline): List<TextureOverlay> {
         val visibleTracks = timeline.tracks.associateBy { it.id }
         val overlays: List<TextureOverlay> = timeline.layers
             .filter { it.kind == LayerKind.TEXT }
@@ -57,6 +57,9 @@ object TimedTextEffects {
                             presentationTimeUs < layer.endUs) shown else hidden
                 }
             }
-        return if (overlays.isEmpty()) null else OverlayEffect(overlays)
+        return overlays
     }
+
+    fun create(timeline: LayerTimeline): OverlayEffect? =
+        overlays(timeline).takeIf { it.isNotEmpty() }?.let { OverlayEffect(it) }
 }
