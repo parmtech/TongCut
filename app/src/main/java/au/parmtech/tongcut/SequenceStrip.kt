@@ -230,7 +230,7 @@ internal fun SequenceStrip(
                                                         Color(0xFF6D469E) else Color(0xFF315A67),
                                                     shape = RoundedCornerShape(3.dp),
                                                     border = if (selectedLayerId == layer.id)
-                                                        BorderStroke(2.dp, Color(0xFF83E5E3)) else null,
+                                                        BorderStroke(2.dp, TongCutPalette.AquaSoft) else null,
                                                     modifier = Modifier
                                                         .offset {
                                                             IntOffset(
