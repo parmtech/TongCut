@@ -130,7 +130,7 @@ class VideoExporter(private val context: Context) {
                             .build()
                     ).build()
                 EditedMediaItem.Builder(source)
-                    .setRemoveAudio(options.mute)
+                    .setRemoveAudio(options.mute || clip.removeAudio)
                     .setEffects(Effects(emptyList(), clipEffects))
                     .build()
             }
