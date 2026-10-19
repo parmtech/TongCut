@@ -6,8 +6,10 @@ import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import androidx.media3.common.OverlaySettings
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 
@@ -43,12 +45,16 @@ object TimedTextEffects {
                         0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                 }
+                // Never return an empty string to TextOverlay: it can create a
+                // zero-width Bitmap and crash the GL export worker.
+                val shown = StaticOverlaySettings.Builder().setAlphaScale(1f).build()
+                val hidden = StaticOverlaySettings.Builder().setAlphaScale(0f).build()
                 object : TextOverlay() {
-                    override fun getText(presentationTimeUs: Long): SpannableString {
-                        if (!visible || presentationTimeUs < layer.startUs ||
-                            presentationTimeUs >= layer.endUs) return SpannableString("")
-                        return styled
-                    }
+                    override fun getText(presentationTimeUs: Long): SpannableString = styled
+
+                    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings =
+                        if (visible && presentationTimeUs >= layer.startUs &&
+                            presentationTimeUs < layer.endUs) shown else hidden
                 }
             }
         return if (overlays.isEmpty()) null else OverlayEffect(overlays)
