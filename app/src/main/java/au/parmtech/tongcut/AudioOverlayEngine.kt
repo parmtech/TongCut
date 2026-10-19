@@ -44,6 +44,7 @@ class AudioOverlayEngine(private val context: Context) {
             }
         }
         audible.forEach { layer ->
+            val wasCached = active.containsKey(layer.id)
             val entry = active[layer.id] ?: run {
                 val player = ExoPlayer.Builder(context).build()
                 val startMs = layer.sourceInUs / 1_000L
@@ -64,7 +65,7 @@ class AudioOverlayEngine(private val context: Context) {
             val decoder = entry.player
             decoder.volume = trackMap[layer.trackId]?.gain ?: 1f
             // Resynchronise after scrubbing / large drift, not every 90ms tick.
-            if (abs(decoder.currentPosition - offsetMs) > 240L) {
+            if (!wasCached || abs(decoder.currentPosition - offsetMs) > 240L) {
                 decoder.seekTo(offsetMs)
             }
             if (playing) {
