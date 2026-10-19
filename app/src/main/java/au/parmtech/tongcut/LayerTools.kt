@@ -144,6 +144,29 @@ internal fun LayerTools(
                             motion { it.copy(opacity = (it.opacity + 0.1f).coerceAtMost(1f)) }
                         }
                     }
+                    if (kind == LayerKind.VIDEO) {
+                        SmallLayerButton("Speed −") {
+                            runCatching {
+                                LayerEdits.setVisualSpeed(
+                                    draft, layer.id,
+                                    (layer.playbackSpeed - 0.25f).coerceAtLeast(0.25f)
+                                )
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Speed change failed")
+                            }
+                        }
+                        Text("${layer.playbackSpeed}×", color = Color.LightGray, fontSize = 11.sp)
+                        SmallLayerButton("Speed +") {
+                            runCatching {
+                                LayerEdits.setVisualSpeed(
+                                    draft, layer.id,
+                                    (layer.playbackSpeed + 0.25f).coerceAtMost(4f)
+                                )
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Speed change failed")
+                            }
+                        }
+                    }
                     if (kind == LayerKind.AUDIO) {
                         SmallLayerButton(if (track.muted) "Unmute" else "Mute") {
                             onChange(LayerEdits.setTrackMuted(draft, track.id, !track.muted))

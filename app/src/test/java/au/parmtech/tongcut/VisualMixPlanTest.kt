@@ -28,4 +28,15 @@ class VisualMixPlanTest {
         val late=overlay.copy(startUs=8_000_000)
         VisualMixPlan.from(LayerTimeline(tracks=listOf(video),layers=listOf(late)),10_000_000)
     }
+
+    @Test fun speedFlowsToOverlayClipPlan() {
+        val graph = LayerTimeline(tracks=listOf(video),layers=listOf(
+            overlay.copy(durationUs=2_000_000,playbackSpeed=2f)
+        ))
+        val part = VisualMixPlan.from(graph,10_000_000)
+            .single().items.filterIsInstance<VisualPart.Clip>().single()
+        assertEquals(2f,part.playbackSpeed)
+        assertEquals(2_000_000L,part.durationUs)
+    }
+
 }

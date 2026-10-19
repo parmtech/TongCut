@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 2)
+        put("schema", 3)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -38,6 +38,7 @@ object LayerTimelineCodec {
                     put("sourceInUs", item.sourceInUs)
                     put("sourceDurationUs", item.sourceDurationUs ?: JSONObject.NULL)
                     put("text", item.text ?: JSONObject.NULL)
+                    put("playbackSpeed", item.playbackSpeed.toDouble())
                     put("motion", JSONArray().apply {
                         item.motion.forEach { frame ->
                             put(JSONObject().apply {
@@ -57,7 +58,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..2) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..3) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -93,6 +94,7 @@ object LayerTimelineCodec {
                 sourceDurationUs = if (item.has("sourceDurationUs") &&
                     !item.isNull("sourceDurationUs")) item.getLong("sourceDurationUs") else null,
                 text = item.takeNullableString("text"),
+                playbackSpeed = item.optDouble("playbackSpeed", 1.0).toFloat(),
                 motion = item.optJSONArray("motion")?.let { frames ->
                     require(frames.length() <= MotionCurve.MAX_KEYFRAMES)
                     (0 until frames.length()).map { index ->

@@ -101,4 +101,17 @@ class LayerTimelineCodecTest {
         assertTrue(graph.layers.all { it.motion.isEmpty() })
     }
 
+
+    @Test fun speedSurvivesSerializationAndSchema2DefaultsToNormal() {
+        val video = timeline.layers.first()
+        val fast = video.copy(playbackSpeed = 1.5f)
+        val changed = timeline.copy(layers = listOf(fast) + timeline.layers.drop(1))
+        assertEquals(changed,LayerTimelineCodec.decode(LayerTimelineCodec.encode(changed)))
+        val legacy = LayerTimelineCodec.encode(timeline)
+        legacy.put("schema",2)
+        val raw = legacy.getJSONArray("layers")
+        for (i in 0 until raw.length()) raw.getJSONObject(i).remove("playbackSpeed")
+        assertTrue(LayerTimelineCodec.decode(legacy).layers.all { it.playbackSpeed == 1f })
+    }
+
 }

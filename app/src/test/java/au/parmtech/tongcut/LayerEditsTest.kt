@@ -186,4 +186,38 @@ class LayerEditsTest {
         LayerEdits.setMotionAt(locked, item.id, 100) { it.copy(x = 1f) }
     }
 
+
+    @Test fun speedChangeUpdatesTimelineLengthAndCanUndo() {
+        val base = LayerEdits.addVisual(
+            base(),1_000,LayerKind.VIDEO,"content://short",4_000
+        )
+        val id = base.layers.layers.single().id
+        val fast = LayerEdits.setVisualSpeed(base,id,2f)
+        val layer = fast.layers.layers.single()
+        assertEquals(2_000_000L,layer.durationUs)
+        assertEquals(2f,layer.playbackSpeed)
+        assertEquals(2_000_000L,layer.sourceAt(layer.startUs+1_000_000L))
+        val history = EditHistory(base)
+        history.apply(fast)
+        assertEquals(base,history.undo())
+    }
+
+    @Test fun slowPlaybackDoesNotOverrunSourceMedia() {
+        val initial = LayerEdits.addVisual(
+            base(),1_000,LayerKind.VIDEO,"content://short",4_000
+        )
+        val item = initial.layers.layers.single()
+        val slow = LayerEdits.setVisualSpeed(initial,item.id,0.5f)
+        assertEquals(8_000_000L,slow.layers.layers.single().durationUs)
+        assertEquals(0.5f,slow.layers.layers.single().playbackSpeed)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun speedChangeThatOutgrowsTimelineFails() {
+        val initial = LayerEdits.addVisual(
+            base(),7_000,LayerKind.VIDEO,"content://short",3_000
+        )
+        LayerEdits.setVisualSpeed(initial,initial.layers.layers.single().id,0.25f)
+    }
+
 }

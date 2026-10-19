@@ -6,6 +6,8 @@ import androidx.media3.common.OverlaySettings
 import androidx.media3.common.VideoCompositorSettings
 import androidx.media3.common.util.Size
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.audio.SpeedProvider
+import kotlin.math.roundToLong
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -49,15 +51,26 @@ object VisualComposition {
                     is VisualPart.Clip -> {
                         require(part.kind == LayerKind.VIDEO)
                         val start = part.sourceInUs / 1_000L
+                        val sourceSpanMs = (
+                            part.durationUs.toDouble() * part.playbackSpeed / 1_000.0
+                        ).roundToLong().coerceAtLeast(1L)
                         val item = MediaItem.Builder().setUri(part.uri)
                             .setClippingConfiguration(
                                 MediaItem.ClippingConfiguration.Builder()
                                     .setStartPositionMs(start)
-                                    .setEndPositionMs(start + part.durationUs / 1_000L)
+                                    .setEndPositionMs(start + sourceSpanMs)
                                     .build()
                             ).build()
-                        builder.addItem(EditedMediaItem.Builder(item)
-                            .setRemoveAudio(true).build())
+                        val edited = EditedMediaItem.Builder(item).setRemoveAudio(true)
+                        if (part.playbackSpeed != 1f) {
+                            val value = part.playbackSpeed
+                            edited.setSpeed(object : SpeedProvider {
+                                override fun getSpeed(timeUs: Long): Float = value
+                                override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
+                                    C.TIME_UNSET
+                            })
+                        }
+                        builder.addItem(edited.build())
                     }
                 }
                 duration += part.durationUs

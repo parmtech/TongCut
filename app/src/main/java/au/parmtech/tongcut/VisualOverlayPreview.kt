@@ -64,9 +64,15 @@ internal fun VisualOverlayPreview(
                 player.prepare()
             }
             LaunchedEffect(player, timelineMs, playing, layer.startUs) {
-                val withinClip = (timelineMs - layer.startUs / 1_000L)
-                    .coerceIn(0L, layer.durationUs / 1_000L)
-                if (abs(player.currentPosition - withinClip) > 170L) player.seekTo(withinClip)
+                val withinClip = (
+                    (timelineMs - layer.startUs / 1_000L).toDouble() *
+                    layer.playbackSpeed
+                ).toLong().coerceIn(
+                    0L, (layer.durationUs * layer.playbackSpeed / 1_000.0).toLong()
+                )
+                player.setPlaybackSpeed(layer.playbackSpeed)
+                if (abs(player.currentPosition - withinClip) > 170L)
+                    player.seekTo(withinClip)
                 if (playing) player.play() else player.pause()
             }
             AndroidView(

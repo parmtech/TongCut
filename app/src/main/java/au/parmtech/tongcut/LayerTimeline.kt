@@ -87,7 +87,8 @@ data class TimelineLayer(
     val sourceInUs: Long = 0,
     val sourceDurationUs: Long? = null,
     val text: String? = null,
-    val motion: List<MotionKeyframe> = emptyList()
+    val motion: List<MotionKeyframe> = emptyList(),
+    val playbackSpeed: Float = 1f
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -97,6 +98,9 @@ data class TimelineLayer(
         require(startUs <= Long.MAX_VALUE - durationUs)
         require(sourceInUs >= 0)
         MotionCurve.validate(motion, durationUs)
+        require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
+        if (kind != LayerKind.VIDEO) require(playbackSpeed == 1f)
+
         if (kind == LayerKind.TEXT) {
             require(!text.isNullOrBlank() && text.length <= 10_000)
             require(sourceUri == null)
@@ -105,8 +109,11 @@ data class TimelineLayer(
             require(!sourceUri.isNullOrBlank())
             require(text == null)
             if (kind == LayerKind.VIDEO || kind == LayerKind.AUDIO) {
-                require(sourceInUs <= Long.MAX_VALUE - durationUs)
-                require(sourceDurationUs == null || sourceInUs + durationUs <= sourceDurationUs)
+                val consumedUs = if (kind == LayerKind.VIDEO) {
+                    (durationUs.toDouble() * playbackSpeed).toLong()
+                } else durationUs
+                require(sourceInUs <= Long.MAX_VALUE - consumedUs)
+                require(sourceDurationUs == null || sourceInUs + consumedUs <= sourceDurationUs)
             }
         }
     }
@@ -115,7 +122,10 @@ data class TimelineLayer(
 
     /** Relative source position, not project position. */
     fun sourceAt(positionUs: Long): Long =
-        sourceInUs + (positionUs - startUs).coerceIn(0L, durationUs)
+        sourceInUs + (
+            ((positionUs - startUs).coerceIn(0L, durationUs).toDouble() *
+                playbackSpeed).toLong()
+        )
 }
 
 /**
@@ -194,7 +204,8 @@ data class LayerTimeline(
             id = rightId,
             startUs = atUs,
             durationUs = layer.durationUs - leftDuration,
-            sourceInUs = layer.sourceInUs + leftDuration,
+            sourceInUs = layer.sourceInUs +
+                (leftDuration.toDouble() * layer.playbackSpeed).toLong(),
             motion = rightMotion
         )
         return copy(layers = layers.filterNot { it.id == id } + left + right)

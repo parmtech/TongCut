@@ -118,4 +118,28 @@ class LayerTimelineTest {
         )))
     }
 
+
+    @Test fun splittingFastVideoUsesSourceRate() {
+        val fast = videoClip().copy(
+            durationUs = 2_000_000,
+            playbackSpeed = 2f,
+            sourceDurationUs = 8_000_000
+        )
+        val graph = LayerTimeline(tracks=listOf(video),layers=listOf(fast))
+        val split = graph.splitLayer(fast.id,1_000_000L,"right-fast")
+        val right = split.layers.first { it.id == "right-fast" }
+        assertEquals(3_000_000L,right.sourceInUs)
+        assertEquals(1_000_000L,right.durationUs)
+        assertEquals(2f,right.playbackSpeed)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun videoCannotExceedSourceWithSpeedApplied() {
+        videoClip().copy(
+            durationUs = 2_000_000,
+            playbackSpeed = 4f,
+            sourceDurationUs = 8_000_000
+        )
+    }
+
 }

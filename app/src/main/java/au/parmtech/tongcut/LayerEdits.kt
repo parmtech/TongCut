@@ -97,6 +97,34 @@ object LayerEdits {
         ))
     }
 
+    /** Constant-speed part of P3 speed work; ramp curves need a separate source clock. */
+    fun setVisualSpeed(draft: EditorDraft, id: String, speed: Float): EditorDraft {
+        require(speed.isFinite() && speed in 0.25f..4f)
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
+            ?: throw IllegalArgumentException("Video overlay not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked)
+        val sourceSpan = layer.durationUs.toDouble() * layer.playbackSpeed
+        // Keep all clip edit boundaries at Media3's millisecond resolution.
+        val newDurationUs = (
+            kotlin.math.round(sourceSpan / speed / 1_000.0).toLong() * 1_000L
+        ).coerceAtLeast(1_000L)
+        require(layer.startUs <= clock(draft) - newDurationUs) {
+            "Speed-adjusted video no longer fits the main footage"
+        }
+        val rebuilt = layer.copy(
+            durationUs = newDurationUs,
+            playbackSpeed = speed,
+            motion = layer.motion.map { key ->
+                key.copy(timeUs = (
+                    key.timeUs.toDouble() * newDurationUs / layer.durationUs
+                ).toLong().coerceIn(0L,newDurationUs))
+            }.distinctBy { it.timeUs }
+        )
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) rebuilt else it
+        }))
+    }
+
     fun changeText(draft: EditorDraft, id: String, text: String): EditorDraft {
         val clean = text.trim().take(300)
         require(clean.isNotEmpty()) { "Caption cannot be blank" }

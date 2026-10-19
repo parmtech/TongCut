@@ -16,12 +16,15 @@ sealed interface VisualPart {
         val kind: LayerKind,
         val uri: String,
         val sourceInUs: Long,
-        override val durationUs: Long
+        override val durationUs: Long,
+        val playbackSpeed: Float = 1f
     ) : VisualPart {
         init {
             require(kind == LayerKind.VIDEO || kind == LayerKind.IMAGE)
             require(uri.isNotBlank() && durationUs >= 1_000)
             require(sourceInUs >= 0)
+            require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
+
         }
     }
 }
@@ -44,7 +47,8 @@ object VisualMixPlan {
                     require(layer.endUs <= videoDurationUs) { "Overlay exceeds video" }
                     if (layer.startUs > cursor) parts += VisualPart.Gap(layer.startUs - cursor)
                     parts += VisualPart.Clip(layer.id, layer.kind,
-                        requireNotNull(layer.sourceUri), layer.sourceInUs, layer.durationUs)
+                        requireNotNull(layer.sourceUri), layer.sourceInUs,
+                        layer.durationUs, layer.playbackSpeed)
                     cursor = layer.endUs
                 }
             VisualLanePlan(track.id, parts)
