@@ -602,6 +602,29 @@ class LayerEditsTest {
         assertEquals(initial, restored)
     }
 
+    @Test fun extendingAudioHeadMovesAuthoredEnvelopeAndOmitsGeneratedUnityPoints() {
+        val initial = LayerEdits.addAudio(base(), 1_000L, "content://music", 5_000L)
+        val id = initial.layers.layers.single().id
+        val authored = initial.copy(layers = initial.layers.copy(layers =
+            initial.layers.layers.map { it.copy(audioEnvelope = listOf(
+                AudioGainKeyframe(0L, 0.5f),
+                AudioGainKeyframe(2_000_000L, 1f),
+                AudioGainKeyframe(5_000_000L, 0.25f)
+            )) }
+        ))
+        val trimmed = LayerEdits.trimLayerStartAtFrame(authored, id, 3_000_000L)
+        val restored = LayerEdits.trimLayerStartAtFrame(trimmed, id, 1_000_000L)
+        val envelope = restored.layers.layers.single().audioEnvelope
+        assertEquals(listOf(
+            AudioGainKeyframe(0L, 1f),
+            AudioGainKeyframe(2_000_000L, 1f),
+            AudioGainKeyframe(5_000_000L, 0.25f)
+        ), envelope)
+        assertEquals(1f, AudioEnvelope.gainAt(1_000_000L, 5_000_000L, envelope))
+        assertEquals(1f, AudioEnvelope.gainAt(2_000_000L, 5_000_000L, envelope))
+        assertEquals(0.5f, AudioEnvelope.gainAt(4_000_000L, 5_000_000L, envelope), 0.0001f)
+    }
+
     @Test fun aTrimRejectsMissingSourceEarlierThanZero() {
         val initial = LayerEdits.addAudio(base(), 1_000L, "content://music", 5_000L)
         val id = initial.layers.layers.single().id

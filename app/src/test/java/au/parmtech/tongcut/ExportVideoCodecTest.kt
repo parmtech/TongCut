@@ -2,6 +2,7 @@ package au.parmtech.tongcut
 
 import androidx.media3.common.MimeTypes
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ExportVideoCodecTest {
@@ -50,12 +51,16 @@ class ExportVideoCodecTest {
             height <= 1920
         }
         assertEquals(listOf(720, 1080), result)
-        assertEquals(listOf(406 to 720, 608 to 1080, 1216 to 2160), checked)
+        assertEquals(listOf(720 to 1280, 1080 to 1920, 2160 to 3840), checked)
+        assertTrue(checked.all { (width, height) -> height > width })
     }
 
     @Test fun invalidAspectAndNonPositivePresetsAreRejected() {
         assertEquals(emptyList<Int>(), ExportVideoCodecSupport.supportedShortSides(
             listOf(720, 1080), Float.NaN
+        ) { _, _ -> true })
+        assertEquals(emptyList<Int>(), ExportVideoCodecSupport.supportedShortSides(
+            listOf(720, 1080), Float.POSITIVE_INFINITY
         ) { _, _ -> true })
         assertEquals(emptyList<Int>(), ExportVideoCodecSupport.supportedShortSides(
             listOf(0, -1), 16f / 9f

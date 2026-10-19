@@ -2,6 +2,7 @@ package au.parmtech.tongcut
 
 import android.media.MediaCodecList
 import androidx.media3.common.MimeTypes
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 enum class ExportVideoCodec(val title: String, val mimeType: String) {
@@ -51,16 +52,22 @@ object ExportVideoCodecSupport {
         presets: List<Int>,
         aspectRatio: Float,
         supports: (width: Int, height: Int) -> Boolean
-    ): List<Int> = presets.filter { shortSide ->
-        if (shortSide <= 0) return@filter false
-        val longSide = (shortSide * aspectRatio).roundToInt().coerceAtLeast(2)
-        val width = if (aspectRatio >= 1f) longSide else shortSide
-        val height = if (aspectRatio >= 1f) shortSide else longSide
-        // Encoders generally require even 4:2:0 dimensions; use the nearest even
-        // geometry while retaining the requested short edge exactly.
-        val evenWidth = if (aspectRatio >= 1f) width + width % 2 else width
-        val evenHeight = if (aspectRatio < 1f) height + height % 2 else height
-        evenWidth >= 2 && evenHeight >= 2 && supports(evenWidth, evenHeight)
+    ): List<Int> {
+        if (!aspectRatio.isFinite() || aspectRatio !in 0.1f..10f) return emptyList()
+        return presets.filter { shortSide ->
+            if (shortSide <= 0) return@filter false
+            val longSideValue = shortSide.toDouble() * max(aspectRatio, 1f / aspectRatio)
+            if (!longSideValue.isFinite() || longSideValue > Int.MAX_VALUE - 2) {
+                return@filter false
+            }
+            val longSide = longSideValue.roundToInt().coerceAtLeast(2)
+            val width = if (aspectRatio >= 1f) longSide else shortSide
+            val height = if (aspectRatio >= 1f) shortSide else longSide
+            // Encoders generally require even 4:2:0 dimensions; retain the requested short edge.
+            val evenWidth = if (aspectRatio >= 1f) width + width % 2 else width
+            val evenHeight = if (aspectRatio < 1f) height + height % 2 else height
+            evenWidth >= 2 && evenHeight >= 2 && supports(evenWidth, evenHeight)
+        }
     }
 }
 

@@ -704,6 +704,19 @@ object LayerEdits {
             val shifted = prepend + layer.motion.map {
                 it.copy(timeUs = it.timeUs + extension)
             }
+            val extendedAudioEnvelope = if (layer.kind == LayerKind.AUDIO) {
+                if (layer.audioEnvelope.isEmpty() || layer.audioEnvelope.all { it.gain == 1f }) {
+                    emptyList()
+                } else {
+                    val startingGain = AudioEnvelope.gainAt(
+                        0L, layer.durationUs, layer.audioEnvelope
+                    )
+                    listOf(AudioGainKeyframe(0L, startingGain)) +
+                        layer.audioEnvelope.map { point ->
+                            point.copy(timeUs = Math.addExact(point.timeUs, extension))
+                        }
+                }
+            } else layer.audioEnvelope
             val newLayer = layer.copy(
                 startUs = cut,
                 durationUs = layer.durationUs + extension,
@@ -713,6 +726,7 @@ object LayerEdits {
                     requireNotNull(layer.sourceSpanUs) + consumed
                     else layer.sourceSpanUs,
                 motion = shifted,
+                audioEnvelope = extendedAudioEnvelope,
                 fade = layer.fade.resetToClip()
             )
             return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
@@ -792,3 +806,4 @@ object LayerEdits {
     }
 
 }
+
