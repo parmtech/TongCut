@@ -51,8 +51,8 @@ class AudioMixPlanTest {
         )
     }
 
-    @Test(expected=IllegalArgumentException::class)
-    fun extraVideoOverlayRefusesAudioPlan() {
+    @Test
+    fun visualOverlayDoesNotAddAudioLane() {
         val overlayTrack = TimelineTrack("video", "Overlay", LayerKind.VIDEO, 1)
         val extra = TimelineLayer("v", "video", LayerKind.VIDEO, 0, 3_000_000, sourceUri="content://v")
         AudioMixPlan.from(LayerTimeline(tracks=listOf(lane, overlayTrack), layers=listOf(extra)),videoUs)

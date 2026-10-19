@@ -154,6 +154,44 @@ fun VideoEditorScreen(
         }
     }
 
+    var overlayKind by remember { mutableStateOf(LayerKind.VIDEO) }
+    val overlayPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val kind = overlayKind
+            scope.launch {
+                try {
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    val duration = withContext(Dispatchers.IO) {
+                        if (kind == LayerKind.IMAGE) 5_000L
+                        else MediaMetadataRetriever().use { retriever ->
+                            retriever.setDataSource(context, uri)
+                            retriever.extractMetadata(
+                                MediaMetadataRetriever.METADATA_KEY_DURATION
+                            )?.toLongOrNull()
+                        } ?: throw IllegalArgumentException("Video duration not available")
+                    }
+                    onChange(LayerEdits.addVisual(
+                        draft, playMs, kind, uri.toString(), duration
+                    ))
+                    panel = "Overlay"
+                    onInfo("Overlay added to the timeline; export rendering needs phone validation.")
+                } catch (error: Exception) {
+                    onInfo("Overlay import failed: ${error.message}")
+                }
+            }
+        }
+    }
+    fun chooseOverlay(kind: LayerKind) {
+        overlayKind = kind
+        overlayPicker.launch(arrayOf(if (kind == LayerKind.IMAGE) "image/*" else "video/*"))
+    }
+
     LaunchedEffect(draft.clips) {
         val missing = withContext(Dispatchers.IO) {
             draft.clips.mapIndexedNotNull { index, item ->
@@ -308,6 +346,25 @@ fun VideoEditorScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            // PiP previews are independent video decoders; Media3 export uses the
+            // same saved layer timing and compositor layout. Hardware parity pending.
+            val overlays = active.layers.activeAt(playMs * 1_000L)
+                .filter { it.kind == LayerKind.IMAGE || it.kind == LayerKind.VIDEO }
+            overlays.forEachIndexed { index, layer ->
+                key(layer.id) {
+                    val position = when (index % 3) {
+                        0 -> Alignment.BottomEnd
+                        1 -> Alignment.BottomStart
+                        else -> Alignment.TopEnd
+                    }
+                    VisualOverlayPreview(
+                        layer = layer, timelineMs = playMs, playing = playing,
+                        modifier = Modifier.align(position).fillMaxWidth(0.42f)
+                            .aspectRatio(16f / 9f)
+                    )
+                }
+            }
+
             val visibleText = active.layers.activeAt(playMs * 1_000L)
                 .filter { it.kind == LayerKind.TEXT }
                 .mapNotNull { it.text }
@@ -383,7 +440,14 @@ fun VideoEditorScreen(
                 onAddMedia = onMedia,
                 onAddText = { panel = "Text" },
                 onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
-                onLayerSelect = { panel = if (it == LayerKind.TEXT) "Text" else "Audio" },
+                onAddVisual = ::chooseOverlay,
+                onLayerSelect = { kind ->
+                    panel = when (kind) {
+                        LayerKind.TEXT -> "Text"
+                        LayerKind.AUDIO -> "Audio"
+                        else -> "Overlay"
+                    }
+                },
                 onMoveLayer = { id, startUs ->
                     runCatching { LayerEdits.placeLayerAtFrame(active, id, startUs) }
                         .onSuccess(onChange)
@@ -494,6 +558,18 @@ fun VideoEditorScreen(
                         onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                         onError = onInfo
                     )
+                    "Overlay" -> {
+                        LayerTools(
+                            active, playMs, LayerKind.VIDEO, onChange,
+                            onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                            onAddVisual = ::chooseOverlay, onError = onInfo
+                        )
+                        LayerTools(
+                            active, playMs, LayerKind.IMAGE, onChange,
+                            onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                            onAddVisual = ::chooseOverlay, onError = onInfo
+                        )
+                    }
                     else -> Text("$opened tools are being implemented. No nonfunctional editing buttons.",
                         color = Color.LightGray)
                 }
@@ -511,7 +587,7 @@ fun VideoEditorScreen(
                     modifier = Modifier.width(65.dp).fillMaxHeight()
                         .clickable {
                             panel = if (panel == item.name) null else item.name
-                            if (item.name in listOf("Effects", "Overlay", "Captions", "Adjust", "AI"))
+                            if (item.name in listOf("Effects", "Captions", "Adjust", "AI"))
                                 onUnavailable(item.name)
                         },
                     horizontalAlignment = Alignment.CenterHorizontally,

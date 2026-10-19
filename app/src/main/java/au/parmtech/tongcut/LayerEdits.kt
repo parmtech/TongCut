@@ -65,6 +65,38 @@ object LayerEdits {
         return updated
     }
 
+    /** Add an independent visible clip above the primary video, preserving source media. */
+    fun addVisual(
+        draft: EditorDraft,
+        playheadMs: Long,
+        kind: LayerKind,
+        sourceUri: String,
+        sourceDurationMs: Long
+    ): EditorDraft {
+        require(kind == LayerKind.VIDEO || kind == LayerKind.IMAGE) {
+            "Visual importer supports only video and still photos"
+        }
+        require(sourceUri.isNotBlank() && sourceDurationMs >= 100L)
+        val start = checkedStart(draft, playheadMs)
+        val remaining = clock(draft) - start
+        val requested = Math.multiplyExact(sourceDurationMs, 1_000L)
+        val duration = minOf(remaining, requested)
+        require(duration >= 1_000L)
+        val (graph, laneId) = laneFor(draft.layers, kind, start, start + duration)
+        require(graph.tracks.count { it.kind == LayerKind.VIDEO || it.kind == LayerKind.IMAGE } <= 3) {
+            "Only three independent visual overlays supported in this preview"
+        }
+        return draft.copy(layers = graph.addLayer(
+            TimelineLayer(
+                id = UUID.randomUUID().toString(),
+                trackId = laneId, kind = kind,
+                startUs = start, durationUs = duration,
+                sourceUri = sourceUri,
+                sourceDurationUs = if (kind == LayerKind.VIDEO) requested else null
+            )
+        ))
+    }
+
     fun changeText(draft: EditorDraft, id: String, text: String): EditorDraft {
         val clean = text.trim().take(300)
         require(clean.isNotEmpty()) { "Caption cannot be blank" }

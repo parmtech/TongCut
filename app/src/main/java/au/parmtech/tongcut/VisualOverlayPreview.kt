@@ -1,0 +1,65 @@
+package au.parmtech.tongcut
+
+import android.net.Uri
+import android.view.TextureView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import kotlin.math.abs
+
+/** Overlay monitor with independently decoded muted videos or photo thumbnails. */
+@Composable
+internal fun VisualOverlayPreview(
+    layer: TimelineLayer,
+    timelineMs: Long,
+    playing: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        if (layer.kind == LayerKind.IMAGE) {
+            GalleryThumbnail(Uri.parse(requireNotNull(layer.sourceUri)),Modifier.fillMaxSize())
+        } else if (layer.kind == LayerKind.VIDEO) {
+            val player = remember(context,layer.id,layer.sourceUri) {
+                ExoPlayer.Builder(context).build().apply { volume = 0f }
+            }
+            DisposableEffect(player) {
+                onDispose { player.release() }
+            }
+            LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs) {
+                val fromMs = layer.sourceInUs / 1_000L
+                val toMs = (layer.sourceInUs + layer.durationUs) / 1_000L
+                player.setMediaItem(
+                    MediaItem.Builder().setUri(requireNotNull(layer.sourceUri))
+                        .setClippingConfiguration(
+                            MediaItem.ClippingConfiguration.Builder()
+                                .setStartPositionMs(fromMs)
+                                .setEndPositionMs(toMs)
+                                .build()
+                        ).build()
+                )
+                player.prepare()
+            }
+            LaunchedEffect(player, timelineMs, playing, layer.startUs) {
+                val withinClip = (timelineMs - layer.startUs / 1_000L)
+                    .coerceIn(0L, layer.durationUs / 1_000L)
+                if (abs(player.currentPosition - withinClip) > 170L) player.seekTo(withinClip)
+                if (playing) player.play() else player.pause()
+            }
+            AndroidView(
+                factory = { viewContext ->
+                    TextureView(viewContext).also { player.setVideoTextureView(it) }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}

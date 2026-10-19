@@ -47,9 +47,9 @@ class VideoExporter(private val context: Context) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
-        require(overlayLayers.layers.all {
-            it.kind == LayerKind.TEXT || it.kind == LayerKind.AUDIO
-        }) { "This renderer does not support picture/video/sticker overlay layers" }
+        require(overlayLayers.layers.none { it.kind == LayerKind.STICKER }) {
+            "Sticker export is not implemented"
+        }
         val original = clips.toList()
         val file = File(
             context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.cacheDir,
@@ -99,7 +99,9 @@ class VideoExporter(private val context: Context) {
             }
             val baseVideoDurationUs = original.sumOf { it.trimmedDurationMs * 1_000L }
             val audioPlans = AudioMixPlan.from(overlayLayers, baseVideoDurationUs)
+            val visualPlans = VisualMixPlan.from(overlayLayers, baseVideoDurationUs)
             val allSequences = mutableListOf(sequence)
+            allSequences += VisualComposition.sequences(visualPlans)
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
                 lane.parts.forEach { part ->
@@ -142,6 +144,7 @@ class VideoExporter(private val context: Context) {
                 allSequences += audioOnly.build()
             }
             val composition = Composition.Builder(allSequences)
+                .setVideoCompositorSettings(VisualComposition.layout)
                 .setEffects(Effects(emptyList(), compositionEffects))
                 .build()
             transformer = Transformer.Builder(context)

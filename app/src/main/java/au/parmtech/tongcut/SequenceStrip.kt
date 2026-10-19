@@ -42,6 +42,7 @@ internal fun SequenceStrip(
     onAddMedia: () -> Unit,
     onAddText: () -> Unit,
     onAddAudio: () -> Unit,
+    onAddVisual: (LayerKind) -> Unit,
     onLayerSelect: (LayerKind) -> Unit,
     onMoveLayer: (String, Long) -> Unit,
     onUnavailable: (String) -> Unit
@@ -59,7 +60,7 @@ internal fun SequenceStrip(
         }
     }
 
-    Column(Modifier.fillMaxWidth().height(309.dp).background(Color(0xFF171717))) {
+    Column(Modifier.fillMaxWidth().height(349.dp).background(Color(0xFF171717))) {
         Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -164,11 +165,11 @@ internal fun SequenceStrip(
                     }
                     Spacer(Modifier.height(4.dp))
                     Column(
-                        Modifier.fillMaxWidth().height(149.dp)
+                        Modifier.fillMaxWidth().height(189.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        listOf(LayerKind.AUDIO, LayerKind.TEXT).forEach { kind ->
+                        listOf(LayerKind.VIDEO, LayerKind.IMAGE, LayerKind.AUDIO, LayerKind.TEXT).forEach { kind ->
                             val relevant = draft.layers.tracks
                                 .filter { it.kind == kind }.sortedBy { it.order }
                             val lanes = if (relevant.isEmpty()) listOf<TimelineTrack?>(null)
@@ -178,12 +179,23 @@ internal fun SequenceStrip(
                                     Modifier.fillMaxWidth().height(40.dp)
                                         .background(Color(0xFF262626), RoundedCornerShape(3.dp))
                                         .clickable {
-                                            if (kind == LayerKind.TEXT) onAddText() else onAddAudio()
+                                            when (kind) {
+                                                LayerKind.TEXT -> onAddText()
+                                                LayerKind.AUDIO -> onAddAudio()
+                                                LayerKind.VIDEO, LayerKind.IMAGE -> onAddVisual(kind)
+                                                else -> onUnavailable("Sticker track")
+                                            }
                                         }
                                 ) {
                                     if (lane == null) {
                                         Text(
-                                            if (kind == LayerKind.AUDIO) "+ Add audio" else "+ Add text",
+                                            when (kind) {
+                                                LayerKind.AUDIO -> "+ Add audio"
+                                                LayerKind.TEXT -> "+ Add text"
+                                                LayerKind.VIDEO -> "+ Add overlay video"
+                                                LayerKind.IMAGE -> "+ Add overlay photo"
+                                                else -> "+ Add media"
+                                            },
                                             color = Color.Gray,
                                             fontSize = 12.sp,
                                             modifier = Modifier.align(Alignment.CenterStart)
@@ -234,10 +246,20 @@ internal fun SequenceStrip(
                                                                 modifier = Modifier.fillMaxSize().padding(3.dp)
                                                             )
                                                         }
+                                                        if (kind == LayerKind.IMAGE || kind == LayerKind.VIDEO) {
+                                                            GalleryThumbnail(
+                                                                layer.sourceUri.orEmpty().toUri(),
+                                                                Modifier.fillMaxSize()
+                                                            )
+                                                        }
                                                         Text(
-                                                            if (kind == LayerKind.TEXT)
-                                                                layer.text.orEmpty()
-                                                            else "♪ Audio",
+                                                            when (kind) {
+                                                                LayerKind.TEXT -> layer.text.orEmpty()
+                                                                LayerKind.AUDIO -> "♪ Audio"
+                                                                LayerKind.VIDEO -> "Overlay video"
+                                                                LayerKind.IMAGE -> "Photo"
+                                                                else -> "Layer"
+                                                            },
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis,
                                                             color = if (lane.hidden) Color.Gray

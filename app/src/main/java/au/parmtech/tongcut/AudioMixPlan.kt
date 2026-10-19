@@ -39,9 +39,9 @@ object AudioMixPlan {
 
     fun from(timeline: LayerTimeline, videoDurationUs: Long): List<AudioLanePlan> {
         require(videoDurationUs > 0) { "Video duration is required" }
-        require(timeline.layers.none {
-            it.kind !in setOf(LayerKind.TEXT, LayerKind.AUDIO)
-        }) { "Video/image/sticker overlays require the visual compositor" }
+        require(timeline.layers.none { it.kind == LayerKind.STICKER }) {
+            "Sticker compositions require a dedicated renderer"
+        }
         val activeTracks = timeline.tracks
             .filter { it.kind == LayerKind.AUDIO && !it.muted }
             .sortedBy { it.order }

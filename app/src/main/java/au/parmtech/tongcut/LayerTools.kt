@@ -20,6 +20,7 @@ internal fun LayerTools(
     kind: LayerKind,
     onChange: (EditorDraft) -> Unit,
     onAddAudio: () -> Unit,
+    onAddVisual: (LayerKind) -> Unit = {},
     onError: (String) -> Unit
 ) {
     var editingId by remember { mutableStateOf<String?>(null) }
@@ -31,18 +32,32 @@ internal fun LayerTools(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (kind == LayerKind.TEXT) "Text overlays" else "Audio layers",
+                when (kind) {
+                    LayerKind.TEXT -> "Text overlays"
+                    LayerKind.AUDIO -> "Audio layers"
+                    LayerKind.VIDEO -> "Video overlays"
+                    LayerKind.IMAGE -> "Photo overlays"
+                    else -> "Layers"
+                },
                 color = Color.White,
                 style = MaterialTheme.typography.titleSmall
             )
             Spacer(Modifier.weight(1f))
             TextButton(onClick = {
-                if (kind == LayerKind.TEXT) {
-                    editingId = ""
-                    entry = ""
-                } else onAddAudio()
+                when (kind) {
+                    LayerKind.TEXT -> { editingId = ""; entry = "" }
+                    LayerKind.AUDIO -> onAddAudio()
+                    LayerKind.VIDEO, LayerKind.IMAGE -> onAddVisual(kind)
+                    else -> Unit
+                }
             }) {
-                Text(if (kind == LayerKind.TEXT) "+ Add text" else "+ Add audio", color = ProCyan)
+                Text(when (kind) {
+                    LayerKind.TEXT -> "+ Add text"
+                    LayerKind.AUDIO -> "+ Add audio"
+                    LayerKind.VIDEO -> "+ Add video"
+                    LayerKind.IMAGE -> "+ Add photo"
+                    else -> "+ Add"
+                }, color = ProCyan)
             }
         }
         layers.forEach { layer ->
@@ -53,7 +68,13 @@ internal fun LayerTools(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (kind == LayerKind.TEXT) layer.text.orEmpty() else "Audio clip",
+                        when (kind) {
+                            LayerKind.TEXT -> layer.text.orEmpty()
+                            LayerKind.AUDIO -> "Audio clip"
+                            LayerKind.VIDEO -> "Video overlay"
+                            LayerKind.IMAGE -> "Photo overlay"
+                            else -> "Layer"
+                        },
                         color = if (track.hidden) Color.Gray else Color.White,
                         modifier = Modifier.weight(1f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp

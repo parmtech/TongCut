@@ -131,4 +131,20 @@ class LayerEditsTest {
         assertEquals(initial, restored)
     }
 
+    @Test fun visualLayerImportsDoNotAlterMainFootage() {
+        val original = base()
+        val overlay = LayerEdits.addVisual(original,2_000,LayerKind.VIDEO,"content://overlay",4_000)
+        assertEquals(original.clips, overlay.clips)
+        assertEquals(2_000_000L,overlay.layers.layers.single().startUs)
+        assertEquals(4_000_000L,overlay.layers.layers.single().durationUs)
+        assertEquals(LayerKind.VIDEO,overlay.layers.layers.single().kind)
+        val image = LayerEdits.addVisual(overlay, 7_000,LayerKind.IMAGE,"content://image",5_000)
+        assertEquals(3_000_000L,image.layers.layers.last().durationUs)
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun unsupportedLayerKindCannotEnterVisualImporter() {
+        LayerEdits.addVisual(base(),0,LayerKind.AUDIO,"content://x",1_000)
+    }
+
 }
