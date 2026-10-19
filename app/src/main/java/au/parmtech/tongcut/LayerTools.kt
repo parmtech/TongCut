@@ -282,6 +282,9 @@ internal fun LayerTools(
                             .onSuccess(onChange).onFailure { onError(it.message ?: "Delete failed") }
                     }
                 }
+                if (kind == LayerKind.VIDEO && layer.speedRamp.isNotEmpty()) {
+                    SpeedCurveEditor(draft, layer, onChange, onError)
+                }
                 if (kind in setOf(LayerKind.VIDEO, LayerKind.IMAGE, LayerKind.TEXT) &&
                     layer.motion.isNotEmpty()
                 ) {

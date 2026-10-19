@@ -352,4 +352,21 @@ class LayerEditsTest {
             LayerEdits.moveMotionKey(b,id,0L,1_000_000L)
         }
     }
+    @Test fun speedRampSplitKeepsTimingsAfterEditedKeys() {
+        val initial = LayerEdits.addVisual(base(), 0L, LayerKind.VIDEO, "content://clip", 5_000)
+        val id = initial.layers.layers.single().id
+        val keyed = LayerEdits.setSpeedKeyAt(initial,id,2_000L,2f)
+        val edited = LayerEdits.changeSpeedKey(keyed,id,2_000_000L,1.5f)
+        val layer = edited.layers.layers.single()
+        assertEquals(5_000_000L,layer.consumedSourceUs)
+        val boundary = layer.startUs + layer.durationUs / 2L
+        val (left,right) = edited.layers.splitLayer(id,boundary).layers
+            .sortedBy { it.startUs }
+        assertEquals(layer.durationUs,left.durationUs+right.durationUs)
+        assertEquals(layer.startUs,left.startUs)
+        assertEquals(layer.endUs,right.endUs)
+        assertEquals(left.sourceInUs+left.consumedSourceUs,right.sourceInUs)
+    }
+
+
 }

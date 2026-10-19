@@ -145,29 +145,104 @@ object LayerEdits {
                 layer.sourceInUs + 500L) / 1_000L
         ).coerceIn(0L, span / 1_000L - 1L) * 1_000L
         val points = SpeedRamp.upsert(span, oldPoints, SpeedKeyframe(relativeUs, speed))
-        val newDuration = SpeedRamp.durationUs(span, points)
-        require(layer.startUs <= clock(draft) - newDuration) {
-            "The changed speed makes the clip extend beyond your video"
-        }
+        return applySpeedPoints(draft, layer, points)
+    }
 
-        fun oldSourceAt(keyTimeUs: Long): Long =
-            if (layer.speedRamp.isEmpty()) {
-                (keyTimeUs.toDouble() * layer.playbackSpeed).toLong()
-            } else SpeedRamp.sourceAtOutput(
-                keyTimeUs, requireNotNull(layer.sourceSpanUs), layer.speedRamp
-            )
-        val motion = layer.motion.map { key ->
-            val sourcePosition = oldSourceAt(key.timeUs)
-            key.copy(timeUs = SpeedRamp.outputAtSource(sourcePosition, span, points)
-                .coerceIn(0L, newDuration))
-        }.distinctBy { it.timeUs }
-        val next = layer.copy(
-            durationUs = newDuration, sourceSpanUs = span,
-            speedRamp = points, motion = motion
+    /**
+     * Mutate the true source-clock speed curve. Changing tempo moves every later
+     * project timestamp. Re-map existing motion keys to their unchanged source
+     * frames and keep fade handles proportionate to the new authored duration.
+     */
+    private fun applySpeedPoints(
+        draft: EditorDraft, layer: TimelineLayer, points: List<SpeedKeyframe>
+    ): EditorDraft {
+        val sourceSpanUs = ((layer.consumedSourceUs + 500L) / 1_000L) * 1_000L
+        SpeedRamp.validate(sourceSpanUs, points)
+        require(layer.fade.phaseDurationUs == null) {
+            "Speed editing on a previously split fade needs a reset fade first"
+        }
+        val newDuration = SpeedRamp.durationUs(sourceSpanUs, points)
+        val videoEnd = clock(draft)
+        require(layer.startUs <= videoEnd && newDuration <= videoEnd - layer.startUs) {
+            "Changed speed extends past the project's video"
+        }
+        val remapped = layer.motion.map { key ->
+            val sourceOffset = layer.sourceAt(layer.startUs + key.timeUs) - layer.sourceInUs
+            key.copy(timeUs = SpeedRamp.outputAtSource(
+                sourceOffset.coerceIn(0L, sourceSpanUs), sourceSpanUs, points
+            ).coerceIn(0L, newDuration))
+        }.distinctBy { it.timeUs }.sortedBy { it.timeUs }
+        val oldFade = layer.fade.resetToClip()
+        val newFadeIn = (oldFade.inUs.toDouble() * newDuration / layer.durationUs)
+            .toLong().coerceIn(0L, newDuration)
+        val newFadeOut = (oldFade.outUs.toDouble() * newDuration / layer.durationUs)
+            .toLong().coerceIn(0L, newDuration - newFadeIn)
+        val updated = layer.copy(
+            durationUs = newDuration,
+            sourceSpanUs = sourceSpanUs,
+            speedRamp = points,
+            motion = remapped,
+            fade = LayerFade(newFadeIn, newFadeOut)
         )
         return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
-            if (it.id == id) next else it
+            if (it.id == layer.id) updated else it
         }))
+    }
+
+    /** A direct speed-graph edit; source-relative offset must match an existing key. */
+    fun changeSpeedKey(
+        draft: EditorDraft, id: String, sourceOffsetUs: Long, speed: Float
+    ): EditorDraft {
+        require(speed.isFinite() && speed in 0.25f..4f)
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
+            ?: throw IllegalArgumentException("Video layer not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the layer before changing speed"
+        }
+        require(layer.speedRamp.any { it.sourceOffsetUs == sourceOffsetUs }) {
+            "Speed point no longer exists"
+        }
+        return applySpeedPoints(draft, layer, layer.speedRamp.map {
+            if (it.sourceOffsetUs == sourceOffsetUs) it.copy(speed = speed) else it
+        })
+    }
+
+    /** Move an existing speed control point on the trimmed SOURCE clock. */
+    fun moveSpeedKey(
+        draft: EditorDraft, id: String, sourceOffsetUs: Long, newSourceOffsetUs: Long
+    ): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
+            ?: throw IllegalArgumentException("Video layer not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the layer before changing speed"
+        }
+        require(sourceOffsetUs != 0L) { "The first speed key must start at source zero" }
+        require(layer.speedRamp.any { it.sourceOffsetUs == sourceOffsetUs }) {
+            "Selected speed point not found"
+        }
+        require(newSourceOffsetUs >= 1_000L && newSourceOffsetUs % 1_000L == 0L &&
+            newSourceOffsetUs < layer.consumedSourceUs) { "Speed point out of source range" }
+        require(layer.speedRamp.none {
+            it.sourceOffsetUs == newSourceOffsetUs && it.sourceOffsetUs != sourceOffsetUs
+        }) { "Another speed point already occupies that frame" }
+        val points = layer.speedRamp.map {
+            if (it.sourceOffsetUs == sourceOffsetUs) it.copy(sourceOffsetUs = newSourceOffsetUs) else it
+        }.sortedBy { it.sourceOffsetUs }
+        return applySpeedPoints(draft, layer, points)
+    }
+
+    fun removeSpeedKey(draft: EditorDraft, id: String, sourceOffsetUs: Long): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
+            ?: throw IllegalArgumentException("Video layer not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the layer before changing speed"
+        }
+        require(sourceOffsetUs != 0L) { "The initial speed key cannot be removed" }
+        require(layer.speedRamp.any { it.sourceOffsetUs == sourceOffsetUs }) {
+            "Selected speed point no longer exists"
+        }
+        return applySpeedPoints(draft, layer,
+            layer.speedRamp.filterNot { it.sourceOffsetUs == sourceOffsetUs })
     }
 
     /** Change the persisted photograph alpha matte; both preview and export share the renderer. */
