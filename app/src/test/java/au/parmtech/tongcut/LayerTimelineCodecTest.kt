@@ -114,7 +114,7 @@ class LayerTimelineCodecTest {
         assertTrue(LayerTimelineCodec.decode(legacy).layers.all { it.playbackSpeed == 1f })
     }
 
-    @Test fun photoMaskAndChromaSurviveSchema5Save() {
+    @Test fun photoMaskAndChromaSurviveCurrentSchemaSave() {
         val photo = TimelineTrack("photo5", "Photo", LayerKind.IMAGE, 7)
         val edit = PhotoEffects(
             mask = PhotoMask.CIRCLE,
@@ -128,7 +128,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(5,json.getInt("schema"))
+        assertEquals(6,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
     }
 
