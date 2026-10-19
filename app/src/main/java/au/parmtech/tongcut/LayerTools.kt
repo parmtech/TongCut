@@ -93,6 +93,30 @@ internal fun LayerTools(
                     if (kind == LayerKind.TEXT) {
                         SmallLayerButton("Edit") { editingId = layer.id; entry = layer.text.orEmpty() }
                     }
+                    SmallLayerButton("Split ◆") {
+                        runCatching {
+                            LayerEdits.splitLayerAtFrame(
+                                draft, layer.id, Math.multiplyExact(playheadMs, 1_000L)
+                            )
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Split failed") }
+                    }
+                    SmallLayerButton("Trim ◀ here") {
+                        runCatching {
+                            LayerEdits.trimLayerStartAtFrame(
+                                draft, layer.id, Math.multiplyExact(playheadMs, 1_000L)
+                            )
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "Start trim failed") }
+                    }
+                    SmallLayerButton("Trim ▶ here") {
+                        runCatching {
+                            LayerEdits.trimLayerEndAtFrame(
+                                draft, layer.id, Math.multiplyExact(playheadMs, 1_000L)
+                            )
+                        }.onSuccess(onChange)
+                            .onFailure { onError(it.message ?: "End trim failed") }
+                    }
                     SmallLayerButton("◀ 0.5s") {
                         runCatching {
                             LayerEdits.placeLayer(draft, layer.id, (layer.startUs / 1000L - 500).coerceAtLeast(0))

@@ -228,7 +228,7 @@ data class LayerTimeline(
 
     fun splitLayer(id: String, atUs: Long, rightId: String = UUID.randomUUID().toString()): LayerTimeline {
         val layer = layers.firstOrNull { it.id == id } ?: throw IllegalArgumentException("Missing clip")
-        require(layer.kind in listOf(LayerKind.VIDEO, LayerKind.AUDIO)) { "Only timed media can be split" }
+        require(layer.kind != LayerKind.STICKER) { "Sticker renderer not available" }
         val track = tracks.first { it.id == layer.trackId }
         require(!track.locked)
         require(atUs - layer.startUs >= 1_000 && layer.endUs - atUs >= 1_000) {
@@ -275,8 +275,12 @@ data class LayerTimeline(
             id = rightId,
             startUs = atUs,
             durationUs = layer.durationUs - leftDuration,
-            sourceInUs = layer.sourceInUs +
-                (leftDuration.toDouble() * layer.playbackSpeed).toLong(),
+            sourceInUs = when (layer.kind) {
+                LayerKind.VIDEO -> layer.sourceInUs +
+                    (leftDuration.toDouble() * layer.playbackSpeed).toLong()
+                LayerKind.AUDIO -> layer.sourceInUs + leftDuration
+                else -> layer.sourceInUs // IMAGE/TEXT reuse the same static source.
+            },
             motion = rightMotion, fade = rightFade
         )
         return copy(layers = layers.filterNot { it.id == id } + left + right)

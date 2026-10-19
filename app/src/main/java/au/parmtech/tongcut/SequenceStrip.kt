@@ -27,6 +27,7 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 private const val PIXELS_PER_SECOND_DP = 56f
+private enum class LayerGesture { MOVE, TRIM_START, TRIM_END }
 
 /** A unified scrolling ruler and consecutive clip strip, driven by real edited milliseconds.
  *
@@ -45,6 +46,8 @@ internal fun SequenceStrip(
     onAddVisual: (LayerKind) -> Unit,
     onLayerSelect: (LayerKind) -> Unit,
     onMoveLayer: (String, Long) -> Unit,
+    onTrimLayerStart: (String, Long) -> Unit,
+    onTrimLayerEnd: (String, Long) -> Unit,
     onUnavailable: (String) -> Unit
 ) {
     val timeline = remember(draft.clips) { SequentialTimeline(draft.clips) }
@@ -207,6 +210,20 @@ internal fun SequenceStrip(
                                                 val start = layer.startUs / 1_000_000f * pxPerSecond
                                                 val length = layer.durationUs / 1_000_000f * pxPerSecond
                                                 var dragPx by remember(layer.id) { mutableFloatStateOf(0f) }
+                                                var gesture by remember(layer.id) {
+                                                    mutableStateOf(LayerGesture.MOVE)
+                                                }
+                                                val shiftedPx = when (gesture) {
+                                                    LayerGesture.TRIM_END -> 0f
+                                                    else -> dragPx
+                                                }
+                                                val resizingPx = when (gesture) {
+                                                    LayerGesture.TRIM_START -> -dragPx
+                                                    LayerGesture.TRIM_END -> dragPx
+                                                    else -> 0f
+                                                }
+                                                val resizedWidthDp = (length +
+                                                    resizingPx / density.density).coerceAtLeast(8f)
                                                 Surface(
                                                     color = if (kind == LayerKind.TEXT)
                                                         Color(0xFF6D469E) else Color(0xFF315A67),
@@ -215,21 +232,51 @@ internal fun SequenceStrip(
                                                         .offset {
                                                             IntOffset(
                                                                 with(density) { start.dp.roundToPx() } +
-                                                                    dragPx.roundToInt(),
+                                                                    shiftedPx.roundToInt(),
                                                                 0
                                                             )
                                                         }
-                                                        .width(length.coerceAtLeast(8f).dp)
+                                                        .width(resizedWidthDp.dp)
                                                         .height(38.dp)
-                                                        .pointerInput(layer.id, layer.startUs, pxPerSecond) {
+                                                        .pointerInput(
+                                                            layer.id, layer.startUs, layer.durationUs,
+                                                            pxPerSecond
+                                                        ) {
                                                             detectDragGestures(
-                                                                onDragStart = { dragPx = 0f },
-                                                                onDragCancel = { dragPx = 0f },
-                                                                onDragEnd = {
-                                                                    val offsetUs = ((dragPx / density.density) /
-                                                                        pxPerSecond * 1_000_000f).toLong()
-                                                                    onMoveLayer(layer.id, layer.startUs + offsetUs)
+                                                                onDragStart = { finger ->
                                                                     dragPx = 0f
+                                                                    val edge = with(density) { 14.dp.toPx() }
+                                                                    gesture = if (size.width < edge * 3f) {
+                                                                        LayerGesture.MOVE
+                                                                    } else when {
+                                                                        finger.x <= edge -> LayerGesture.TRIM_START
+                                                                        finger.x >= size.width - edge ->
+                                                                            LayerGesture.TRIM_END
+                                                                        else -> LayerGesture.MOVE
+                                                                    }
+                                                                },
+                                                                onDragCancel = {
+                                                                    dragPx = 0f
+                                                                    gesture = LayerGesture.MOVE
+                                                                },
+                                                                onDragEnd = {
+                                                                    val offsetUs = (
+                                                                        (dragPx / density.density) /
+                                                                            pxPerSecond * 1_000_000f
+                                                                    ).toLong()
+                                                                    when (gesture) {
+                                                                        LayerGesture.MOVE -> onMoveLayer(
+                                                                            layer.id, layer.startUs + offsetUs
+                                                                        )
+                                                                        LayerGesture.TRIM_START -> onTrimLayerStart(
+                                                                            layer.id, layer.startUs + offsetUs
+                                                                        )
+                                                                        LayerGesture.TRIM_END -> onTrimLayerEnd(
+                                                                            layer.id, layer.endUs + offsetUs
+                                                                        )
+                                                                    }
+                                                                    dragPx = 0f
+                                                                    gesture = LayerGesture.MOVE
                                                                 },
                                                                 onDrag = { change, amount ->
                                                                     change.consume()
@@ -240,6 +287,19 @@ internal fun SequenceStrip(
                                                         .clickable { onLayerSelect(kind) }
                                                 ) {
                                                     Box(contentAlignment = Alignment.CenterStart) {
+                                                        // Visible left/right trim handles. Narrow
+                                                        // clips retain move gestures; tool buttons
+                                                        // always offer precise split/trim editing.
+                                                        Box(
+                                                            Modifier.align(Alignment.CenterStart)
+                                                                .width(3.dp).fillMaxHeight()
+                                                                .background(Color.White.copy(alpha = 0.45f))
+                                                        )
+                                                        Box(
+                                                            Modifier.align(Alignment.CenterEnd)
+                                                                .width(3.dp).fillMaxHeight()
+                                                                .background(Color.White.copy(alpha = 0.45f))
+                                                        )
                                                         if (kind == LayerKind.AUDIO) {
                                                             AudioWaveform(
                                                                 layer = layer,

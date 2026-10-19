@@ -607,6 +607,18 @@ fun VideoEditorScreen(
                         .onSuccess(onChange)
                         .onFailure { onInfo("Cannot move layer: ${it.message}") }
                 },
+                onTrimLayerStart = { id, requestedUs ->
+                    runCatching { LayerEdits.trimLayerStartAtFrame(
+                        active, id, requestedUs.coerceAtLeast(0L)
+                    ) }.onSuccess(onChange)
+                        .onFailure { onInfo("Cannot trim start: ${it.message}") }
+                },
+                onTrimLayerEnd = { id, requestedUs ->
+                    runCatching { LayerEdits.trimLayerEndAtFrame(
+                        active, id, requestedUs.coerceAtLeast(0L)
+                    ) }.onSuccess(onChange)
+                        .onFailure { onInfo("Cannot trim end: ${it.message}") }
+                },
                 onUnavailable = onUnavailable
             )
         }

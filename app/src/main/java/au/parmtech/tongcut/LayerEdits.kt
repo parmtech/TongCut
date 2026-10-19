@@ -540,6 +540,112 @@ object LayerEdits {
         }))
     }
 
+    /**
+     * Split any renderable independent layer at the current project playhead.
+     * Text/photo copies remain static media, while video/audio are source-trimmed.
+     * Reject cuts closer than 100ms to an edge, preserving export-safe intervals.
+     */
+    fun splitLayerAtFrame(draft: EditorDraft, id: String, requestedUs: Long): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Timeline layer not found")
+        val cut = snappedEditUs(draft, requestedUs)
+        require(cut >= layer.startUs + 100_000L && cut <= layer.endUs - 100_000L) {
+            "Move playhead at least 0.1 seconds inside the layer"
+        }
+        return draft.copy(layers = draft.layers.splitLayer(id, cut))
+    }
+
+    /**
+     * Trim the source/start of an independent layer by its left handle.
+     * The remaining right-side layer keeps the original ID, all visual effects,
+     * timeline track and stable PiP slot. Removing only the discarded left half
+     * preserves ramp motion/fade phase and the exact trimmed media source.
+     */
+    fun trimLayerStartAtFrame(draft: EditorDraft, id: String, requestedUs: Long): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Timeline layer not found")
+        val cut = snappedEditUs(draft, requestedUs)
+        require(cut <= layer.endUs - 100_000L) {
+            "At least 0.1 seconds of this layer must remain"
+        }
+        if (cut == layer.startUs) return draft
+        if (cut < layer.startUs) {
+            require(layer.speedRamp.isEmpty() && layer.fade.phaseDurationUs == null) {
+                "Use Undo before extending a split speed-ramped or faded clip"
+            }
+            val extension = layer.startUs - cut
+            val consumed = when (layer.kind) {
+                LayerKind.VIDEO -> (extension.toDouble() * layer.playbackSpeed).toLong()
+                LayerKind.AUDIO -> extension
+                else -> 0L
+            }
+            require(consumed <= layer.sourceInUs) {
+                "The source has no earlier footage to extend into"
+            }
+            // Media3 source clipping is precise only to 1ms.
+            require(consumed % 1_000L == 0L) {
+                "Adjust trim to a full source millisecond for this playback speed"
+            }
+            val prepend = if (layer.motion.isEmpty()) emptyList() else listOf(
+                MotionKeyframe(0L, MotionCurve.at(layer.motion, 0),
+                    MotionInterpolation.HOLD)
+            )
+            val shifted = prepend + layer.motion.map {
+                it.copy(timeUs = it.timeUs + extension)
+            }
+            val newLayer = layer.copy(
+                startUs = cut,
+                durationUs = layer.durationUs + extension,
+                sourceInUs = layer.sourceInUs - consumed,
+                motion = shifted,
+                fade = layer.fade.resetToClip()
+            )
+            return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+                if (it.id == id) newLayer else it
+            }))
+        }
+        val split = draft.layers.splitLayer(id, cut)
+        val tail = split.layers.first { it.trackId == layer.trackId &&
+            it.id != id && it.startUs >= cut && it.startUs < layer.endUs }
+        val updated = split.copy(layers = split.layers.filterNot {
+            it.id == id || it.id == tail.id
+        } + tail.copy(id = id))
+        return draft.copy(layers = updated)
+    }
+
+    /**
+     * Right handle: splitting discards the source tail while preserving all
+     * interpolated effects. Extension is allowed for static media or when the
+     * full source-duration validation still passes.
+     */
+    fun trimLayerEndAtFrame(draft: EditorDraft, id: String, requestedUs: Long): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Timeline layer not found")
+        val cut = snappedEditUs(draft, requestedUs)
+        val total = clock(draft)
+        require(cut <= total) { "Layer cannot exceed the main video" }
+        require(cut >= layer.startUs + 100_000L) {
+            "At least 0.1 seconds of this layer must remain"
+        }
+        if (cut == layer.endUs) return draft
+        val next = if (cut < layer.endUs) {
+            val split = draft.layers.splitLayer(id, cut)
+            split.copy(layers = split.layers.filterNot { it.id != id &&
+                it.trackId == layer.trackId && it.startUs >= cut &&
+                it.endUs <= layer.endUs })
+        } else draft.layers.resizeLayer(id, cut - layer.startUs)
+        return draft.copy(layers = next)
+    }
+
+    /** Frame snap followed by export-compatible millisecond source boundaries. */
+    private fun snappedEditUs(draft: EditorDraft, requestedUs: Long): Long {
+        require(requestedUs >= 0L)
+        val total = clock(draft)
+        val aligned = draft.layers.rate.nearestFrameUs(requestedUs.coerceAtMost(total))
+        return ((aligned / 1_000L) + if (aligned % 1_000L >= 500L) 1 else 0) *
+            1_000L
+    }
+
     fun trimLayer(draft: EditorDraft, id: String, durationUs: Long): EditorDraft =
         draft.copy(layers = draft.layers.resizeLayer(id, durationUs.coerceAtLeast(1_000L)))
 

@@ -515,4 +515,111 @@ class LayerEditsTest {
         val locked=LayerEdits.setTrackLocked(original,layer.trackId,true)
         LayerEdits.applySpeedPreset(locked,layer.id,SpeedRhythmPreset.HERO)
     }
+    @Test fun splitTextCreatesTwoIndependentPersistentSegments() {
+        val original = LayerEdits.addText(base(), 0L, "Timed caption")
+        val layer = original.layers.layers.single()
+        val animated = LayerEdits.setLayerFade(original, layer.id, LayerFade(500_000L, 300_000L))
+        val after = LayerEdits.splitLayerAtFrame(animated, layer.id, 1_000_000L)
+        assertEquals(2, after.layers.layers.size)
+        val pieces = after.layers.layers.sortedBy { it.startUs }
+        assertEquals(0L, pieces[0].startUs)
+        assertEquals(1_000_000L, pieces[0].durationUs)
+        assertEquals(1_000_000L, pieces[1].startUs)
+        assertEquals(2_000_000L, pieces[1].durationUs)
+        assertEquals("Timed caption", pieces[0].text)
+        assertEquals("Timed caption", pieces[1].text)
+        assertEquals(0, pieces[1].fade.alphaAt(0L, pieces[1].durationUs)
+            .compareTo(layer.fade.alphaAt(1_000_000L, layer.durationUs)))
+        assertNotEquals(pieces[0].id, pieces[1].id)
+        val history = EditHistory(animated)
+        history.apply(after)
+        assertEquals(animated, history.undo())
+    }
+
+    @Test fun splittingImageKeepsPhotoMatteAndItsLayerSlot() {
+        val original = LayerEdits.addVisual(base(), 1_000L, LayerKind.IMAGE,
+            "content://photo", 5_000L)
+        val layer = original.layers.layers.single()
+        val matte = PhotoEffects(mask = PhotoMask.CIRCLE)
+        val styled = LayerEdits.setPhotoEffects(original, layer.id, matte)
+        val after = LayerEdits.splitLayerAtFrame(styled, layer.id, 3_000_000L)
+        assertEquals(2, after.layers.layers.size)
+        assertTrue(after.layers.layers.all { it.photoEffects == matte })
+        assertTrue(after.layers.layers.all { it.sourceUri == layer.sourceUri })
+        assertEquals(6_000_000L, after.layers.layers.maxOf { it.endUs })
+    }
+
+    @Test fun trimmingAudioStartAndEndPreservesExactSourceOffsetAndUndo() {
+        val initial = LayerEdits.addAudio(base(), 1_000L, "content://music", 5_000L)
+        val id = initial.layers.layers.single().id
+        val trimmed = LayerEdits.trimLayerStartAtFrame(initial, id, 2_000_000L)
+        assertEquals(id, trimmed.layers.layers.single().id)
+        assertEquals(2_000_000L, trimmed.layers.layers.single().startUs)
+        assertEquals(1_000_000L, trimmed.layers.layers.single().sourceInUs)
+        assertEquals(4_000_000L, trimmed.layers.layers.single().durationUs)
+        val shorter = LayerEdits.trimLayerEndAtFrame(trimmed, id, 4_000_000L)
+        assertEquals(2_000_000L, shorter.layers.layers.single().durationUs)
+        assertEquals(1_000_000L, shorter.layers.layers.single().sourceInUs)
+        val history = EditHistory(initial)
+        history.apply(trimmed)
+        history.apply(shorter)
+        assertEquals(trimmed, history.undo())
+        assertEquals(initial, history.undo())
+    }
+
+    @Test fun headTrimCanExtendBackIntoExistingSourceWithoutMovingOtherTracks() {
+        val initial = LayerEdits.addAudio(base(), 1_000L, "content://music", 5_000L)
+        val id = initial.layers.layers.single().id
+        val trimmed = LayerEdits.trimLayerStartAtFrame(initial, id, 2_000_000L)
+        val restored = LayerEdits.trimLayerStartAtFrame(trimmed, id, 1_000_000L)
+        assertEquals(initial, restored)
+    }
+
+    @Test fun aTrimRejectsMissingSourceEarlierThanZero() {
+        val initial = LayerEdits.addAudio(base(), 1_000L, "content://music", 5_000L)
+        val id = initial.layers.layers.single().id
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.trimLayerStartAtFrame(initial, id, 0L)
+        }
+    }
+
+    @Test fun trimEndCanExtendTextButNeverOverlapSameLane() {
+        val initial = LayerEdits.addText(base(), 0L, "Original")
+        val id = initial.layers.layers.single().id
+        val longer = LayerEdits.trimLayerEndAtFrame(initial, id, 4_000_000L)
+        assertEquals(4_000_000L, longer.layers.layers.single().durationUs)
+        val another = LayerEdits.addText(longer, 5_000L, "Next")
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.trimLayerEndAtFrame(another, id, 6_000_000L)
+        }
+    }
+
+    @Test fun singleClipSplitRejectsLockedTrackAndNearZeroFragments() {
+        val initial = LayerEdits.addText(base(), 0L, "Protect me")
+        val layer = initial.layers.layers.single()
+        val locked = LayerEdits.setTrackLocked(initial, layer.trackId, true)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.splitLayerAtFrame(locked, layer.id, 1_000_000L)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.splitLayerAtFrame(initial, layer.id, 0L)
+        }
+    }
+
+    @Test fun trimmingPhotoAtStartPreservesAnimatedPoseOnSurvivingTail() {
+        val initial = LayerEdits.addVisual(base(), 0L, LayerKind.IMAGE,
+            "content://photo", 5_000L)
+        val id = initial.layers.layers.single().id
+        val keyframed = LayerEdits.setMotionAt(initial, id, 2_000L) {
+            it.copy(x = 0.5f, opacity = 0.75f)
+        }
+        val original = keyframed.layers.layers.single()
+        val expected = MotionCurve.at(original.motion, 3_000_000L)
+        val cropped = LayerEdits.trimLayerStartAtFrame(keyframed, id, 3_000_000L)
+        val remaining = cropped.layers.layers.single()
+        assertEquals(3_000_000L, remaining.startUs)
+        assertEquals(expected, MotionCurve.at(remaining.motion, 0L))
+        assertEquals(original.visualSlot, remaining.visualSlot)
+    }
+
 }
