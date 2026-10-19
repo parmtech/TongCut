@@ -385,6 +385,40 @@ internal fun LayerTools(
                         }
                     }
                     if (kind == LayerKind.AUDIO) {
+                        SmallLayerButton("Audio 0.5×") {
+                            runCatching {
+                                AudioSpeedEdits.setConstant(draft,layer.id,0.5f)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Audio speed failed") }
+                        }
+                        SmallLayerButton("Audio 1×") {
+                            runCatching {
+                                AudioSpeedEdits.setConstant(draft,layer.id,1f)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Audio speed failed") }
+                        }
+                        SmallLayerButton("Audio 2×") {
+                            runCatching {
+                                AudioSpeedEdits.setConstant(draft,layer.id,2f)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Audio speed failed") }
+                        }
+                        SmallLayerButton("Speed key here") {
+                            runCatching {
+                                AudioSpeedEdits.addKeyAt(
+                                    draft,layer.id,playheadMs,2f
+                                )
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Audio speed key failed") }
+                        }
+                        if (layer.speedRamp.isNotEmpty()) {
+                            SmallLayerButton("Reset audio curve") {
+                                runCatching {
+                                    AudioSpeedEdits.setConstant(draft,layer.id,1f)
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Audio speed reset failed") }
+                            }
+                        }
                         SmallLayerButton(if (track.muted) "Unmute" else "Mute") {
                             onChange(LayerEdits.setTrackMuted(draft, track.id, !track.muted))
                         }

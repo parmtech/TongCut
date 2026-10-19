@@ -67,7 +67,7 @@ class AudioOverlayEngine(private val context: Context) {
                     val player = ExoPlayer.Builder(context).build()
                     created = player
                     val startMs = layer.sourceInUs / 1_000L
-                    val endMs = (layer.sourceInUs + layer.durationUs) / 1_000L
+                    val endMs = (layer.sourceInUs + layer.consumedSourceUs) / 1_000L
                     val media = MediaItem.Builder()
                         .setUri(Uri.parse(requireNotNull(layer.sourceUri)))
                         .setClippingConfiguration(
@@ -96,10 +96,14 @@ class AudioOverlayEngine(private val context: Context) {
                 }
             }
             if (entry == null) return@forEach
-            val offsetMs = ((timeUs - layer.startUs) / 1_000L)
-                .coerceIn(0L, layer.durationUs / 1_000L)
+            val sourceOffsetUs = (layer.sourceAt(timeUs) - layer.sourceInUs)
+                .coerceIn(0L, layer.consumedSourceUs)
+            val offsetMs = sourceOffsetUs / 1_000L
+            val speed = if (layer.speedRamp.isEmpty()) layer.playbackSpeed
+                else SpeedRamp.speedAt(sourceOffsetUs, layer.speedRamp)
             val player = entry.player
             try {
+                player.setPlaybackSpeed(speed)
                 player.volume = tracks[layer.trackId]?.gain ?: 1f
                 if (cached == null || abs(player.currentPosition - offsetMs) > 120L) {
                     player.seekTo(offsetMs)

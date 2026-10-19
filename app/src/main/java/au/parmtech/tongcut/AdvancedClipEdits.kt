@@ -104,8 +104,7 @@ object AdvancedClipEdits {
         }
         val deltaUs = Math.multiplyExact(deltaMs, 1_000L)
         val newStart = Math.addExact(original.sourceInUs, deltaUs)
-        val consumed = if (original.kind == LayerKind.VIDEO)
-            original.consumedSourceUs else original.durationUs
+        val consumed = original.consumedSourceUs
         require(newStart >= 0L && consumed <= totalSource &&
             newStart <= totalSource - consumed) {
             "Slip would read beyond the available source footage"

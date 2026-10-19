@@ -154,11 +154,12 @@ class VideoExporter(private val context: Context) {
                             // MediaItem clipping is millisecond-based. We reject
                             // sub-ms boundaries to avoid exporting offset audio.
                             require(part.sourceInUs % 1_000L == 0L &&
-                                part.durationUs % 1_000L == 0L) {
-                                "Audio clip must align to millisecond boundaries"
+                                part.durationUs % 1_000L == 0L &&
+                                part.consumedSourceUs % 1_000L == 0L) {
+                                "Audio trim/speed needs full source millisecond boundaries"
                             }
                             val beginMs = part.sourceInUs / 1_000L
-                            val endMs = beginMs + part.durationUs / 1_000L
+                            val endMs = beginMs + part.consumedSourceUs / 1_000L
                             val media = MediaItem.Builder().setUri(part.uri)
                                 .setClippingConfiguration(
                                     MediaItem.ClippingConfiguration.Builder()
@@ -168,6 +169,23 @@ class VideoExporter(private val context: Context) {
                                 ).build()
                             val edited = EditedMediaItem.Builder(media)
                                 .setRemoveVideo(true)
+                            if (part.speedRamp.isNotEmpty()) {
+                                val speedCurve = part.speedRamp
+                                edited.setSpeed(object : androidx.media3.common.audio.SpeedProvider {
+                                    override fun getSpeed(timeUs: Long): Float =
+                                        SpeedRamp.speedAt(timeUs, speedCurve)
+
+                                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
+                                        SpeedRamp.nextChangeAfter(timeUs, speedCurve) ?: C.TIME_UNSET
+                                })
+                            } else if (part.playbackSpeed != 1f) {
+                                val clipSpeed = part.playbackSpeed
+                                edited.setSpeed(object : androidx.media3.common.audio.SpeedProvider {
+                                    override fun getSpeed(timeUs: Long): Float = clipSpeed
+                                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
+                                        C.TIME_UNSET
+                                })
+                            }
                             if (lane.gain < 1f) {
                                 val processor = GainProcessor(object : GainProcessor.GainProvider {
                                     override fun getGainFactorAtSamplePosition(

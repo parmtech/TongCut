@@ -159,8 +159,8 @@ data class TimelineLayer(
     /** Relative source position, not project position. */
     fun sourceAt(positionUs: Long): Long {
         val output = (positionUs - startUs).coerceIn(0L, durationUs)
-        if (speedRamp.isNotEmpty() && output >= durationUs) {
-            return sourceInUs + requireNotNull(sourceSpanUs)
+        if (sourceSpanUs != null && output >= durationUs) {
+            return sourceInUs + sourceSpanUs
         }
         return sourceInUs + if (speedRamp.isEmpty()) {
             (output.toDouble() * playbackSpeed).toLong()
@@ -272,7 +272,23 @@ data class LayerTimeline(
         val (leftFade, rightFade) = if (layer.kind == LayerKind.AUDIO) {
             LayerFade() to LayerFade()
         } else layer.fade.split(leftDuration, layer.durationUs)
-        val left = layer.copy(durationUs = leftDuration, motion = leftMotion, fade = leftFade)
+        // A constant-speed audio clip may pin an exact millisecond input span
+        // while its output is rounded. Splits must divide that span, not
+        // duplicate it into both child layers.
+        val audioPinned = layer.kind == LayerKind.AUDIO && layer.sourceSpanUs != null
+        val consumedLeftUs = if (audioPinned) {
+            ((leftDuration.toDouble() * layer.playbackSpeed / 1_000.0)
+                .let(kotlin.math::roundToLong) * 1_000L)
+        } else 0L
+        if (audioPinned) require(
+            consumedLeftUs >= 1_000L &&
+                consumedLeftUs <= requireNotNull(layer.sourceSpanUs) - 1_000L
+        ) { "Audio split must keep at least 1ms of source on each side" }
+        val left = layer.copy(
+            durationUs = leftDuration,
+            sourceSpanUs = if (audioPinned) consumedLeftUs else layer.sourceSpanUs,
+            motion = leftMotion, fade = leftFade
+        )
         val right = layer.copy(
             id = rightId,
             startUs = atUs,
@@ -280,9 +296,13 @@ data class LayerTimeline(
             sourceInUs = when (layer.kind) {
                 LayerKind.VIDEO -> layer.sourceInUs +
                     (leftDuration.toDouble() * layer.playbackSpeed).toLong()
-                LayerKind.AUDIO -> layer.sourceInUs + leftDuration
+                LayerKind.AUDIO -> layer.sourceInUs +
+                    (if (audioPinned) consumedLeftUs else leftDuration)
                 else -> layer.sourceInUs // IMAGE/TEXT reuse the same static source.
             },
+            sourceSpanUs = if (audioPinned)
+                requireNotNull(layer.sourceSpanUs) - consumedLeftUs
+            else layer.sourceSpanUs,
             motion = rightMotion, fade = rightFade
         )
         return copy(layers = layers.filterNot { it.id == id } + left + right)
@@ -301,8 +321,16 @@ data class LayerTimeline(
                 val local = it.fade.resetToClip()
                 val fadeIn = minOf(local.inUs, newDurationUs)
                 val fadeOut = minOf(local.outUs, newDurationUs - fadeIn)
-                it.copy(durationUs = newDurationUs, motion = trimmedMotion,
-                    fade = LayerFade(fadeIn,fadeOut))
+                it.copy(
+                    durationUs = newDurationUs,
+                    sourceSpanUs = if (it.kind == LayerKind.AUDIO &&
+                        it.sourceSpanUs != null) {
+                        (newDurationUs.toDouble() * it.playbackSpeed / 1_000.0)
+                            .let(kotlin.math::roundToLong) * 1_000L
+                    } else it.sourceSpanUs,
+                    motion = trimmedMotion,
+                    fade = LayerFade(fadeIn,fadeOut)
+                )
             } else it
         })
     }

@@ -423,7 +423,8 @@ object LayerEdits {
         if (replacementDurationUs != null) {
             val required = Math.addExact(
                 layer.sourceInUs,
-                if (layer.kind == LayerKind.VIDEO) layer.consumedSourceUs else layer.durationUs
+                if (layer.kind == LayerKind.VIDEO || layer.kind == LayerKind.AUDIO)
+                    layer.consumedSourceUs else layer.durationUs
             )
             require(replacementDurationUs >= required) {
                 "Replacement source is too short for this layer's saved trim"
@@ -593,7 +594,8 @@ object LayerEdits {
             val extension = layer.startUs - cut
             val consumed = when (layer.kind) {
                 LayerKind.VIDEO -> (extension.toDouble() * layer.playbackSpeed).toLong()
-                LayerKind.AUDIO -> extension
+                LayerKind.AUDIO ->
+                    (extension.toDouble() * layer.playbackSpeed).toLong()
                 else -> 0L
             }
             require(consumed <= layer.sourceInUs) {
@@ -614,6 +616,10 @@ object LayerEdits {
                 startUs = cut,
                 durationUs = layer.durationUs + extension,
                 sourceInUs = layer.sourceInUs - consumed,
+                sourceSpanUs = if (layer.kind == LayerKind.AUDIO &&
+                    layer.sourceSpanUs != null)
+                    requireNotNull(layer.sourceSpanUs) + consumed
+                    else layer.sourceSpanUs,
                 motion = shifted,
                 fade = layer.fade.resetToClip()
             )
