@@ -16,9 +16,11 @@ internal object PhotoBitmapDecoder {
 
     fun decode(context: Context, uri: Uri, effects: PhotoEffects): Bitmap {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, bounds)
-        } ?: throw IllegalArgumentException("Unable to open photo")
+        // BitmapFactory.decodeStream RETURNS NULL intentionally when
+        // inJustDecodeBounds=true. Only a missing input stream is an error.
+        val boundsStream = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("Unable to open photo")
+        boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
         val longest = maxOf(bounds.outWidth, bounds.outHeight)
         require(longest > 0) { "Unsupported image or missing dimensions" }
         var sample = 1
