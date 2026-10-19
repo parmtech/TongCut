@@ -40,7 +40,7 @@ internal fun VideoChromaKeyPicker(
         layer.id, layer.sourceInUs, layer.startUs, layer.durationUs,
         layer.playbackSpeed, layer.sourceSpanUs, layer.speedRamp, frozenPlayheadMs
     ) {
-        layer.sourceAt(Math.multiplyExact(frozenPlayheadMs, 1_000L))
+        layer.sourceAt(ChromaSampleMath.safeProjectTimeUs(frozenPlayheadMs))
     }
     val source = requireNotNull(layer.sourceUri)
     val frame by produceState<SampleFrame>(
