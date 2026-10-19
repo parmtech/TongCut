@@ -1,4 +1,4 @@
-name: TongCut Phase 2 - Corrected SAFE Device TEST APK
+name: TongCut Phase 2 Owner Device Acceptance TEST APK
 
 on:
   push:
@@ -58,11 +58,18 @@ jobs:
           PY
           AAPT="$(find "$ANDROID_HOME/build-tools/36.0.0" -maxdepth 1 -name aapt | head -n 1)"
           "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | head -n 4
+      - name: Prepare isolated P2 owner-testing APK and SHA-256
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/TongCut-P2-TEST.apk
+          sha256sum dist/TongCut-P2-TEST.apk
+          AAPT="$(find "$ANDROID_HOME/build-tools/36.0.0" -maxdepth 1 -name aapt | head -n 1)"
+          "$AAPT" dump badging dist/TongCut-P2-TEST.apk | grep "package: name='au.parmtech.tongcut.p2test'"
       - name: Owner-only Android test artifact (NOT A PRODUCTION RELEASE)
         uses: actions/upload-artifact@v4
         with:
-          name: TongCut-P2-SAFE-TEST-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: TongCut-P2-DEVICE-TEST-APK
+          path: dist/TongCut-P2-TEST.apk
           retention-days: 14
           if-no-files-found: error
       - name: Archive test and Lint reports
