@@ -72,6 +72,9 @@ class VideoExporter(private val context: Context) {
                 Look.COOL -> clipEffects += RgbAdjustment.Builder()
                     .setRedScale(0.90f).setBlueScale(1.10f).build()
             }
+            if (options.colorGrade != ColorGrade()) {
+                clipEffects += ColorGradeEffect(options.colorGrade)
+            }
             // Apply common framing after concatenation, not to each clip independently.
             val compositionEffects = mutableListOf<androidx.media3.common.Effect>()
             options.ratio.ratio?.let { ratio ->
@@ -352,3 +355,4 @@ class VideoExporter(private val context: Context) {
         }
     }
 }
+
