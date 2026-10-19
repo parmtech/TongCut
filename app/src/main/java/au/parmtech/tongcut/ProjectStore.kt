@@ -1,0 +1,78 @@
+package au.parmtech.tongcut
+
+import android.content.Context
+import android.util.AtomicFile
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+/** Crash-safe local storage. URI access requires an existing persistable SAF grant. */
+class ProjectStore(context: Context) {
+    private val file = AtomicFile(File(context.filesDir, "tongcut-current-project.json"))
+
+    fun load(): EditorDraft? {
+        if (!file.baseFile.exists()) return null
+        val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val root = JSONObject(raw)
+        require(root.optInt("schema", -1) == 1) { "Unsupported project format" }
+        val array = root.getJSONArray("clips")
+        require(array.length() <= 500) { "Project too large" }
+        val clips = (0 until array.length()).map { index ->
+            val obj = array.getJSONObject(index)
+            DraftClip(
+                sourceUri = obj.getString("uri"),
+                label = obj.optString("label", "Video"),
+                durationMs = obj.getLong("durationMs"),
+                inMs = obj.getLong("inMs"),
+                outMs = obj.getLong("outMs")
+            )
+        }
+        val look = enumValues<Look>().firstOrNull {
+            it.name == root.optString("look")
+        } ?: Look.ORIGINAL
+        val canvas = enumValues<CanvasRatio>().firstOrNull {
+            it.name == root.optString("canvas")
+        } ?: CanvasRatio.SOURCE
+        val resolution = root.optInt("shortSide", 1080).takeIf { it in listOf(720, 1080, 2160) } ?: 1080
+        return EditorDraft(
+            title = root.optString("title", "Untitled Project").take(120),
+            clips = clips,
+            selectedIndex = root.optInt("selected", 0),
+            look = look,
+            canvas = canvas,
+            shortSidePixels = resolution,
+            muteOriginalAudio = root.optBoolean("mute", false)
+        ).normalized()
+    }
+
+    fun save(project: EditorDraft) {
+        val root = JSONObject().apply {
+            put("schema", 1)
+            put("title", project.title)
+            put("selected", project.selectedIndex)
+            put("look", project.look.name)
+            put("canvas", project.canvas.name)
+            put("shortSide", project.shortSidePixels)
+            put("mute", project.muteOriginalAudio)
+            put("clips", JSONArray().apply {
+                project.clips.forEach { clip ->
+                    put(JSONObject().apply {
+                        put("uri", clip.sourceUri)
+                        put("label", clip.label)
+                        put("durationMs", clip.durationMs)
+                        put("inMs", clip.inMs)
+                        put("outMs", clip.outMs)
+                    })
+                }
+            })
+        }
+        val output = file.startWrite()
+        try {
+            output.write(root.toString().toByteArray(Charsets.UTF_8))
+            file.finishWrite(output)
+        } catch (failure: Exception) {
+            file.failWrite(output)
+            throw failure
+        }
+    }
+}

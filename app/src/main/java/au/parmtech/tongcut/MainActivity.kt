@@ -23,11 +23,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlin.math.max
 import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
@@ -36,14 +41,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val colors = darkColorScheme(
-                primary = Color(0xFFB4FA4F),
-                onPrimary = Color(0xFF0D1308),
-                background = Color(0xFF0A0D11),
-                surface = Color(0xFF171C22),
-                onSurface = Color(0xFFEAF1F5)
-            )
-            MaterialTheme(colorScheme = colors) { EditorScreen(exporter) }
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = Color(0xFFB6F650),
+                    onPrimary = Color(0xFF10170A),
+                    background = Color(0xFF0D0F12),
+                    surface = Color(0xFF1D222A),
+                    surfaceVariant = Color(0xFF272D37),
+                    onSurface = Color(0xFFF1F4F6),
+                    onSurfaceVariant = Color(0xFFBEC7D0)
+                )
+            ) {
+                EditorWorkspace(exporter)
+            }
         }
     }
 
@@ -53,222 +63,445 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun DraftClip.asMediaClip() = Clip(
+    uri = Uri.parse(sourceUri),
+    label = label,
+    durationMs = durationMs,
+    startMs = inMs,
+    endMs = outMs
+)
+
 @Composable
-private fun EditorScreen(exporter: VideoExporter) {
+private fun EditorWorkspace(exporter: VideoExporter) {
     val context = LocalContext.current
-    val clips = remember { mutableStateListOf<Clip>() }
-    var activeIndex by remember { mutableIntStateOf(0) }
-    var look by remember { mutableStateOf(Look.ORIGINAL) }
-    var ratio by remember { mutableStateOf(CanvasRatio.SOURCE) }
-    var resolution by remember { mutableIntStateOf(1080) }
-    var mute by remember { mutableStateOf(false) }
+    val store = remember(context) { ProjectStore(context.applicationContext) }
+    val history = remember { EditHistory(EditorDraft()) }
+    var draft by remember { mutableStateOf(EditorDraft()) }
+    var loaded by remember { mutableStateOf(false) }
+    var gestureStart by remember { mutableStateOf<EditorDraft?>(null) }
+    var tool by remember { mutableStateOf(EditorTool.EDIT) }
+    var feedback by remember { mutableStateOf("Import videos to create a project.") }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
-    var feedback by remember { mutableStateOf("Import videos to begin. All edits stay on your device.") }
-    var exported by remember { mutableStateOf<Uri?>(null) }
-    val chosen = clips.getOrNull(activeIndex)
+    var lastExport by remember { mutableStateOf<Uri?>(null) }
+    val selected = draft.selectedClip
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        var count = 0
+    fun finishTrimGesture() {
+        val before = gestureStart ?: return
+        gestureStart = null
+        if (before != draft) history.record(before, draft)
+    }
+    fun commit(updated: EditorDraft) {
+        if (busy || !loaded) return
+        finishTrimGesture()
+        val safe = updated.normalized()
+        if (history.apply(safe)) draft = safe
+    }
+    fun undo() {
+        if (busy) return
+        finishTrimGesture()
+        history.undo()?.let { draft = it }
+    }
+    fun redo() {
+        if (busy) return
+        finishTrimGesture()
+        history.redo()?.let { draft = it }
+    }
+
+    // Load once. Corrupt drafts are NOT overwritten: users are warned, and saving is disabled.
+    var saveAllowed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        try {
+            val recovered = withContext(Dispatchers.IO) { store.load() }
+            if (recovered != null) {
+                draft = recovered
+                history.reset(recovered)
+                feedback = "Recovered draft • ${recovered.clips.size} clip(s)"
+            } else feedback = "New project • imports stay on your device"
+            saveAllowed = true
+        } catch (error: Exception) {
+            feedback = "Cannot open draft: ${error.message}. Existing file was not overwritten."
+            saveAllowed = false
+        } finally {
+            loaded = true
+        }
+    }
+    LaunchedEffect(draft, loaded, saveAllowed) {
+        if (loaded && saveAllowed) {
+            delay(650) // coalesce edits and seek/trim previews into one atomic save
+            try {
+                withContext(Dispatchers.IO) { store.save(draft) }
+            } catch (error: Exception) {
+                feedback = "Autosave failed: ${error.message}"
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (!loaded || busy || !saveAllowed) return@rememberLauncherForActivityResult
+        val added = mutableListOf<DraftClip>()
+        var nonPersistent = 0
         uris.forEach { uri ->
             try {
                 context.contentResolver.takePersistableUriPermission(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (_: SecurityException) { /* The immediate grant can still be used. */ }
-            val clip = runCatching { inspectClip(context, uri) }.getOrNull()
-            if (clip != null) {
-                clips.add(clip)
-                count++
+            } catch (_: SecurityException) {
+                nonPersistent++
+            }
+            runCatching { inspectClip(context, uri) }.getOrNull()?.let { clip ->
+                added += DraftClip(
+                    sourceUri = clip.uri.toString(),
+                    label = clip.label,
+                    durationMs = clip.durationMs
+                )
             }
         }
-        if (count > 0) activeIndex = clips.lastIndex
-        feedback = if (count > 0) "Imported $count video(s). Tap a clip to edit it."
-            else "No compatible videos selected. Try MP4/H.264."
+        if (added.isNotEmpty()) {
+            commit(draft.copy(
+                clips = draft.clips + added,
+                selectedIndex = draft.clips.size
+            ))
+            feedback = "Imported ${added.size} video(s)" +
+                if (nonPersistent > 0) " • Some file access might expire after restart" else ""
+        } else if (uris.isNotEmpty()) {
+            feedback = "No readable videos found."
+        }
     }
+
     val player = remember(context) { ExoPlayer.Builder(context).build() }
     DisposableEffect(player) { onDispose { player.release() } }
-    LaunchedEffect(chosen?.uri) {
+    LaunchedEffect(draft.selectedIndex, selected?.sourceUri) {
         player.pause()
-        if (chosen != null) {
-            player.setMediaItem(MediaItem.fromUri(chosen.uri))
+        if (selected == null) player.clearMediaItems()
+        else {
+            player.setMediaItem(MediaItem.fromUri(Uri.parse(selected.sourceUri)))
             player.prepare()
-            player.seekTo(chosen.startMs)
-        } else {
-            player.clearMediaItems()
+            player.seekTo(selected.inMs)
         }
     }
 
     Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = Modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding().navigationBarsPadding()
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("TONG", style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black)
-            Text("CUT", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+        // Fixed toolbar does not slide offscreen while editing.
+        Row(
+            Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("TONG", color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+            Text("CUT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
             Spacer(Modifier.weight(1f))
-            Text("ALPHA 0.1", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary)
+            TextButton(onClick = ::undo, enabled = loaded && history.canUndo && !busy) {
+                Text("↶", style = MaterialTheme.typography.headlineSmall)
+            }
+            TextButton(onClick = ::redo, enabled = loaded && history.canRedo && !busy) {
+                Text("↷", style = MaterialTheme.typography.headlineSmall)
+            }
+            Button(
+                onClick = { tool = EditorTool.EXPORT },
+                enabled = loaded && draft.clips.isNotEmpty(),
+                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 4.dp)
+            ) { Text("Export") }
         }
-        Text("An offline Android editing studio", style = MaterialTheme.typography.bodySmall)
-        Button(onClick = { picker.launch(arrayOf("video/*")) }, enabled = !busy,
-            modifier = Modifier.fillMaxWidth()) { Text("+ Add videos") }
 
-        Surface(shape = RoundedCornerShape(16.dp), color = Color.Black) {
-            if (chosen == null) {
-                Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
-                    Text("Your video preview appears here", color = Color.LightGray)
-                }
-            } else {
-                AndroidView(
-                    factory = { viewContext -> PlayerView(viewContext).apply {
-                        this.player = player
-                        useController = true
-                    } },
+        // Preview uses the source stream. Multi-layer preview will use the shared render graph.
+        Box(
+            Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                color = Color.Black,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (selected == null) Box(Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center) {
+                    Text("Tap + to import video", color = Color.LightGray)
+                } else AndroidView(
+                    factory = { viewContext ->
+                        PlayerView(viewContext).apply {
+                            this.player = player
+                            useController = true
+                        }
+                    },
                     update = { it.player = player },
-                    modifier = Modifier.fillMaxWidth().height(280.dp)
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
-        Text("Preview shows original footage; filters and crop apply in exported MP4.",
-            style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
 
-        if (clips.isNotEmpty()) {
-            SectionTitle("Timeline · ${clips.size} clips")
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(clips) { index, clip ->
+        Row(
+            Modifier.fillMaxWidth().height(45.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                selected?.label ?: "No media",
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                selected?.editedDurationMs?.asTimestamp() ?: "00:00",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            OutlinedButton(
+                onClick = { picker.launch(arrayOf("video/*")) },
+                enabled = loaded && !busy && saveAllowed,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            ) { Text("+ Media") }
+        }
+
+        // First iteration of a dedicated horizontally-scrolling timeline.
+        Column(Modifier.fillMaxWidth().height(111.dp).padding(start = 12.dp, end = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("VIDEO 1", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.weight(1f))
+                Text("${draft.clips.size} clips • ${draft.clips.sumOf { it.editedDurationMs }.asTimestamp()}",
+                    style = MaterialTheme.typography.labelSmall)
+            }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                itemsIndexed(draft.clips) { index, clip ->
+                    val width = (75f + clip.editedDurationMs / 1000f * 6f).coerceIn(90f, 235f)
                     FilterChip(
-                        selected = activeIndex == index,
-                        onClick = { activeIndex = index },
-                        label = { Text("${index + 1}. ${clip.label.take(15)} · ${clip.trimmedDurationMs.asTimestamp()}") }
+                        selected = index == draft.selectedIndex,
+                        enabled = loaded && !busy,
+                        onClick = { finishTrimGesture(); commit(draft.copy(selectedIndex = index)) },
+                        modifier = Modifier.width(width.dp).height(68.dp),
+                        label = {
+                            Column {
+                                Text("${index + 1}  ${clip.label}", maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.labelMedium)
+                                Text(clip.editedDurationMs.asTimestamp(),
+                                    style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     )
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    if (activeIndex > 0) {
-                        val old = clips.removeAt(activeIndex)
-                        clips.add(activeIndex - 1, old)
-                        activeIndex--
-                    }
-                }, enabled = !busy && activeIndex > 0) { Text("← Move") }
-                OutlinedButton(onClick = {
-                    if (activeIndex < clips.lastIndex) {
-                        val old = clips.removeAt(activeIndex)
-                        clips.add(activeIndex + 1, old)
-                        activeIndex++
-                    }
-                }, enabled = !busy && activeIndex < clips.lastIndex) { Text("Move →") }
-                OutlinedButton(onClick = {
-                    clips.removeAt(activeIndex)
-                    activeIndex = min(activeIndex, clips.lastIndex).coerceAtLeast(0)
-                }, enabled = !busy) { Text("Remove") }
-            }
-            if (chosen != null) {
-                SectionTitle("Trim · ${chosen.label}")
-                Text("Start: ${chosen.startMs.asTimestamp()} / ${chosen.durationMs.asTimestamp()}")
-                Slider(
-                    value = chosen.startMs.toFloat(),
-                    onValueChange = { input ->
-                        clips[activeIndex] = chosen.trimStart(input.toLong())
-                        player.seekTo(clips[activeIndex].startMs)
-                    },
-                    valueRange = 0f..(chosen.endMs - 100).toFloat(),
-                    enabled = !busy
-                )
-                Text("End: ${chosen.endMs.asTimestamp()} / ${chosen.durationMs.asTimestamp()}")
-                Slider(
-                    value = chosen.endMs.toFloat(),
-                    onValueChange = { input -> clips[activeIndex] = chosen.trimEnd(input.toLong()) },
-                    valueRange = (chosen.startMs + 100).toFloat()..chosen.durationMs.toFloat(),
-                    enabled = !busy
+            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.surfaceVariant)
+        }
+
+        // Stable tool dock; editor controls scroll *inside* their own sheet only.
+        ScrollableTabRow(
+            selectedTabIndex = tool.ordinal,
+            edgePadding = 7.dp,
+            containerColor = MaterialTheme.colorScheme.background,
+            divider = {}
+        ) {
+            EditorTool.entries.forEach { item ->
+                Tab(
+                    selected = tool == item,
+                    onClick = { finishTrimGesture(); tool = item },
+                    text = { Text(item.label, style = MaterialTheme.typography.labelMedium) }
                 )
             }
         }
-        SectionTitle("Color look")
-        OptionPicker(Look.entries.toList(), look, { look = it }, { it.label }, busy)
-        SectionTitle("Canvas crop")
-        OptionPicker(CanvasRatio.entries.toList(), ratio, { ratio = it }, { it.label }, busy)
-        SectionTitle("Export resolution · short edge")
-        OptionPicker(listOf(720, 1080, 2160), resolution, { resolution = it }, { "${it}p" }, busy)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = mute, onCheckedChange = { mute = it }, enabled = !busy)
-            Text("Mute original audio")
+        Column(
+            Modifier.fillMaxWidth().height(160.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            when (tool) {
+                EditorTool.EDIT -> {
+                    if (selected == null) {
+                        Text("Import videos. Select a clip to edit, split or reorder it.")
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val split = draft.splitSelected(player.currentPosition)
+                                    if (split == null) feedback = "Move playhead inside clip before splitting"
+                                    else {
+                                        commit(split)
+                                        feedback = "Clip split without changing source file"
+                                    }
+                                }, enabled = !busy
+                            ) { Text("Split") }
+                            OutlinedButton(
+                                onClick = {
+                                    if (draft.selectedIndex > 0) commit(draft.withMovedClip(
+                                        draft.selectedIndex, draft.selectedIndex - 1
+                                    ))
+                                }, enabled = !busy && draft.selectedIndex > 0
+                            ) { Text("←") }
+                            OutlinedButton(
+                                onClick = {
+                                    if (draft.selectedIndex < draft.clips.lastIndex) commit(
+                                        draft.withMovedClip(draft.selectedIndex, draft.selectedIndex + 1)
+                                    )
+                                }, enabled = !busy && draft.selectedIndex < draft.clips.lastIndex
+                            ) { Text("→") }
+                            OutlinedButton(
+                                onClick = { commit(draft.withRemovedClip(draft.selectedIndex)) },
+                                enabled = !busy
+                            ) { Text("Delete") }
+                        }
+                        Text("Trim start • ${selected.inMs.asTimestamp()}")
+                        Slider(
+                            value = selected.inMs.toFloat(),
+                            valueRange = 0f..max(0f, (selected.outMs - 100).toFloat()),
+                            enabled = !busy,
+                            onValueChange = { value ->
+                                if (gestureStart == null) gestureStart = draft
+                                draft = draft.withReplacedClip(draft.selectedIndex,
+                                    selected.withStart(value.toLong()))
+                                player.seekTo(draft.selectedClip?.inMs ?: 0)
+                            },
+                            onValueChangeFinished = ::finishTrimGesture
+                        )
+                        Text("Trim end • ${selected.outMs.asTimestamp()}")
+                        Slider(
+                            value = selected.outMs.toFloat(),
+                            valueRange = (selected.inMs + 100).toFloat()..selected.durationMs.toFloat(),
+                            enabled = !busy,
+                            onValueChange = { value ->
+                                if (gestureStart == null) gestureStart = draft
+                                draft = draft.withReplacedClip(draft.selectedIndex,
+                                    selected.withEnd(value.toLong()))
+                            },
+                            onValueChangeFinished = ::finishTrimGesture
+                        )
+                    }
+                }
+                EditorTool.COLOR -> {
+                    Text("Colour look • applied during MP4 export")
+                    PickOptions(
+                        Look.entries.toList(), draft.look, !busy,
+                        onSelect = { commit(draft.copy(look = it)) },
+                        caption = { it.label }
+                    )
+                }
+                EditorTool.CANVAS -> {
+                    Text("Canvas • frame and aspect")
+                    PickOptions(
+                        CanvasRatio.entries.toList(), draft.canvas, !busy,
+                        onSelect = { commit(draft.copy(canvas = it)) },
+                        caption = { it.label }
+                    )
+                }
+                EditorTool.EXPORT -> {
+                    Text("Resolution • short edge (depends on phone codec)")
+                    PickOptions(
+                        listOf(720, 1080, 2160), draft.shortSidePixels, !busy,
+                        onSelect = { commit(draft.copy(shortSidePixels = it)) },
+                        caption = { "${it}p" }
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = draft.muteOriginalAudio,
+                            onCheckedChange = { commit(draft.copy(muteOriginalAudio = it)) },
+                            enabled = !busy
+                        )
+                        Text("Mute original audio")
+                    }
+                }
+            }
         }
-        HorizontalDivider()
+
         if (busy) {
             LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
-            Text("Exporting... $progress% · Keep TongCut open")
-            OutlinedButton(onClick = {
-                if (exporter.cancel()) {
-                    busy = false
-                    feedback = "Export cancelled"
-                } else feedback = "Finalising gallery save; cannot cancel this step."
-            }) { Text("Cancel export") }
-        } else {
-            Button(
-                enabled = clips.isNotEmpty(), modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    busy = true
-                    progress = 0
-                    exported = null
-                    feedback = "Export started"
-                    exporter.start(
-                        clips.toList(), ExportOptions(look, ratio, resolution, mute),
-                        onProgress = { progress = it },
-                        onSuccess = { uri ->
-                            busy = false
-                            feedback = "Saved to Movies/TongCut"
-                            exported = uri
-                        },
-                        onError = { msg -> busy = false; feedback = msg }
-                    )
-                }
-            ) { Text("Export MP4") }
         }
-        Text(feedback, style = MaterialTheme.typography.bodySmall)
-        exported?.let { uri ->
-            OutlinedButton(onClick = {
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "video/mp4")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                runCatching { context.startActivity(intent) }
-                    .onFailure { feedback = "Saved video; open it from Movies/TongCut." }
-            }) { Text("Open exported video") }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (busy) {
+                OutlinedButton(onClick = {
+                    if (exporter.cancel()) {
+                        busy = false
+                        feedback = "Export cancelled"
+                    } else feedback = "Saving to gallery; please wait"
+                }) { Text("Cancel") }
+                Text("Exporting $progress%")
+            } else {
+                Button(
+                    enabled = loaded && draft.clips.isNotEmpty() && saveAllowed,
+                    onClick = {
+                        finishTrimGesture()
+                        val input = runCatching { draft.clips.map { it.asMediaClip() } }
+                        if (input.isFailure) {
+                            feedback = "Invalid input: ${input.exceptionOrNull()?.message}"
+                        } else {
+                            busy = true
+                            progress = 0
+                            lastExport = null
+                            exporter.start(
+                                input.getOrThrow(), draft.exportOptions(),
+                                onProgress = { progress = it },
+                                onSuccess = { uri ->
+                                    busy = false
+                                    lastExport = uri
+                                    feedback = "Saved video to Movies/TongCut"
+                                },
+                                onError = { message ->
+                                    busy = false
+                                    feedback = message
+                                }
+                            )
+                        }
+                    }, modifier = Modifier.weight(1f)
+                ) { Text("Export MP4") }
+            }
+            lastExport?.let { uri ->
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, "video/mp4")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        })
+                    }.onFailure { feedback = "Video saved; find it in Movies/TongCut" }
+                }) { Text("Open") }
+            }
         }
-        Spacer(Modifier.height(28.dp))
+        Text(
+            feedback,
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 5.dp),
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+private enum class EditorTool(val label: String) {
+    EDIT("Edit"), COLOR("Color"), CANVAS("Canvas"), EXPORT("Settings")
 }
 
 @Composable
-private fun <T> OptionPicker(
-    options: List<T>, selected: T, onSelect: (T) -> Unit,
-    caption: (T) -> String, disabled: Boolean
+private fun <T> PickOptions(
+    options: List<T>, selected: T, enabled: Boolean,
+    onSelect: (T) -> Unit, caption: (T) -> String
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(options.size) { i ->
-            val option = options[i]
+        items(options.size) { index ->
+            val item = options[index]
             FilterChip(
-                selected = selected == option,
-                onClick = { onSelect(option) },
-                enabled = !disabled,
-                label = { Text(caption(option)) }
+                selected = item == selected,
+                enabled = enabled,
+                onClick = { onSelect(item) },
+                label = { Text(caption(item)) }
             )
         }
     }
 }
 
 private fun inspectClip(context: android.content.Context, uri: Uri): Clip? {
-    val title = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME),
-        null, null, null)?.use { cursor ->
+    val title = context.contentResolver.query(
+        uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
+    )?.use { cursor ->
         if (cursor.moveToFirst()) cursor.getString(0) else null
     } ?: "Video"
     val duration = MediaMetadataRetriever().use { retriever ->
