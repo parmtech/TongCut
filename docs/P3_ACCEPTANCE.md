@@ -2,7 +2,7 @@
 
 Work branch: `development/capcut-parity`.
 
-The owner explicitly requires **both P2 and P3 complete** before a comprehensive bug, static lint, runtime and export audit, and only then an owner-facing TongCut TEST APK. Do not tag P2/P3 complete or deliver an interim APK.
+**2026-10-20 priority update:** The owner prefers feature-first work across all phases, followed by comprehensive integrated QA, bug fixing and a final APK. Keep individual development milestones separate from verified acceptance, and do not mark P2/P3 complete merely because code was committed. Do not ship interim APKs.
 
 ## Source that exists
 - [x] Motion keyframes on layered clips: X/Y, scale, rotation and opacity; frame snapping and easing (linear, smooth, hold)
