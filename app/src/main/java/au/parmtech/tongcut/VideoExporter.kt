@@ -12,6 +12,8 @@ import androidx.media3.common.C
 import androidx.media3.common.audio.GainProcessor
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.SpeedParameters
+import androidx.media3.common.util.ExperimentalApi
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.Presentation
@@ -29,7 +31,7 @@ import java.io.File
 import java.io.IOException
 
 /** Export stays in the foreground for the alpha build; cancelling leaves no partial MediaStore file. */
-@androidx.annotation.OptIn(UnstableApi::class)
+@androidx.annotation.OptIn(UnstableApi::class, ExperimentalApi::class)
 class VideoExporter(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var transformer: Transformer? = null
@@ -169,22 +171,33 @@ class VideoExporter(private val context: Context) {
                                 ).build()
                             val edited = EditedMediaItem.Builder(media)
                                 .setRemoveVideo(true)
+                            // Media3's setSpeed(SpeedProvider) defaults to
+                            // shouldMaintainPitch=false: 2x audio becomes 880 Hz
+                            // from 440 Hz. Use SpeedParameters(true) for the
+                            // time-stretching audio path; VIDEO PiP remains separate.
                             if (part.speedRamp.isNotEmpty()) {
                                 val speedCurve = part.speedRamp
-                                edited.setSpeed(object : androidx.media3.common.audio.SpeedProvider {
-                                    override fun getSpeed(timeUs: Long): Float =
-                                        SpeedRamp.speedAt(timeUs, speedCurve)
+                                edited.setSpeed(SpeedParameters(
+                                    object : androidx.media3.common.audio.SpeedProvider {
+                                        override fun getSpeed(timeUs: Long): Float =
+                                            SpeedRamp.speedAt(timeUs, speedCurve)
 
-                                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
-                                        SpeedRamp.nextChangeAfter(timeUs, speedCurve) ?: C.TIME_UNSET
-                                })
+                                        override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
+                                            SpeedRamp.nextChangeAfter(timeUs, speedCurve)
+                                                ?: C.TIME_UNSET
+                                    },
+                                    /* shouldMaintainPitch = */ true
+                                ))
                             } else if (part.playbackSpeed != 1f) {
                                 val clipSpeed = part.playbackSpeed
-                                edited.setSpeed(object : androidx.media3.common.audio.SpeedProvider {
-                                    override fun getSpeed(timeUs: Long): Float = clipSpeed
-                                    override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
-                                        C.TIME_UNSET
-                                })
+                                edited.setSpeed(SpeedParameters(
+                                    object : androidx.media3.common.audio.SpeedProvider {
+                                        override fun getSpeed(timeUs: Long): Float = clipSpeed
+                                        override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
+                                            C.TIME_UNSET
+                                    },
+                                    /* shouldMaintainPitch = */ true
+                                ))
                             }
                             if (lane.gain < 1f) {
                                 val processor = GainProcessor(object : GainProcessor.GainProvider {
