@@ -41,7 +41,7 @@ object ExportVideoCodecSupport {
             encoders.any { info ->
                 runCatching {
                     info.getCapabilitiesForType(codec.mimeType).videoCapabilities
-                        ?.areSizeSupported(width, height) == true
+                        ?.isSizeSupported(width, height) == true
                 }.getOrDefault(false)
             }
         }
