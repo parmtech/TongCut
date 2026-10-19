@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 9)
+        put("schema", 10)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -61,6 +61,7 @@ object LayerTimelineCodec {
                         put("scaleY", item.photoEffects.maskScaleY.toDouble())
                         put("invert", item.photoEffects.invertMask)
                         put("rotation", item.photoEffects.maskRotationDegrees.toDouble())
+                        put("colorGrade", ColorGradeCodec.encode(item.photoEffects.colorGrade))
                         put("chroma", item.photoEffects.chroma?.let { key ->
                             JSONObject().apply {
                                 put("color", key.keyArgb)
@@ -105,7 +106,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..9) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..10) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -167,6 +168,7 @@ object LayerTimelineCodec {
                         maskScaleY = fx.optDouble("scaleY",1.0).toFloat(),
                         invertMask = fx.optBoolean("invert",false),
                         maskRotationDegrees = fx.optDouble("rotation",0.0).toFloat(),
+                        colorGrade = ColorGradeCodec.decode(fx.optJSONObject("colorGrade")),
                         chroma = fx.optJSONObject("chroma")?.let { c ->
                             PhotoChroma(
                                 keyArgb = c.optInt("color",0xFF00FF00.toInt()),
@@ -229,3 +231,4 @@ object LayerTimelineCodec {
     private fun JSONObject.takeNullableString(key: String): String? =
         if (!has(key) || isNull(key)) null else getString(key)
 }
+
