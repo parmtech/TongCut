@@ -1,0 +1,79 @@
+name: TongCut Phase 2 - Device Acceptance TEST APK
+
+on:
+  push:
+    branches: [development/capcut-parity]
+    paths:
+      - '.github/workflows/p2-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Android 36 SDK
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Isolate from old TongCut and old TEST installation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path('app/build.gradle.kts')
+          text = gradle.read_text()
+          assert 'applicationIdSuffix = ".test"' in text
+          gradle.write_text(text.replace('applicationIdSuffix = ".test"',
+              'applicationIdSuffix = ".p2test"'))
+          strings = Path('app/src/main/res/values/strings.xml')
+          strings.write_text(strings.read_text().replace('TongCut TEST','TongCut P2 TEST'))
+          PY
+      - name: Run clean unit tests, strict Lint, build QA APK
+        run: gradle --no-daemon --stacktrace clean testDebugUnitTest lintDebug assembleDebug
+      - name: Verify package and APK integrity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile,hashlib
+          path=Path("app/build/outputs/apk/debug/app-debug.apk")
+          assert path.exists() and path.stat().st_size > 1_000_000
+          with zipfile.ZipFile(path) as f:
+              assert f.testzip() is None
+              assert "AndroidManifest.xml" in f.namelist()
+              assert any(x.startswith("classes") and x.endswith(".dex") for x in f.namelist())
+          print("APK bytes:",path.stat().st_size)
+          print("SHA256:",hashlib.sha256(path.read_bytes()).hexdigest())
+          PY
+          AAPT="$(find "$ANDROID_HOME/build-tools/36.0.0" -maxdepth 1 -name aapt | head -n 1)"
+          "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | head -n 4
+      - name: Owner-only Android test artifact (NOT A PRODUCTION RELEASE)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-P2-TEST-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+      - name: Archive test and Lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-P2-QA-Reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+          retention-days: 14
+          if-no-files-found: ignore
