@@ -35,8 +35,12 @@ data class ExportOptions(
     val ratio: CanvasRatio = CanvasRatio.SOURCE,
     val shortSidePixels: Int = 1080,
     val mute: Boolean = false,
-    val colorGrade: ColorGrade = ColorGrade()
-)
+    val colorGrade: ColorGrade = ColorGrade(),
+    val videoCodec: ExportVideoCodec = ExportVideoCodec.H264,
+    val videoBitrateBps: Int = 8_000_000
+) {
+    init { require(videoBitrateBps in 1_000_000..50_000_000) }
+}
 
 fun Long.asTimestamp(): String {
     val total = this.coerceAtLeast(0) / 1000
