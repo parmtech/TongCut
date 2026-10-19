@@ -92,6 +92,7 @@ data class TimelineLayer(
     val playbackSpeed: Float = 1f,
     val sourceSpanUs: Long? = null,
     val speedRamp: List<SpeedKeyframe> = emptyList(),
+    val audioEnvelope: List<AudioGainKeyframe> = emptyList(),
     val photoEffects: PhotoEffects = PhotoEffects(),
     val fade: LayerFade = LayerFade(),
     // An explicit PiP screen slot is required for a freeze still to cover its source video.
@@ -114,6 +115,8 @@ data class TimelineLayer(
         if (kind == LayerKind.AUDIO) require(fade == LayerFade()) {
             "Audio fading requires a separate sound envelope"
         } else fade.validate(durationUs)
+        if (kind == LayerKind.AUDIO) AudioEnvelope.validate(durationUs, audioEnvelope)
+        else require(audioEnvelope.isEmpty()) { "Audio envelope applies only to audio clips" }
         if (kind != LayerKind.IMAGE && kind != LayerKind.VIDEO) {
             require(photoEffects == PhotoEffects()) {
                 "Visual masks and chroma apply only to video/photo overlays"
@@ -254,6 +257,9 @@ data class LayerTimeline(
             "Split too close to clip edge"
         }
         val requestedLeft = atUs - layer.startUs
+        val (leftEnvelope, rightEnvelope) = if (layer.kind == LayerKind.AUDIO) {
+            AudioEnvelope.split(layer.durationUs, layer.audioEnvelope, requestedLeft)
+        } else emptyList<AudioGainKeyframe>() to emptyList()
         if (layer.kind in setOf(LayerKind.VIDEO, LayerKind.AUDIO) &&
             layer.speedRamp.isNotEmpty()) {
             val fullSpan = requireNotNull(layer.sourceSpanUs)
@@ -276,13 +282,14 @@ data class LayerTimeline(
             } else layer.fade.split(leftDuration, layer.durationUs)
             val left = layer.copy(
                 durationUs = leftDuration, sourceSpanUs = splitSource,
-                speedRamp = leftRamp, motion = leftMotion, fade = leftFade
+                speedRamp = leftRamp, motion = leftMotion, fade = leftFade,
+                audioEnvelope = leftEnvelope
             )
             val right = layer.copy(
                 id = rightId, startUs = layer.startUs + leftDuration,
                 durationUs = rightDuration, sourceInUs = layer.sourceInUs + splitSource,
                 sourceSpanUs = rightSpan, speedRamp = rightRamp, motion = rightMotion,
-                fade = rightFade
+                fade = rightFade, audioEnvelope = rightEnvelope
             )
             return copy(layers = layers.filterNot { it.id == id } + left + right)
         }
@@ -307,7 +314,7 @@ data class LayerTimeline(
         val left = layer.copy(
             durationUs = leftDuration,
             sourceSpanUs = if (audioPinned) consumedLeftUs else layer.sourceSpanUs,
-            motion = leftMotion, fade = leftFade
+            motion = leftMotion, fade = leftFade, audioEnvelope = leftEnvelope
         )
         val right = layer.copy(
             id = rightId,
@@ -323,7 +330,7 @@ data class LayerTimeline(
             sourceSpanUs = if (audioPinned)
                 requireNotNull(layer.sourceSpanUs) - consumedLeftUs
             else layer.sourceSpanUs,
-            motion = rightMotion, fade = rightFade
+            motion = rightMotion, fade = rightFade, audioEnvelope = rightEnvelope
         )
         return copy(layers = layers.filterNot { it.id == id } + left + right)
     }
@@ -338,6 +345,7 @@ data class LayerTimeline(
                     "Trim this ramped clip using the source speed editor first"
                 }
                 val trimmedMotion = it.motion.filter { key -> key.timeUs <= newDurationUs }
+                val trimmedEnvelope = it.audioEnvelope.filter { key -> key.timeUs <= newDurationUs }
                 val local = it.fade.resetToClip()
                 val fadeIn = minOf(local.inUs, newDurationUs)
                 val fadeOut = minOf(local.outUs, newDurationUs - fadeIn)
@@ -348,7 +356,7 @@ data class LayerTimeline(
                         (newDurationUs.toDouble() * it.playbackSpeed / 1_000.0)
                             .roundToLong() * 1_000L
                     } else it.sourceSpanUs,
-                    motion = trimmedMotion,
+                    motion = trimmedMotion, audioEnvelope = trimmedEnvelope,
                     fade = LayerFade(fadeIn,fadeOut)
                 )
             } else it

@@ -18,7 +18,8 @@ sealed interface AudioPart {
         override val durationUs: Long,
         val playbackSpeed: Float = 1f,
         val sourceSpanUs: Long? = null,
-        val speedRamp: List<SpeedKeyframe> = emptyList()
+        val speedRamp: List<SpeedKeyframe> = emptyList(),
+        val envelope: List<AudioGainKeyframe> = emptyList()
     ) : AudioPart {
         init {
             require(uri.isNotBlank())
@@ -30,6 +31,7 @@ sealed interface AudioPart {
                 require(kotlin.math.abs(SpeedRamp.durationUs(span,speedRamp)-durationUs)
                     <= 1_000L)
             }
+            AudioEnvelope.validate(durationUs, envelope)
         }
 
         val consumedSourceUs: Long get() = sourceSpanUs ?:
@@ -82,7 +84,8 @@ object AudioMixPlan {
                     durationUs = layer.durationUs,
                     playbackSpeed = layer.playbackSpeed,
                     sourceSpanUs = layer.sourceSpanUs,
-                    speedRamp = layer.speedRamp
+                    speedRamp = layer.speedRamp,
+                    envelope = layer.audioEnvelope
                 )
                 cursor = layer.endUs
             }

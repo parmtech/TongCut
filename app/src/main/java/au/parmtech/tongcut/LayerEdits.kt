@@ -491,6 +491,36 @@ object LayerEdits {
         }))
     }
 
+    /** Adds or replaces one clip-local envelope point at the current project playhead. */
+    fun setAudioEnvelopeAt(
+        draft: EditorDraft, id: String, playheadMs: Long, gain: Float
+    ): EditorDraft {
+        require(gain.isFinite() && gain in 0f..1f)
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.AUDIO }
+            ?: throw IllegalArgumentException("Audio clip not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the audio track first"
+        }
+        val relativeUs = (playheadMs.coerceAtLeast(0L) * 1_000L - layer.startUs)
+            .coerceIn(0L, layer.durationUs)
+        val updated = AudioEnvelope.upsert(layer.durationUs, layer.audioEnvelope,
+            AudioGainKeyframe(relativeUs, gain))
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(audioEnvelope = updated) else it
+        }))
+    }
+
+    fun clearAudioEnvelope(draft: EditorDraft, id: String): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.AUDIO }
+            ?: throw IllegalArgumentException("Audio clip not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the audio track first"
+        }
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(audioEnvelope = emptyList()) else it
+        }))
+    }
+
     /** Set or replace a motion keyframe at the closest rational project frame. */
     fun setMotionAt(
         draft: EditorDraft,

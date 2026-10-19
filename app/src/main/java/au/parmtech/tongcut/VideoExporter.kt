@@ -199,11 +199,21 @@ class VideoExporter(private val context: Context) {
                                     /* shouldMaintainPitch = */ true
                                 ))
                             }
-                            if (lane.gain < 1f) {
+                            if (lane.gain < 1f || part.envelope.isNotEmpty()) {
                                 val processor = GainProcessor(object : GainProcessor.GainProvider {
                                     override fun getGainFactorAtSamplePosition(
                                         samplePosition: Long, sampleRate: Int
-                                    ): Float = lane.gain
+                                    ): Float {
+                                        // Divide first so a long export cannot overflow while
+                                        // converting a PCM sample index to microseconds.
+                                        val seconds = samplePosition / sampleRate
+                                        val remainder = samplePosition % sampleRate
+                                        val positionUs = seconds * 1_000_000L +
+                                            remainder * 1_000_000L / sampleRate
+                                        return lane.gain * AudioEnvelope.gainAt(
+                                            positionUs, part.durationUs, part.envelope
+                                        )
+                                    }
 
                                     override fun isUnityUntil(
                                         samplePosition: Long, sampleRate: Int

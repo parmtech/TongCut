@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 8)
+        put("schema", 9)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -78,6 +78,14 @@ object LayerTimelineCodec {
                             })
                         }
                     })
+                    put("audioEnvelope", JSONArray().apply {
+                        item.audioEnvelope.forEach { point ->
+                            put(JSONObject().apply {
+                                put("timeUs", point.timeUs)
+                                put("gain", point.gain.toDouble())
+                            })
+                        }
+                    })
                     put("motion", JSONArray().apply {
                         item.motion.forEach { frame ->
                             put(JSONObject().apply {
@@ -97,7 +105,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..8) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..9) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -181,6 +189,16 @@ object LayerTimelineCodec {
                         SpeedKeyframe(
                             sourceOffsetUs = key.getLong("sourceOffsetUs"),
                             speed = key.getDouble("speed").toFloat()
+                        )
+                    }
+                } ?: emptyList(),
+                audioEnvelope = item.optJSONArray("audioEnvelope")?.let { points ->
+                    require(points.length() <= AudioEnvelope.MAX_POINTS)
+                    (0 until points.length()).map { index ->
+                        val key = points.getJSONObject(index)
+                        AudioGainKeyframe(
+                            timeUs = key.getLong("timeUs"),
+                            gain = key.getDouble("gain").toFloat()
                         )
                     }
                 } ?: emptyList(),

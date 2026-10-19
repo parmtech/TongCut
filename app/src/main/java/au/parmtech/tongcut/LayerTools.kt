@@ -596,6 +596,32 @@ internal fun LayerTools(
                                     .onFailure { onError(it.message ?: "Audio speed reset failed") }
                             }
                         }
+                        val clipGain = AudioEnvelope.gainAt(
+                            (playheadMs * 1_000L - layer.startUs)
+                                .coerceIn(0L, layer.durationUs),
+                            layer.durationUs, layer.audioEnvelope
+                        )
+                        SmallLayerButton("Envelope −") {
+                            runCatching {
+                                LayerEdits.setAudioEnvelopeAt(draft, layer.id, playheadMs,
+                                    (clipGain - 0.1f).coerceAtLeast(0f))
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Envelope failed") }
+                        }
+                        Text("Clip ${(clipGain * 100).toInt()}%", color = Color.LightGray, fontSize = 11.sp)
+                        SmallLayerButton("Envelope +") {
+                            runCatching {
+                                LayerEdits.setAudioEnvelopeAt(draft, layer.id, playheadMs,
+                                    (clipGain + 0.1f).coerceAtMost(1f))
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Envelope failed") }
+                        }
+                        if (layer.audioEnvelope.isNotEmpty()) {
+                            SmallLayerButton("Reset envelope") {
+                                runCatching { LayerEdits.clearAudioEnvelope(draft, layer.id) }
+                                    .onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Envelope reset failed") }
+                            }
+                            Text("${layer.audioEnvelope.size} envelope points", color = Color.LightGray, fontSize = 10.sp)
+                        }
                         SmallLayerButton(if (track.muted) "Unmute" else "Mute") {
                             onChange(LayerEdits.setTrackMuted(draft, track.id, !track.muted))
                         }

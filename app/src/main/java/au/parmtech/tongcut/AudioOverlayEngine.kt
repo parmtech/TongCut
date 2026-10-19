@@ -109,7 +109,11 @@ class AudioOverlayEngine(private val context: Context) {
                 if (abs(player.playbackParameters.speed - speed) > 0.0001f) {
                     player.setPlaybackSpeed(speed)
                 }
-                val targetGain = tracks[layer.trackId]?.gain ?: 1f
+                val trackGain = tracks[layer.trackId]?.gain ?: 1f
+                val targetGain = trackGain * AudioEnvelope.gainAt(
+                    (timeUs - layer.startUs).coerceIn(0L, layer.durationUs),
+                    layer.durationUs, layer.audioEnvelope
+                )
                 if (player.volume != targetGain) player.volume = targetGain
                 // The seek threshold is in SOURCE time. Scale it by playback
                 // speed so a 4x clip does not tolerate 4x project-time drift.
