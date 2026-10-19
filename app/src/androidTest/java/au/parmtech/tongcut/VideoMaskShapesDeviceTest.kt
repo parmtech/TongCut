@@ -114,7 +114,11 @@ class VideoMaskShapesDeviceTest {
         val frame = renderedFrame(PhotoMask.ROUNDED_RECT)
         try {
             assertRed(at(frame, 0.79f, 0.79f), "Rounded centre")
-            assertBlue(at(frame, 0.61f, 0.61f), "Rounded upper-left")
+            // PiP begins at approx (0.58, 0.58). The old (0.61,0.61)
+            // point was INSIDE a 19%-radius rounded corner and was correctly
+            // red. Sample 0.59: inside the PiP box, but outside the rounded
+            // boundary by >5 source pixels for reliable H.264 acceptance.
+            assertBlue(at(frame, 0.59f, 0.59f), "Rounded upper-left")
             assertRed(at(frame, 0.79f, 0.63f), "Rounded upper middle")
         } finally {
             frame.recycle()
