@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 private data class ProTool(val name: String, val icon: ImageVector)
 private val tools = listOf(
@@ -198,6 +199,63 @@ fun VideoEditorScreen(
                     onInfo("Audio added. Preview follows the playhead; mix export needs device verification.")
                 } catch (error: Exception) {
                     onInfo("Audio import failed: ${error.message}")
+                }
+            }
+        }
+    }
+
+    // Offline captions are ordinary TEXT layers: saved, undoable, previewed
+    // and sent to the same Media3 text renderer as hand-written captions.
+    val subtitleImportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val raw = withContext(Dispatchers.IO) {
+                        val stream = context.contentResolver.openInputStream(uri)
+                            ?: throw IllegalArgumentException("Unable to open subtitle file")
+                        stream.use { input ->
+                            val buffer = ByteArray(8_192)
+                            val bytes = ByteArrayOutputStream()
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read < 0) break
+                                if (read == 0) continue
+                                require(bytes.size() + read <= SrtCaptions.MAX_INPUT_BYTES) {
+                                    "The subtitle file exceeds 2 MB"
+                                }
+                                bytes.write(buffer, 0, read)
+                            }
+                            bytes.toString(Charsets.UTF_8.name())
+                        }
+                    }
+                    val latest = currentDraft.value
+                    val imported = SrtCaptions.importInto(latest, raw)
+                    onChange(imported)
+                    panel = "Captions"
+                    onInfo("Imported ${imported.layers.layers.size - latest.layers.layers.size} timed captions.")
+                } catch (error: Exception) {
+                    onInfo("SRT import failed: ${error.message ?: "invalid file"}")
+                }
+            }
+        }
+    }
+    val subtitleExportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/x-subrip")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val raw = SrtCaptions.exportFrom(currentDraft.value)
+                    withContext(Dispatchers.IO) {
+                        val output = context.contentResolver.openOutputStream(uri, "wt")
+                            ?: throw IllegalArgumentException("Cannot create subtitle document")
+                        output.bufferedWriter(Charsets.UTF_8).use { it.write(raw) }
+                    }
+                    onInfo("SRT subtitles saved.")
+                } catch (error: Exception) {
+                    onInfo("SRT export failed: ${error.message ?: "unknown error"}")
                 }
             }
         }
@@ -778,10 +836,36 @@ fun VideoEditorScreen(
                         active, playMs, LayerKind.TEXT, onChange,
                         onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                         onError = onInfo,
-                            selectedGroupIds = groupIds,
-                            onGroupToggle = onGroupToggle,
-                            onGroupClear = onGroupClear
+                        selectedGroupIds = groupIds,
+                        onGroupToggle = onGroupToggle,
+                        onGroupClear = onGroupClear
                     )
+                    "Captions" -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ToolPill("Import .srt") {
+                                subtitleImportPicker.launch(arrayOf(
+                                    "application/x-subrip", "text/plain", "text/*",
+                                    "application/octet-stream"
+                                ))
+                            }
+                            ToolPill("Export .srt") {
+                                if (active.layers.layers.none { it.kind == LayerKind.TEXT }) {
+                                    onInfo("Add or import a caption before exporting.")
+                                } else subtitleExportPicker.launch("TongCut-captions.srt")
+                            }
+                        }
+                        Text("SRT timestamps are relative to project start. Imported text stays editable.",
+                            color = Color.LightGray, fontSize = 11.sp)
+                        LayerTools(
+                            active, playMs, LayerKind.TEXT, onChange,
+                            onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                            onError = onInfo, selectedGroupIds = groupIds,
+                            onGroupToggle = onGroupToggle, onGroupClear = onGroupClear
+                        )
+                    }
                     "Overlay" -> {
                         LayerTools(
                             active, playMs, LayerKind.VIDEO, onChange,
@@ -818,7 +902,7 @@ fun VideoEditorScreen(
                     modifier = Modifier.width(65.dp).fillMaxHeight()
                         .clickable {
                             panel = if (panel == item.name) null else item.name
-                            if (item.name in listOf("Effects", "Captions", "Adjust", "AI"))
+                            if (item.name in listOf("Effects", "Adjust", "AI"))
                                 onUnavailable(item.name)
                         },
                     horizontalAlignment = Alignment.CenterHorizontally,
