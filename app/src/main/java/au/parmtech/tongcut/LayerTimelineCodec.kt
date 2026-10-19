@@ -54,6 +54,7 @@ object LayerTimelineCodec {
                         put("centerY", item.photoEffects.maskCenterY.toDouble())
                         put("scaleX", item.photoEffects.maskScaleX.toDouble())
                         put("scaleY", item.photoEffects.maskScaleY.toDouble())
+                        put("invert", item.photoEffects.invertMask)
                         put("chroma", item.photoEffects.chroma?.let { key ->
                             JSONObject().apply {
                                 put("color", key.keyArgb)
@@ -143,6 +144,7 @@ object LayerTimelineCodec {
                         maskCenterY = fx.optDouble("centerY",0.0).toFloat(),
                         maskScaleX = fx.optDouble("scaleX",1.0).toFloat(),
                         maskScaleY = fx.optDouble("scaleY",1.0).toFloat(),
+                        invertMask = fx.optBoolean("invert",false),
                         chroma = fx.optJSONObject("chroma")?.let { c ->
                             PhotoChroma(
                                 keyArgb = c.optInt("color",0xFF00FF00.toInt()),
