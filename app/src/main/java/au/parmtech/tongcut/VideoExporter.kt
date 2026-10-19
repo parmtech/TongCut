@@ -7,6 +7,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
@@ -45,7 +46,9 @@ class VideoExporter(private val context: Context) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
-        require(TimedTextEffects.supported(overlayLayers)) { "Some track types still need a compositor" }
+        require(overlayLayers.layers.all {
+            it.kind == LayerKind.TEXT || it.kind == LayerKind.AUDIO
+        }) { "This renderer does not support picture/video/sticker overlay layers" }
         val original = clips.toList()
         val file = File(
             context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.cacheDir,
@@ -93,7 +96,41 @@ class VideoExporter(private val context: Context) {
             } else {
                 EditedMediaItemSequence.withAudioAndVideoFrom(editedClips)
             }
-            val composition = Composition.Builder(sequence)
+            val baseVideoDurationUs = original.sumOf { it.trimmedDurationMs * 1_000L }
+            val audioPlans = AudioMixPlan.from(overlayLayers, baseVideoDurationUs)
+            val allSequences = mutableListOf(sequence)
+            audioPlans.forEach { lane ->
+                val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+                lane.parts.forEach { part ->
+                    when (part) {
+                        is AudioPart.Gap -> audioOnly.addGap(part.durationUs)
+                        is AudioPart.Source -> {
+                            // MediaItem clipping is millisecond-based. We reject
+                            // sub-ms boundaries to avoid exporting offset audio.
+                            require(part.sourceInUs % 1_000L == 0L &&
+                                part.durationUs % 1_000L == 0L) {
+                                "Audio clip must align to millisecond boundaries"
+                            }
+                            val beginMs = part.sourceInUs / 1_000L
+                            val endMs = beginMs + part.durationUs / 1_000L
+                            val media = MediaItem.Builder().setUri(part.uri)
+                                .setClippingConfiguration(
+                                    MediaItem.ClippingConfiguration.Builder()
+                                        .setStartPositionMs(beginMs)
+                                        .setEndPositionMs(endMs)
+                                        .build()
+                                ).build()
+                            audioOnly.addItem(
+                                EditedMediaItem.Builder(media)
+                                    .setRemoveVideo(true)
+                                    .build()
+                            )
+                        }
+                    }
+                }
+                allSequences += audioOnly.build()
+            }
+            val composition = Composition.Builder(allSequences)
                 .setEffects(Effects(emptyList(), compositionEffects))
                 .build()
             transformer = Transformer.Builder(context)

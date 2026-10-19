@@ -82,7 +82,11 @@ data class EditorDraft(
     }
 
     /** Prevent silent omission of layered content by the older sequential renderer. */
-    val canExportWithLegacyRenderer: Boolean get() = layers.layers.all { it.kind == LayerKind.TEXT }
+    val canExportWithLegacyRenderer: Boolean get() =
+        layers.layers.all { it.kind == LayerKind.TEXT || it.kind == LayerKind.AUDIO } &&
+            runCatching {
+                AudioMixPlan.from(layers, SequentialTimeline(clips).totalMs * 1_000L)
+            }.isSuccess
 
     fun exportOptions() = ExportOptions(look, canvas, shortSidePixels, muteOriginalAudio)
 }

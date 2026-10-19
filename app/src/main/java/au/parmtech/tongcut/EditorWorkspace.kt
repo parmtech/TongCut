@@ -67,6 +67,7 @@ fun VideoEditorScreen(
 ) {
     val context = LocalContext.current
     val player = remember(context) { ExoPlayer.Builder(context).build() }
+    val audioMonitor = remember(context) { AudioOverlayEngine(context) }
     var playing by remember { mutableStateOf(false) }
     var playMs by remember { mutableLongStateOf(0L) }
     var fullscreen by remember { mutableStateOf(false) }
@@ -144,7 +145,7 @@ fun VideoEditorScreen(
                     } ?: throw IllegalArgumentException("Audio duration not available")
                     onChange(LayerEdits.addAudio(draft, playMs, uri.toString(), duration))
                     panel = "Audio"
-                    onInfo("Audio layer added as editable draft. Audio preview/export mixing is still in development.")
+                    onInfo("Audio added. Preview follows the playhead; mix export needs device verification.")
                 } catch (error: Exception) {
                     onInfo("Audio import failed: ${error.message}")
                 }
@@ -171,6 +172,7 @@ fun VideoEditorScreen(
     val active = previewDraft ?: draft
     val clip = active.selectedClip
     DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
     val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
 
     // A single ExoPlayer playlist plays trimmed media clips consecutively.
@@ -200,13 +202,14 @@ fun VideoEditorScreen(
             if (resume) player.play()
         }
     }
-    LaunchedEffect(player, editTimeline) {
+    LaunchedEffect(player, editTimeline, active.layers) {
         while (true) {
             if (player.mediaItemCount > 0 && player.currentMediaItemIndex in editTimeline.clips.indices) {
                 val index = player.currentMediaItemIndex
                 playMs = editTimeline.timeOf(index, player.currentPosition)
             }
             playing = player.isPlaying
+            audioMonitor.sync(active.layers, playMs, playing)
             delay(90)
         }
     }

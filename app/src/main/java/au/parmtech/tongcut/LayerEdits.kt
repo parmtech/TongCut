@@ -60,7 +60,9 @@ object LayerEdits {
             startUs = start, durationUs = duration, sourceUri = uri,
             sourceDurationUs = durationMs * 1_000L
         )
-        return draft.copy(layers = graph.addLayer(newLayer))
+        val updated = draft.copy(layers = graph.addLayer(newLayer))
+        AudioMixPlan.from(updated.layers, clock(updated)) // enforce mixer limits on edit
+        return updated
     }
 
     fun changeText(draft: EditorDraft, id: String, text: String): EditorDraft {
