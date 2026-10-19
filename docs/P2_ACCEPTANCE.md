@@ -22,3 +22,18 @@
 
 ## Caveat and release gate
 This is **P2 model + persistence foundation only**, not phase completion. Legacy sequential export is maintained for projects with zero new layers. Never mark a button complete unless both preview and final export perform it. The owner prohibited APK packaging until all phases and acceptance gates finish; automated CI runs compile and JVM tests only. P1 also remains open pending physical-device verification.
+
+
+## Phase 2 increment: editable text and audio lanes (19 October 2026)
+- [x] Interactive Compose text/audio lanes in timeline; persistent project model on add/edit/move/duration/delete/hide.
+- [x] Text add/edit at playhead; stored on microsecond timeline; undo/redo and autosave use immutable EditorDraft snapshots.
+- [x] Android SAF audio import with persistable URI grant, source duration retrieval, bounded project placement. Audio mixing/output is **NOT** implemented.
+- [x] Preview displays time-gated text overlay based on the same timeline model used by export.
+- [x] Experimental Media3 TextOverlay burn-in path; uses constant text bitmaps with alpha-gated visibility rather than empty-size bitmaps.
+- [x] Explicitly reject unsupported audio/video/image/sticker compositing on export; no silently missing tracks.
+- [x] JVM operations tests and source CI updated to run unit tests plus lint, without APK packaging.
+- [ ] Real-device verify frame-by-frame text video export after caption start/end, multi-caption overlaps, text legibility and varied aspect ratios; source-only tests do not prove graphical output.
+- [ ] Simultaneous timeline audio playback and audio mixing export with volume, ducking and precise sync.
+- [ ] Preview/export typography and positioning parity, transitions, images, true compositor for stacked video overlays and live gesture editor.
+- [ ] Genuine waveform preview, track actions, draggable layers with snapping, automated UI/end-to-end video output tests.
+**Do not mark P2 complete** until all of the above gates and P1 device regression checks pass.
