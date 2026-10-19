@@ -126,8 +126,13 @@ object LayerEdits {
         require(layer.durationUs <= total) { "Layer does not fit the video" }
         val maximum = total - layer.durationUs
         val bounded = requestedStartUs.coerceIn(0L, maximum)
-        val snapped = draft.layers.rate.nearestFrameUs(bounded).coerceIn(0L, maximum)
-        return draft.copy(layers = draft.layers.moveLayer(id, layer.trackId, snapped))
+        val frameOnly = draft.layers.rate.nearestFrameUs(bounded).coerceIn(0L, maximum)
+        val magnetic = TimelineSnap.move(draft, id, requestedStartUs)
+        // Reject a collision instead of allowing two clips on a lane to overlap.
+        // If the magnetic candidate collides, try the independently snapped position.
+        val moved = runCatching { draft.layers.moveLayer(id, layer.trackId, magnetic) }
+            .getOrElse { draft.layers.moveLayer(id, layer.trackId, frameOnly) }
+        return draft.copy(layers = moved)
     }
 
 }
