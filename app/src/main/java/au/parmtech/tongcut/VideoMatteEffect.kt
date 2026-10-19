@@ -154,7 +154,7 @@ private class MatteShader(
                         + min(max(q.x, q.y), 0.0) - radius;
                     matte = edge(-blur * 0.5, blur * 0.5, -signedDistance);
                 } else if (uMaskMode > 2.5 && uMaskMode < 3.5) {
-                    float inside = uFrameSize.x * 0.5 -
+                    float inside = (uFrameSize.x * 0.5) * (1.0 + uMaskCenter.x) -
                         (vTexSamplingCoord.x * uFrameSize.x);
                     matte = edge(-blur * 0.5, blur * 0.5, inside);
                 } else if (uMaskMode > 3.5 && uMaskMode < 5.5) {
