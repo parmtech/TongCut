@@ -31,6 +31,19 @@ object PhotoOverlayEffects {
             object : BitmapOverlay() {
                 private var image: Bitmap? = null
 
+                override fun release() {
+                    // Media3 deletes the GL texture in super.release(), but
+                    // does not recycle the decoded source bitmap. A 1024px
+                    // masked photo can otherwise retain native memory after
+                    // repeated exports on memory-constrained devices.
+                    try {
+                        super.release()
+                    } finally {
+                        image?.let { if (!it.isRecycled) it.recycle() }
+                        image = null
+                    }
+                }
+
                 override fun getBitmap(presentationTimeUs: Long): Bitmap {
                     image?.let { return it }
                     val uri = Uri.parse(requireNotNull(layer.sourceUri))
