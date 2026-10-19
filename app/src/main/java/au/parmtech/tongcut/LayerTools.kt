@@ -166,6 +166,30 @@ internal fun LayerTools(
                                 onError(it.message ?: "Speed change failed")
                             }
                         }
+                        // Ramp points are authored at this layer's current playhead SOURCE frame.
+                        // These are real persisted edit operations with preview/export mapping.
+                        listOf(0.5f, 1f, 2f).forEach { requested ->
+                            SmallLayerButton("Ramp ${requested}×") {
+                                runCatching {
+                                    LayerEdits.setSpeedKeyAt(draft, layer.id, playheadMs, requested)
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "Speed ramp failed")
+                                }
+                            }
+                        }
+                        if (layer.speedRamp.isNotEmpty()) {
+                            SmallLayerButton("Reset ramp") {
+                                runCatching {
+                                    LayerEdits.setVisualSpeed(draft, layer.id, 1f)
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "Cannot reset ramp")
+                                }
+                            }
+                            Text(
+                                "${layer.speedRamp.size} speed points",
+                                color = Color.LightGray, fontSize = 10.sp
+                            )
+                        }
                     }
                     if (kind == LayerKind.AUDIO) {
                         SmallLayerButton(if (track.muted) "Unmute" else "Mute") {

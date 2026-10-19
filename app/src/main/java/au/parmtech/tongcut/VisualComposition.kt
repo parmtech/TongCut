@@ -52,8 +52,10 @@ object VisualComposition {
                         require(part.kind == LayerKind.VIDEO)
                         val start = part.sourceInUs / 1_000L
                         val sourceSpanMs = (
-                            part.durationUs.toDouble() * part.playbackSpeed / 1_000.0
-                        ).roundToLong().coerceAtLeast(1L)
+                            (part.sourceSpanUs ?: (
+                                part.durationUs.toDouble() * part.playbackSpeed
+                            ).roundToLong()) / 1_000L
+                        ).coerceAtLeast(1L)
                         val item = MediaItem.Builder().setUri(part.uri)
                             .setClippingConfiguration(
                                 MediaItem.ClippingConfiguration.Builder()
@@ -62,7 +64,18 @@ object VisualComposition {
                                     .build()
                             ).build()
                         val edited = EditedMediaItem.Builder(item).setRemoveAudio(true)
-                        if (part.playbackSpeed != 1f) {
+                        if (part.speedRamp.isNotEmpty()) {
+                            // The provider's input clock begins at the clipped source zero.
+                            // Motion preview reads the same source-based speed boundaries.
+                            val points = part.speedRamp
+                            edited.setSpeed(object : SpeedProvider {
+                                override fun getSpeed(timeUs: Long): Float =
+                                    SpeedRamp.speedAt(timeUs, points)
+                                override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
+                                    SpeedRamp.nextChangeAfter(timeUs, points)
+                                        ?: C.TIME_UNSET
+                            })
+                        } else if (part.playbackSpeed != 1f) {
                             val value = part.playbackSpeed
                             edited.setSpeed(object : SpeedProvider {
                                 override fun getSpeed(timeUs: Long): Float = value

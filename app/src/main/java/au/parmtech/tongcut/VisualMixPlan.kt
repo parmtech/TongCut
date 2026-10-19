@@ -17,13 +17,20 @@ sealed interface VisualPart {
         val uri: String,
         val sourceInUs: Long,
         override val durationUs: Long,
-        val playbackSpeed: Float = 1f
+        val playbackSpeed: Float = 1f,
+        val sourceSpanUs: Long? = null,
+        val speedRamp: List<SpeedKeyframe> = emptyList()
     ) : VisualPart {
         init {
             require(kind == LayerKind.VIDEO || kind == LayerKind.IMAGE)
             require(uri.isNotBlank() && durationUs >= 1_000)
             require(sourceInUs >= 0)
             require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
+            if (speedRamp.isNotEmpty()) {
+                val span = requireNotNull(sourceSpanUs)
+                SpeedRamp.validate(span, speedRamp)
+                require(durationUs == SpeedRamp.durationUs(span, speedRamp))
+            }
 
         }
     }
@@ -48,7 +55,8 @@ object VisualMixPlan {
                     if (layer.startUs > cursor) parts += VisualPart.Gap(layer.startUs - cursor)
                     parts += VisualPart.Clip(layer.id, layer.kind,
                         requireNotNull(layer.sourceUri), layer.sourceInUs,
-                        layer.durationUs, layer.playbackSpeed)
+                        layer.durationUs, layer.playbackSpeed,
+                        layer.sourceSpanUs, layer.speedRamp)
                     cursor = layer.endUs
                 }
             VisualLanePlan(track.id, parts)

@@ -103,7 +103,7 @@ object LayerEdits {
         val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
             ?: throw IllegalArgumentException("Video overlay not found")
         require(!draft.layers.tracks.first { it.id == layer.trackId }.locked)
-        val sourceSpan = layer.durationUs.toDouble() * layer.playbackSpeed
+        val sourceSpan = layer.consumedSourceUs.toDouble()
         // Keep all clip edit boundaries at Media3's millisecond resolution.
         val newDurationUs = (
             kotlin.math.round(sourceSpan / speed / 1_000.0).toLong() * 1_000L
@@ -114,6 +114,8 @@ object LayerEdits {
         val rebuilt = layer.copy(
             durationUs = newDurationUs,
             playbackSpeed = speed,
+            sourceSpanUs = null,
+            speedRamp = emptyList(),
             motion = layer.motion.map { key ->
                 key.copy(timeUs = (
                     key.timeUs.toDouble() * newDurationUs / layer.durationUs
@@ -122,6 +124,49 @@ object LayerEdits {
         )
         return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
             if (it.id == id) rebuilt else it
+        }))
+    }
+
+    /**
+     * Insert/modify the VIDEO PiP speed at the playhead.
+     * Existing source frames are retained; only their presentation timing changes.
+     */
+    fun setSpeedKeyAt(draft: EditorDraft, id: String, playheadMs: Long, speed: Float): EditorDraft {
+        require(speed.isFinite() && speed in 0.25f..4f)
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
+            ?: throw IllegalArgumentException("Missing video overlay")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked)
+        val span = ((layer.consumedSourceUs + 500L) / 1_000L) * 1_000L
+        require(span >= 2_000L)
+        val oldPoints = if (layer.speedRamp.isNotEmpty()) layer.speedRamp else
+            listOf(SpeedKeyframe(0L, layer.playbackSpeed))
+        val relativeUs = (
+            (layer.sourceAt(playheadMs.coerceAtLeast(0L) * 1_000L) -
+                layer.sourceInUs + 500L) / 1_000L
+        ).coerceIn(0L, span / 1_000L - 1L) * 1_000L
+        val points = SpeedRamp.upsert(span, oldPoints, SpeedKeyframe(relativeUs, speed))
+        val newDuration = SpeedRamp.durationUs(span, points)
+        require(layer.startUs <= clock(draft) - newDuration) {
+            "The changed speed makes the clip extend beyond your video"
+        }
+
+        fun oldSourceAt(keyTimeUs: Long): Long =
+            if (layer.speedRamp.isEmpty()) {
+                (keyTimeUs.toDouble() * layer.playbackSpeed).toLong()
+            } else SpeedRamp.sourceAtOutput(
+                keyTimeUs, requireNotNull(layer.sourceSpanUs), layer.speedRamp
+            )
+        val motion = layer.motion.map { key ->
+            val sourcePosition = oldSourceAt(key.timeUs)
+            key.copy(timeUs = SpeedRamp.outputAtSource(sourcePosition, span, points)
+                .coerceIn(0L, newDuration))
+        }.distinctBy { it.timeUs }
+        val next = layer.copy(
+            durationUs = newDuration, sourceSpanUs = span,
+            speedRamp = points, motion = motion
+        )
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) next else it
         }))
     }
 

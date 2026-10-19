@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 3)
+        put("schema", 4)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -39,6 +39,15 @@ object LayerTimelineCodec {
                     put("sourceDurationUs", item.sourceDurationUs ?: JSONObject.NULL)
                     put("text", item.text ?: JSONObject.NULL)
                     put("playbackSpeed", item.playbackSpeed.toDouble())
+                    put("sourceSpanUs", item.sourceSpanUs ?: JSONObject.NULL)
+                    put("speedRamp", JSONArray().apply {
+                        item.speedRamp.forEach { point ->
+                            put(JSONObject().apply {
+                                put("sourceOffsetUs", point.sourceOffsetUs)
+                                put("speed", point.speed.toDouble())
+                            })
+                        }
+                    })
                     put("motion", JSONArray().apply {
                         item.motion.forEach { frame ->
                             put(JSONObject().apply {
@@ -58,7 +67,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..3) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..4) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -95,6 +104,18 @@ object LayerTimelineCodec {
                     !item.isNull("sourceDurationUs")) item.getLong("sourceDurationUs") else null,
                 text = item.takeNullableString("text"),
                 playbackSpeed = item.optDouble("playbackSpeed", 1.0).toFloat(),
+                sourceSpanUs = if (item.has("sourceSpanUs") &&
+                    !item.isNull("sourceSpanUs")) item.getLong("sourceSpanUs") else null,
+                speedRamp = item.optJSONArray("speedRamp")?.let { points ->
+                    require(points.length() <= SpeedRamp.MAX_POINTS)
+                    (0 until points.length()).map { index ->
+                        val key = points.getJSONObject(index)
+                        SpeedKeyframe(
+                            sourceOffsetUs = key.getLong("sourceOffsetUs"),
+                            speed = key.getDouble("speed").toFloat()
+                        )
+                    }
+                } ?: emptyList(),
                 motion = item.optJSONArray("motion")?.let { frames ->
                     require(frames.length() <= MotionCurve.MAX_KEYFRAMES)
                     (0 until frames.length()).map { index ->

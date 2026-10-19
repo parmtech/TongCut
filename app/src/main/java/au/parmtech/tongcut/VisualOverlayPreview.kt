@@ -51,7 +51,7 @@ internal fun VisualOverlayPreview(
             }
             LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs) {
                 val fromMs = layer.sourceInUs / 1_000L
-                val toMs = (layer.sourceInUs + layer.durationUs) / 1_000L
+                val toMs = (layer.sourceInUs + layer.consumedSourceUs) / 1_000L
                 player.setMediaItem(
                     MediaItem.Builder().setUri(requireNotNull(layer.sourceUri))
                         .setClippingConfiguration(
@@ -64,13 +64,13 @@ internal fun VisualOverlayPreview(
                 player.prepare()
             }
             LaunchedEffect(player, timelineMs, playing, layer.startUs) {
+                val absoluteProjectUs = Math.multiplyExact(timelineMs, 1_000L)
                 val withinClip = (
-                    (timelineMs - layer.startUs / 1_000L).toDouble() *
-                    layer.playbackSpeed
-                ).toLong().coerceIn(
-                    0L, (layer.durationUs * layer.playbackSpeed / 1_000.0).toLong()
-                )
-                player.setPlaybackSpeed(layer.playbackSpeed)
+                    layer.sourceAt(absoluteProjectUs) - layer.sourceInUs
+                ) / 1_000L
+                val speed = if (layer.speedRamp.isEmpty()) layer.playbackSpeed
+                    else SpeedRamp.speedAt(withinClip * 1_000L, layer.speedRamp)
+                player.setPlaybackSpeed(speed)
                 if (abs(player.currentPosition - withinClip) > 170L)
                     player.seekTo(withinClip)
                 if (playing) player.play() else player.pause()
