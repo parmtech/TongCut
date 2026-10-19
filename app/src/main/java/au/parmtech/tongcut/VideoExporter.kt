@@ -20,6 +20,7 @@ import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbAdjustment
 import androidx.media3.effect.RgbFilter
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.Effects
@@ -27,6 +28,7 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.VideoEncoderSettings
 import java.io.File
 import java.io.IOException
 
@@ -46,7 +48,8 @@ class VideoExporter(private val context: Context) {
         onProgress: (Int) -> Unit,
         onSuccess: (Uri) -> Unit,
         onError: (String) -> Unit,
-        overlayLayers: LayerTimeline = LayerTimeline()
+        overlayLayers: LayerTimeline = LayerTimeline(),
+        onWarning: (String) -> Unit = {}
     ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
@@ -239,8 +242,23 @@ class VideoExporter(private val context: Context) {
             }
             val composition = compositionBuilder.build()
             transformer = Transformer.Builder(context)
-                .setVideoMimeType(MimeTypes.VIDEO_H264)
+                .setVideoMimeType(options.videoCodec.mimeType)
+                .setEncoderFactory(DefaultEncoderFactory.Builder(context)
+                    .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder()
+                        .setBitrate(options.videoBitrateBps)
+                        .build())
+                    .build())
                 .addListener(object : Transformer.Listener {
+                    override fun onFallbackApplied(
+                        composition: Composition,
+                        originalTransformationRequest: androidx.media3.transformer.TransformationRequest,
+                        fallbackTransformationRequest: androidx.media3.transformer.TransformationRequest
+                    ) {
+                        main.post {
+                            onWarning("The device could not use the requested codec or size; the renderer selected a supported fallback.")
+                        }
+                    }
+
                     override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                         stopPoll()
                         transformer = null
