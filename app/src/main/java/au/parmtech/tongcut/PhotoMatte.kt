@@ -42,7 +42,8 @@ data class PhotoEffects(
     /** Retain the exterior instead of the interior of a selected shape. */
     val invertMask: Boolean = false,
     /** Degrees around the geometric center, for adjustable ellipse/diamond masks. */
-    val maskRotationDegrees: Float = 0f
+    val maskRotationDegrees: Float = 0f,
+    val colorGrade: ColorGrade = ColorGrade()
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -188,6 +189,8 @@ object PhotoMatte {
             1f - mask else mask
         val next = (current * shaped * chroma + 0.5f).toInt().coerceIn(0, 255)
         val corrected = settings.chroma?.let { despill(pixelArgb, it) } ?: pixelArgb
-        return (corrected and 0x00FFFFFF) or (next shl 24)
+        val graded = settings.colorGrade.apply(corrected)
+        return (graded and 0x00FFFFFF) or (next shl 24)
     }
 }
+
