@@ -280,6 +280,24 @@ object LayerEdits {
         }))
     }
 
+    /**
+     * CapCut-style speed rhythm presets, represented as REAL source-clock speed keys.
+     * Uses the same deterministic Media3 SpeedProvider path as manually edited ramps.
+     * Every boundary is millisecond aligned; the whole change is one undoable edit.
+     */
+    fun applySpeedPreset(
+        draft: EditorDraft, id: String, preset: SpeedRhythmPreset
+    ): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.VIDEO }
+            ?: throw IllegalArgumentException("Select a video overlay")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the video track first"
+        }
+        val span = ((layer.consumedSourceUs + 500L) / 1_000L) * 1_000L
+        val keys = SpeedRhythmPresets.build(span, preset)
+        return applySpeedPoints(draft, layer, keys)
+    }
+
     /** A direct speed-graph edit; source-relative offset must match an existing key. */
     fun changeSpeedKey(
         draft: EditorDraft, id: String, sourceOffsetUs: Long, speed: Float

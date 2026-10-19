@@ -473,4 +473,46 @@ class LayerEditsTest {
     }
 
 
+
+    @Test fun speedRhythmPresetsHaveExactSourceBoundariesAndValidExportClock() {
+        for (preset in SpeedRhythmPreset.entries) {
+            val points=SpeedRhythmPresets.build(4_000_000L,preset)
+            assertEquals(0L,points.first().sourceOffsetUs)
+            assertTrue(points.zipWithNext().all { (a,b) ->
+                a.sourceOffsetUs < b.sourceOffsetUs &&
+                    a.sourceOffsetUs % 1_000L == 0L
+            })
+            val duration=SpeedRamp.durationUs(4_000_000L,points)
+            assertTrue(duration in 1_000_000L..16_000_000L)
+            assertEquals(4_000_000L,SpeedRamp.sourceAtOutput(
+                duration,4_000_000L,points))
+        }
+    }
+
+    @Test fun presetIsOneUndoableEditAndRestoresNormalSpeed() {
+        val original=LayerEdits.addVisual(
+            base(),0L,LayerKind.VIDEO,"content://rhythm",4_000L
+        )
+        val id=original.layers.layers.single().id
+        val changed=LayerEdits.applySpeedPreset(original,id,SpeedRhythmPreset.RUSH)
+        assertEquals(4,changed.layers.layers.single().speedRamp.size)
+        assertEquals(4_000_000L,changed.layers.layers.single().consumedSourceUs)
+        val history=EditHistory(original)
+        history.apply(changed)
+        assertEquals(original,history.undo())
+        assertEquals(changed,history.redo())
+        val reset=LayerEdits.applySpeedPreset(changed,id,SpeedRhythmPreset.RESET)
+        assertEquals(4_000_000L,reset.layers.layers.single().durationUs)
+        assertEquals(1f,reset.layers.layers.single().speedRamp.single().speed,0f)
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun speedPresetCannotEditLockedVideo() {
+        val original=LayerEdits.addVisual(
+            base(),0L,LayerKind.VIDEO,"content://rhythm",4_000L
+        )
+        val layer=original.layers.layers.single()
+        val locked=LayerEdits.setTrackLocked(original,layer.trackId,true)
+        LayerEdits.applySpeedPreset(locked,layer.id,SpeedRhythmPreset.HERO)
+    }
 }

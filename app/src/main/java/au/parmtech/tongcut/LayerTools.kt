@@ -239,6 +239,14 @@ internal fun LayerTools(
                                 onError(it.message ?: "Speed change failed")
                             }
                         }
+                        SpeedRhythmPreset.entries.forEach { preset ->
+                            SmallLayerButton(preset.label) {
+                                runCatching {
+                                    LayerEdits.applySpeedPreset(draft, layer.id, preset)
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Speed preset failed") }
+                            }
+                        }
                         // Ramp points are authored at this layer's current playhead SOURCE frame.
                         // These are real persisted edit operations with preview/export mapping.
                         listOf(0.5f, 1f, 2f).forEach { requested ->
