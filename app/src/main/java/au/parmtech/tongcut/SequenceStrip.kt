@@ -44,7 +44,8 @@ internal fun SequenceStrip(
     onAddText: () -> Unit,
     onAddAudio: () -> Unit,
     onAddVisual: (LayerKind) -> Unit,
-    onLayerSelect: (LayerKind) -> Unit,
+    selectedLayerId: String? = null,
+    onLayerSelect: (LayerKind, String) -> Unit,
     onMoveLayer: (String, Long) -> Unit,
     onTrimLayerStart: (String, Long) -> Unit,
     onTrimLayerEnd: (String, Long) -> Unit,
@@ -228,6 +229,8 @@ internal fun SequenceStrip(
                                                     color = if (kind == LayerKind.TEXT)
                                                         Color(0xFF6D469E) else Color(0xFF315A67),
                                                     shape = RoundedCornerShape(3.dp),
+                                                    border = if (selectedLayerId == layer.id)
+                                                        BorderStroke(2.dp, Color(0xFF83E5E3)) else null,
                                                     modifier = Modifier
                                                         .offset {
                                                             IntOffset(
@@ -284,7 +287,7 @@ internal fun SequenceStrip(
                                                                 }
                                                             )
                                                         }
-                                                        .clickable { onLayerSelect(kind) }
+                                                        .clickable { onLayerSelect(kind, layer.id) }
                                                 ) {
                                                     Box(contentAlignment = Alignment.CenterStart) {
                                                         // Visible left/right trim handles. Narrow
