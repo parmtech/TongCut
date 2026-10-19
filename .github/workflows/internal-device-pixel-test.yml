@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/internal-device-pixel-test.yml'
       - 'app/src/androidTest/**'
+      - 'app/src/main/**'
+      - 'app/build.gradle.kts'
   workflow_dispatch:
 
 permissions:

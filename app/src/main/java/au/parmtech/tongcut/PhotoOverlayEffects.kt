@@ -15,7 +15,8 @@ import androidx.media3.effect.TextureOverlay
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 object PhotoOverlayEffects {
-    fun overlays(context: Context, timeline: LayerTimeline): List<TextureOverlay> {
+    fun overlays(context: Context, timeline: LayerTimeline, outputWidthPx: Int): List<TextureOverlay> {
+        require(outputWidthPx > 0)
         val byTrack = timeline.tracks.associateBy { it.id }
         val photos = timeline.layers.filter {
             it.kind == LayerKind.IMAGE && byTrack[it.trackId]?.hidden != true
@@ -38,12 +39,19 @@ object PhotoOverlayEffects {
                 }
 
                 override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                    // Media3's setScale is relative to the bitmap's native pixels,
+                    // not the output frame. Use the same 42%-width, 16:9 FIT box
+                    // used by the Compose PiP preview, preserving photo aspect.
+                    val bitmap = image ?: getBitmap(presentationTimeUs)
+                    val fitted = PhotoOverlaySizing.fitScale(
+                        bitmap.width, bitmap.height, outputWidthPx
+                    )
                     val pose = MotionCurve.at(
                         layer.motion,
                         (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
                     )
                     return StaticOverlaySettings.Builder()
-                        .setScale(0.42f * pose.scale, 0.42f * pose.scale)
+                        .setScale(fitted * pose.scale, fitted * pose.scale)
                         .setBackgroundFrameAnchor(
                             (position.first + pose.x).coerceIn(-1f, 1f),
                             (position.second + pose.y).coerceIn(-1f, 1f)

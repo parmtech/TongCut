@@ -95,8 +95,10 @@ class PhotoMatteExportDeviceTest {
                 val before = countColour(250_000L)
                 val during = countColour(1_000_000L)
                 val after = countColour(2_500_000L)
-                assertTrue("Masked red photo not visible: $before $during",
-                    during.first > before.first + 30)
+                // Export uses the SAME screen-relative 42% fit box as Compose.
+                // A 128px fixture previously rendered as a tiny ~54px bitmap.
+                assertTrue("Masked red photo still too small: $before $during",
+                    during.first > before.first + 120)
                 assertTrue("Photo layer visible after its end: $after $before",
                     after.first <= before.first + 20)
                 assertTrue("Green screen leaked to export: $before $during",

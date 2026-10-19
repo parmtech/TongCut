@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.media.MediaMetadataRetriever
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -78,11 +79,40 @@ class VideoExporter(private val context: Context) {
                 )
             }
             compositionEffects += Presentation.createForShortSide(options.shortSidePixels)
-            // Post-composition effects draw photos and titles on top of opaque base video.
-            // Draw pictures first and titles last so the final text remains readable,
-            // matching the Compose preview's ordering above other media.
-            val visibleOverlays = PhotoOverlayEffects.overlays(context, overlayLayers) +
-                TimedTextEffects.overlays(overlayLayers)
+            // An overlay is sized relative to the *output frame*, not to its
+            // source bitmap pixels. Use the rotated primary-video dimensions
+            // when SOURCE canvas is selected.
+            val hasVisiblePhoto = overlayLayers.layers.any { layer ->
+                layer.kind == LayerKind.IMAGE &&
+                    overlayLayers.tracks.firstOrNull { it.id == layer.trackId }?.hidden != true
+            }
+            val photoOutputWidth = if (hasVisiblePhoto) {
+                val ratio = options.ratio.ratio ?: MediaMetadataRetriever().use { media ->
+                    media.setDataSource(context, original.first().uri)
+                    var videoWidth = media.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+                    )?.toIntOrNull() ?: throw IllegalArgumentException("Cannot read video width")
+                    var videoHeight = media.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+                    )?.toIntOrNull() ?: throw IllegalArgumentException("Cannot read video height")
+                    val degrees = media.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
+                    )?.toIntOrNull() ?: 0
+                    if (degrees == 90 || degrees == 270) {
+                        val previous = videoWidth
+                        videoWidth = videoHeight
+                        videoHeight = previous
+                    }
+                    require(videoWidth > 0 && videoHeight > 0)
+                    videoWidth.toFloat() / videoHeight.toFloat()
+                }
+                PhotoOverlaySizing.outputWidth(options.shortSidePixels, ratio)
+            } else 0
+
+            // Post-composition overlays draw photos first, titles last.
+            val visibleOverlays = (if (hasVisiblePhoto) {
+                PhotoOverlayEffects.overlays(context, overlayLayers, photoOutputWidth)
+            } else emptyList()) + TimedTextEffects.overlays(overlayLayers)
             if (visibleOverlays.isNotEmpty()) {
                 compositionEffects += OverlayEffect(visibleOverlays)
             }
