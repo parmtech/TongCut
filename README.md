@@ -1,47 +1,36 @@
 # TongCut — Android video editor
 
-**Status: 0.1.0-alpha / source project.** Offline Android editor under active development. It is **not yet** a feature-complete CapCut replacement. No CapCut proprietary code, subscriptions, effects, or trademarks are included.
+**Status:** Experimental source development on `development/capcut-parity`, not an accepted release or a complete CapCut replacement. The `main` branch retains the older 0.1.0-alpha editor. All code must be independently implemented and appropriately licensed.
 
-## Implemented in source
+## Implemented in the development branch (source; not feature-accepted)
 
-- Import multiple videos using Android's Storage Access Framework, without broad storage permissions.
-- Preview/select individual clips, trim their in/out points, reorder or remove clips.
-- Concatenate selected clips in timeline order via the official Media3 Transformer composition API.
-- Export to H.264 MP4 at 720, 1080, or 2160 px **short-side** resolutions, dependent on hardware encoder support. 2160 is not a guaranteed 4K long edge preset.
-- Export grayscale/invert/warm/cool filters and 16:9, 9:16, or square crop.
-- Optional source-audio mute; export progress, cancel, error display; save under Movies/TongCut using scoped storage.
-- Branded dark Compose UI and native TongCut vector app icon.
-- Simple pure Kotlin trim-range unit tests and CI pipeline that attempts to build a debug APK.
+- Offline source selection/import, main-sequence trim/split/reorder and preview with project persistence, undo/redo and relink support.
+- Multiple typed VIDEO, PHOTO, AUDIO and TEXT overlay tracks; timeline gestures, keyframe motion, speed editing, PiP and image/title compositing.
+- Experimental Media3 GPU video/photo masks, chroma key and despill, source-colour picker, source-aware audio speed ramps with pitch preservation, basic fades and overlay crossfades.
+- Export experiments include H.264 MP4, filters/cropping, progress/cancel, gallery saving and mixed-media composition subject to device codec support.
+- Pure JVM model/regression tests and instrumented synthetic-media tests, with past CI evidence recorded in the temporary checklist.
 
-**Limitations:** preview is the original clip, not a realtime render of filters/crop or multi-track composite. Export uses device codecs; some videos can fail based on format, HDR, audio layout, or available encoder. Export is foreground-only and ends if app exits. Multi-clip audio compatibility is device/source dependent. This source has not been compiled or device-tested in this workspace; verify GitHub Actions before calling it a working APK.
+**Important:** Presence of code, a CI pass, a synthetic emulator output or an old diagnostic APK does *not* mean P2/P3 has passed on the owner's phone. In particular, true reverse, full blend modes, general main-sequence/audio transitions, tracking, advanced audio studio, real stickers, licensed visual packs, HDR parity, broad codec coverage and AI provider features remain incomplete or unverified.
 
-**Not implemented yet:** face/body reshape, keyframes, transitions, text overlays, subtitles, audio mixing, stabilization, optical-flow slow motion, custom LUTs, professional 4K/8K guarantees, templates, cloud/AI features, or a complex multi-track timeline.
+**Source of truth:** [Temporary master development and acceptance checklist](docs/TEMP_MASTER_PROJECT_CHECKLIST.md), [P2 acceptance](docs/P2_ACCEPTANCE.md), [P3 acceptance](docs/P3_ACCEPTANCE.md), and [UI parity contract](docs/CAPCUT_UI_PARITY_CONTRACT.md). Keep the temporary checklist until all P0–P9 gates and owner approval are complete.
 
-## Build
+## Verification (no APK release)
 
-Requirements: Android SDK Platform 36, JDK 17, Gradle 8.13, Android Gradle Plugin 8.13.2. After opening this directory as a project in Android Studio and syncing, run:
+Required host: JDK 17, Android SDK Platform 36/build-tools 36.0.0, Gradle 8.13, Android Gradle Plugin 8.13.2. For normal branch checks:
 
 ```bash
-gradle --no-daemon testDebugUnitTest assembleDebug
+gradle --no-daemon testDebugUnitTest lintDebug
 ```
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk`.
+The ordinary `.github/workflows/android.yml` workflow **does not package or publish an APK**. Other historical diagnostic or instrumentation workflows must not be mistaken for a distributable product. Re-enable any final release packaging only after the applicable acceptance gates and owner signoff.
 
-GitHub Actions workflow `.github/workflows/android.yml` runs tests and builds, then attaches a **debug-signed APK** as `TongCut-debug-apk` to successful workflow runs. **Do not distribute the debug-signed APK as a production release.**
+## Main files
 
-## Architecture
+- `MainActivity.kt`, `TongCutApp.kt`, `EditorWorkspace.kt`, `MediaGallery.kt` — app shell and editing screens.
+- `EditorDraft.kt`, `ProjectLibrary.kt`, `ProjectStore.kt` — editable projects and persistence.
+- `LayerTimeline.kt`, `LayerEdits.kt`, `AdvancedClipEdits.kt` — non-destructive tracks, source clocks and history operations.
+- `VisualComposition.kt`, `VisualOverlayPreview.kt`, `VideoExporter.kt` — experimental preview/export pathways.
+- `AudioMixPlan.kt`, `AudioSpeedEdits.kt`, `VideoMatteEffect.kt`, `ChromaFrameSampler.kt` — specialist source/render tools.
+- `app/src/test` and `app/src/androidTest` — JVM and Android regression coverage.
 
-- `MainActivity.kt` — Compose UI, import/preview, timeline editing, export controls.
-- `EditorModel.kt` — clips, editing options, range validation.
-- `VideoExporter.kt` — Media3 Transformer composition/export and Android MediaStore saving.
-- `EditorModelTest.kt` — initial model tests.
-
-Source code MIT-licensed. AndroidX Media3 and other upstream libraries retain their own respective open-source licences. Keep third-party notices when redistributing.
-
-## Roadmap
-
-1. Device-tested playback/encoder compatibility and CI fixes.
-2. Persist projects and render accurate multi-clip preview.
-3. Layered text, stickers, audio tracks, and undo/redo.
-4. Transitions, timeline keyframes, audio waveforms, LUTs and better filters.
-5. Optional ML face adjustments (consent and on-device safeguards), performance profiling, accessibility, wider codec compatibility.
+**Licence:** Original TongCut source is MIT licensed. Third-party libraries retain their upstream licences; never commit copyrighted CapCut source, paid assets, keys or private test media.
