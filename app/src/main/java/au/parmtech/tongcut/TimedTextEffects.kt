@@ -1,6 +1,5 @@
 package au.parmtech.tongcut
 
-import android.graphics.Color
 import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableString
@@ -37,13 +36,15 @@ object TimedTextEffects {
                 val visible = visibleTracks[layer.trackId]?.hidden != true
                 val styled = SpannableString(layer.text.orEmpty()).apply {
                     setSpan(
-                        ForegroundColorSpan(Color.WHITE),
+                        ForegroundColorSpan(layer.captionStyle.tone.argb),
                         0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
-                    setSpan(
-                        StyleSpan(Typeface.BOLD),
-                        0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-                    )
+                    if (layer.captionStyle.bold) {
+                        setSpan(
+                            StyleSpan(Typeface.BOLD),
+                            0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
                 }
                 // Never return an empty string to TextOverlay: it can create a
                 // zero-width Bitmap and crash the GL export worker.
@@ -60,7 +61,10 @@ object TimedTextEffects {
                             .setBackgroundFrameAnchor(
                                 pose.x.coerceIn(-1f, 1f), pose.y.coerceIn(-1f, 1f)
                             )
-                            .setScale(pose.scale, pose.scale)
+                            .setScale(
+                                pose.scale * layer.captionStyle.size,
+                                pose.scale * layer.captionStyle.size
+                            )
                             .setRotationDegrees(pose.rotation)
                             .setAlphaScale(
                                 if (visible && presentationTimeUs >= layer.startUs &&
