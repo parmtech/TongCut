@@ -74,6 +74,10 @@ private class MatteShader(
                 PhotoMatte.dominantChannel(it.keyArgb)
             } ?: -1).toFloat()
         )
+        program.setFloatUniform("uExposure", settings.colorGrade.exposure)
+        program.setFloatUniform("uContrast", settings.colorGrade.contrast)
+        program.setFloatUniform("uSaturation", settings.colorGrade.saturation)
+        program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -134,6 +138,10 @@ private class MatteShader(
             uniform float uKeyFeather;
             uniform float uSpill;
             uniform float uKeyDominant;
+            uniform float uExposure;
+            uniform float uContrast;
+            uniform float uSaturation;
+            uniform float uTemperature;
             varying vec2 vTexSamplingCoord;
 
             float edge(float lo, float hi, float value) {
@@ -202,8 +210,15 @@ private class MatteShader(
                             corrected.b - max(corrected.r, corrected.g)) * uSpill;
                     }
                 }
-                gl_FragColor = vec4(corrected * keyedAlpha, keyedAlpha);
+                vec3 grade = corrected * exp2(uExposure);
+                grade = (grade - vec3(0.5)) * uContrast + vec3(0.5);
+                float luminance = dot(grade, vec3(0.2126, 0.7152, 0.0722));
+                grade = mix(vec3(luminance), grade, uSaturation);
+                grade.r += uTemperature * 0.10;
+                grade.b -= uTemperature * 0.10;
+                gl_FragColor = vec4(clamp(grade, 0.0, 1.0) * keyedAlpha, keyedAlpha);
             }
         """
     }
 }
+
