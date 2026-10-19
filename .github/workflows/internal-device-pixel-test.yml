@@ -51,12 +51,9 @@ jobs:
           profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            gradle --no-daemon --stacktrace connectedDebugAndroidTest || {
-              mkdir -p app/build
-              adb logcat -d -v threadtime > app/build/android-pixel-failure-logcat.txt || true
-              exit 1
-            }
+          # Emulator runner sends every newline as a separate command.
+          # Keep failure capture in a single shell command to retain its exit code.
+          script: "gradle --no-daemon --stacktrace connectedDebugAndroidTest || (mkdir -p app/build; adb logcat -d -v threadtime > app/build/android-pixel-failure-logcat.txt || true; exit 1)"
       - name: Upload device test results only
         if: always()
         uses: actions/upload-artifact@v4
