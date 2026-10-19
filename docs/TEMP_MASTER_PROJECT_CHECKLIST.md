@@ -150,6 +150,7 @@
 
 - [x] **P5-01** Basic grayscale/invert/warm/cool looks, cropped canvas settings and simple text/photo overlay prototype exist.
 - [ ] **P5-02** HDR/SDR colour-managed render and displays; exposure/contrast/white balance/HSL/curves.
+- [ ] **P5-02a** Feature-first source: persistent exposure, contrast, saturation and warmth controls for primary footage, with a shared SDR GL transform in editor preview and Media3 export, bounded project-schema migration, safe neutral fallback for malformed grade data, and JVM numeric/codec regression tests. HDR/SDR colour management, encoded-pixel parity and device acceptance remain open; implementation and tests on this revision have not yet been run by Gradle.
 - [ ] **P5-03** LUT import/apply with safe size bounds, presets, strength and GPU preview/export parity.
 - [ ] **P5-04** Blur/sharpen/grain/stabilisation/crop/flip and layered original visual effects with tests.
 - [ ] **P5-05** Real editable stickers, texts, font/typography, animated templates, titles and licensed resource browser.
