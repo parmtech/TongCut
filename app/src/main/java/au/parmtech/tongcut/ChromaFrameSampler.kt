@@ -55,6 +55,17 @@ internal object ChromaSampleMath {
      * Timestamp of the nearest safe millisecond inside a finite media file.
      * Metadata may be absent or invalid; do not fabricate duration in that case.
      */
+    /**
+     * Convert an editor playhead from project ms to source µs without allowing
+     * corrupt/restored state to overflow Math.multiplyExact in Compose.
+     * The timeline is non-negative; a negative stale seek safely starts at zero.
+     */
+    fun safeProjectTimeUs(playheadMs: Long): Long = when {
+        playheadMs <= 0L -> 0L
+        playheadMs > Long.MAX_VALUE / 1_000L -> Long.MAX_VALUE
+        else -> playheadMs * 1_000L
+    }
+
     fun safeSeekUs(requestedUs: Long, durationMs: Long?): Long {
         require(requestedUs >= 0L)
         if (durationMs == null || durationMs <= 0L) return requestedUs
