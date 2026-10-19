@@ -36,7 +36,7 @@ class LayerTimelineCodecTest {
         )
         val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
         val encoded = LayerTimelineCodec.encode(project)
-        assertEquals(9, encoded.getInt("schema"))
+        assertEquals(10, encoded.getInt("schema"))
         assertEquals(project, LayerTimelineCodec.decode(encoded))
         val legacy = LayerTimelineCodec.encode(timeline)
         legacy.put("schema", 7)
@@ -147,7 +147,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(9,json.getInt("schema"))
+        assertEquals(10,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
     }
 
@@ -182,11 +182,25 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(9,serialized.getInt("schema"))
+        assertEquals(10,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
         assertEquals(LayerFade(),LayerTimelineCodec.decode(serialized).layers.single().fade)
     }
 
+    @Test fun overlayColorGradeSurvivesTimelineCodecAndLegacyDefaults() {
+        val grade = ColorGrade(exposure = 0.5f, saturation = 1.5f, temperature = -0.25f)
+        val layer = timeline.layers.first { it.kind == LayerKind.VIDEO }
+            .copy(photoEffects = PhotoEffects(colorGrade = grade))
+        val encoded = LayerTimelineCodec.encode(timeline.copy(layers = listOf(layer)))
+        assertEquals(grade, LayerTimelineCodec.decode(encoded).layers.single().photoEffects.colorGrade)
+
+        val legacy = LayerTimelineCodec.encode(timeline.copy(layers = listOf(layer)))
+        legacy.put("schema", 9)
+        legacy.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx").remove("colorGrade")
+        assertEquals(ColorGrade(), LayerTimelineCodec.decode(legacy).layers.single().photoEffects.colorGrade)
+    }
+
 }
+
