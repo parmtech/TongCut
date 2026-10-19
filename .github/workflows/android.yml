@@ -24,8 +24,8 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER" || { echo "Android sdkmanager not installed"; exit 1; }
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
-      - name: Compile and run unit tests only (NO APK packaging)
-        run: gradle --no-daemon testDebugUnitTest
+      - name: Compile, unit tests and Android Lint (NO APK packaging)
+        run: gradle --no-daemon testDebugUnitTest lintDebug
 # Owner release policy: do not add assembleDebug, assembleRelease,
 # bundleRelease, upload-artifact APK steps or automated publishing until
 # full CapCut 19.8.0 parity matrix and TongCut extra feature gates pass.
