@@ -37,3 +37,21 @@ This is **P2 model + persistence foundation only**, not phase completion. Legacy
 - [ ] Preview/export typography and positioning parity, transitions, images, true compositor for stacked video overlays and live gesture editor.
 - [ ] Genuine waveform preview, track actions, draggable layers with snapping, automated UI/end-to-end video output tests.
 **Do not mark P2 complete** until all of the above gates and P1 device regression checks pass.
+
+
+## P2 increment — multiple audio layers (2026-10-19)
+
+- [x] Build deterministic audio composition schedule from timeline model with independent lanes, silence gaps, source trims, and exact microsecond placement math
+- [x] Assemble Media3 composition with separate audio-only sequences, mixer with primary video/audio and up to 8 unmuted audio lanes
+- [x] Respect per-lane mute state during export; hidden lane visibility is a UI concern, not an audio mute
+- [x] Add clock-following on-device audio preview players with seek resynchronisation; decoder timing is not guaranteed sample-accurate and needs device testing
+- [x] Add tests for overlap across lanes, gaps, timing, mute, zero-source and out-of-bounds media
+- [x] Explicitly reject unsupported visual (video/image/sticker) overlay effects rather than silently dropping them
+- [x] Avoid hard-crashing if an older project contains more audio lanes than the preview limit; surface a warning instead
+- [ ] Device verification: import music and voiceover, listen while scrubbing, check audio sync, test different sample rates, silent videos and mono/stereo files
+- [ ] Sample-level latency compensation, per-track gain and ducking; audio-processing graph remains incomplete
+- [ ] Robust export regression across device encoders, long duration, effects, source media with no audio and hardware thermal limits
+- [ ] Precise text-preview/export appearance parity and real multi-video compositing
+- [ ] Rendering pixel/audio tests and screenshot comparisons with reference editor
+
+**Status:** Audio mixing integration is an initial feature implementation with source-level tests only. P2 remains OPEN; P1 has device acceptance tasks pending. No new APK has been built or published in this increment.
