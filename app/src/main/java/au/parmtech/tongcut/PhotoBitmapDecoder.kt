@@ -3,6 +3,8 @@ package au.parmtech.tongcut
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 
 /**
@@ -28,15 +30,53 @@ internal object PhotoBitmapDecoder {
         val decoded = context.contentResolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, opts)
         } ?: throw IllegalArgumentException("Unable to decode source photo")
-        if (effects == PhotoEffects()) return decoded
+        // Camera JPEGs may store rotation in EXIF rather than in the pixels.
+        // Orient here once so *both* preview and Media3 export use the same source.
+        val orientation = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                ExifInterface(stream).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+        val matrix = Matrix()
+        val transform = when (orientation) {
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> {
+                matrix.setScale(-1f, 1f); true
+            }
+            ExifInterface.ORIENTATION_ROTATE_180 -> {
+                matrix.setRotate(180f); true
+            }
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
+                matrix.setScale(1f, -1f); true
+            }
+            ExifInterface.ORIENTATION_ROTATE_90 -> {
+                matrix.setRotate(90f); true
+            }
+            ExifInterface.ORIENTATION_ROTATE_270 -> {
+                matrix.setRotate(270f); true
+            }
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.setRotate(90f); matrix.postScale(-1f, 1f); true
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.setRotate(270f); matrix.postScale(-1f, 1f); true
+            }
+            else -> false
+        }
+        val bitmap = if (transform) {
+            Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                .also { if (it !== decoded) decoded.recycle() }
+        } else decoded
+        if (effects == PhotoEffects()) return bitmap
 
-        val width = decoded.width
-        val height = decoded.height
+        val width = bitmap.width
+        val height = bitmap.height
         require(width.toLong() * height <= MAX_SIDE.toLong() * MAX_SIDE * 4) {
             "Photo exceeds allocated bitmap safety bound"
         }
         val pixels = IntArray(width * height)
-        decoded.getPixels(pixels, 0, width, 0, 0, width, height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
         for (y in 0 until height) {
             val row = y * width
             for (x in 0 until width) {
@@ -48,7 +88,7 @@ internal object PhotoBitmapDecoder {
         }
         val masked = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         masked.setPixels(pixels, 0, width, 0, 0, width, height)
-        if (!decoded.isRecycled) decoded.recycle()
+        if (!bitmap.isRecycled) bitmap.recycle()
         return masked
     }
 }
