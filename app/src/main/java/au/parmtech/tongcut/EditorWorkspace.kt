@@ -1,6 +1,9 @@
 package au.parmtech.tongcut
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.media.MediaMetadataRetriever
 import android.provider.OpenableColumns
@@ -71,6 +74,12 @@ fun VideoEditorScreen(
     val context = LocalContext.current
     val player = remember(context) { ExoPlayer.Builder(context).build() }
     val audioMonitor = remember(context) { AudioOverlayEngine(context) }
+    val voiceoverCapture = remember(context) { VoiceoverCapture(context.applicationContext) }
+    var voiceoverStartMs by remember { mutableLongStateOf(0L) }
+    var recordingVoiceover by remember { mutableStateOf(false) }
+    DisposableEffect(voiceoverCapture) {
+        onDispose { voiceoverCapture.cancel() }
+    }
     var playing by remember { mutableStateOf(false) }
     var playMs by remember { mutableLongStateOf(0L) }
     var fullscreen by remember { mutableStateOf(false) }
@@ -201,6 +210,53 @@ fun VideoEditorScreen(
                     onInfo("Audio import failed: ${error.message}")
                 }
             }
+        }
+    }
+
+    fun startVoiceover() {
+        try {
+            val lengthMs = SequentialTimeline(currentDraft.value.clips).totalMs
+            require(playMs + 100L < lengthMs) {
+                "Place playhead at least 100ms before the end of the project"
+            }
+            require(!voiceoverCapture.isRecording) { "Microphone is already recording" }
+            player.pause()
+            playing = false
+            voiceoverCapture.start()
+            voiceoverStartMs = playMs
+            recordingVoiceover = true
+            panel = "Audio"
+            onInfo("Recording locally. Press Stop & add to create an editable audio layer.")
+        } catch (error: Exception) {
+            recordingVoiceover = false
+            onInfo("Voiceover start failed: ${error.message}")
+        }
+    }
+    val microphonePermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startVoiceover()
+        else onInfo("Microphone permission is required only to record voiceover.")
+    }
+    fun requestVoiceover() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) startVoiceover()
+        else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    fun finishVoiceover() {
+        var captured: Uri? = null
+        try {
+            val (uri, durationMs) = voiceoverCapture.finish()
+            captured = uri
+            recordingVoiceover = false
+            val latest = currentDraft.value
+            onChange(LayerEdits.addAudio(latest, voiceoverStartMs, uri.toString(), durationMs))
+            onInfo("Voiceover added as an editable audio track.")
+        } catch (error: Exception) {
+            captured?.let(voiceoverCapture::discard)
+            recordingVoiceover = false
+            onInfo("Voiceover failed: ${error.message}")
         }
     }
 
@@ -816,6 +872,22 @@ fun VideoEditorScreen(
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,
                         { onChange(active.copy(canvas = it)) }) { it.label }
                     "Audio" -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (!recordingVoiceover) {
+                                ToolPill("● Record voiceover") { requestVoiceover() }
+                            } else {
+                                ToolPill("■ Stop & add") { finishVoiceover() }
+                                ToolPill("Discard take") {
+                                    voiceoverCapture.cancel()
+                                    recordingVoiceover = false
+                                    onInfo("Voiceover discarded.")
+                                }
+                                Text("REC", color = Color(0xFFFF746D))
+                            }
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
                                 checked = active.muteOriginalAudio,
