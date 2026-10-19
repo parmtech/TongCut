@@ -268,7 +268,7 @@ internal fun LayerTools(
                                 LayerEdits.setVideoEffects(draft, layer.id, next)
                             }
                         if (kind == LayerKind.VIDEO && layer.photoEffects != PhotoEffects()) {
-                            Text("Video matte exports via GPU; preview shader parity pending",
+                            Text("Video matte uses SDR GPU preview/export; verify on your phone",
                                 color = Color(0xFFFFC987), fontSize = 10.sp)
                         }
                         val fx = layer.photoEffects

@@ -17,8 +17,8 @@ import kotlin.math.min
  * Based on the same physical-pixel mask and RGB Euclidean key math as PhotoMatte.
  * HDR is explicitly unsupported until a colour-managed HDR shader is validated.
  *
- * This path is export-only until a matching ExoPlayer GL preview is implemented:
- * the editor surfaces a preview limitation so users do not assume parity.
+ * Applied through both Media3 Transformer export and ExoPlayer preview.
+ * Alpha-to-TextureView compositing must still pass emulator/phone pixel acceptance.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class VideoMatteEffect(private val settings: PhotoEffects) : GlEffect {

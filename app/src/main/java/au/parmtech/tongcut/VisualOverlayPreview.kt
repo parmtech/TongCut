@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import android.net.Uri
 import android.view.TextureView
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.VideoSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -16,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,7 +28,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import kotlin.math.abs
 
-/** Overlay monitor with independently decoded muted videos or photo thumbnails. */
+/** Overlay monitor: muted Video PiP decoders with preview/export-shared GPU matte. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 internal fun VisualOverlayPreview(
     layer: TimelineLayer,
@@ -49,7 +53,9 @@ internal fun VisualOverlayPreview(
                 (timelineMs * 1_000L - layer.startUs).coerceIn(0L,layer.durationUs),
                 layer.durationUs
             )
-        }.then(if (layer.kind == LayerKind.VIDEO) Modifier.background(Color.Black) else Modifier),
+        }.then(if (layer.kind == LayerKind.VIDEO &&
+            layer.photoEffects == PhotoEffects()
+        ) Modifier.background(Color.Black) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         if (layer.kind == LayerKind.IMAGE) {
@@ -78,8 +84,12 @@ internal fun VisualOverlayPreview(
                 ExoPlayer.Builder(context).build().apply { volume = 0f }
             }
             var videoAspect by remember(player) { mutableFloatStateOf(16f / 9f) }
+            var videoError by remember(player) { mutableStateOf<String?>(null) }
             DisposableEffect(player) {
                 val listener = object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        videoError = "Video preview failed: ${error.message ?: "unsupported media or GPU effect"}"
+                    }
                     override fun onVideoSizeChanged(size: VideoSize) {
                         if (size.width <= 0 || size.height <= 0) return
                         val rotated = size.unappliedRotationDegrees == 90 ||
@@ -95,6 +105,14 @@ internal fun VisualOverlayPreview(
                     player.removeListener(listener)
                     player.release()
                 }
+            }
+            // The SAME per-source GPU key/mask as the exported Media3 MP4.
+            // Reconfigure only on actual effect changes; don't reset source time.
+            LaunchedEffect(player, layer.photoEffects) {
+                player.setVideoEffects(
+                    if (layer.photoEffects == PhotoEffects()) emptyList()
+                    else listOf(VideoMatteEffect(layer.photoEffects))
+                )
             }
             LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs,
                 layer.sourceSpanUs, layer.playbackSpeed, layer.speedRamp) {
@@ -134,10 +152,16 @@ internal fun VisualOverlayPreview(
                 val fittedHeight = fittedWidth / videoAspect
                 AndroidView(
                     factory = { viewContext ->
-                        TextureView(viewContext).also { player.setVideoTextureView(it) }
+                        TextureView(viewContext).also { texture ->
+                            texture.isOpaque = false
+                            player.setVideoTextureView(texture)
+                        }
                     },
                     modifier = Modifier.size(fittedWidth, fittedHeight)
                 )
+                videoError?.let { error ->
+                    Text(error, color = Color(0xFFFFC987), fontSize = 11.sp)
+                }
             }
         }
     }
