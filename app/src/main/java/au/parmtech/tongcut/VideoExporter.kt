@@ -79,8 +79,10 @@ class VideoExporter(private val context: Context) {
             }
             compositionEffects += Presentation.createForShortSide(options.shortSidePixels)
             // Post-composition effects draw photos and titles on top of opaque base video.
-            val visibleOverlays = TimedTextEffects.overlays(overlayLayers) +
-                PhotoOverlayEffects.overlays(context, overlayLayers)
+            // Draw pictures first and titles last so the final text remains readable,
+            // matching the Compose preview's ordering above other media.
+            val visibleOverlays = PhotoOverlayEffects.overlays(context, overlayLayers) +
+                TimedTextEffects.overlays(overlayLayers)
             if (visibleOverlays.isNotEmpty()) {
                 compositionEffects += OverlayEffect(visibleOverlays)
             }
