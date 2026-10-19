@@ -2,6 +2,7 @@ package au.parmtech.tongcut
 
 /**
  * Media3 video compositor paints input index 0 LAST (the front-most input).
+ * TongCut reverses tracks to register the HIGHEST track order at input 0.
  * Media3 Bitmap/Photo post-composition effects then paint ABOVE all video inputs
  * in the given list order (later photos in front). Compose children paint later
  * children in front. Use this policy for the preview to match both stages.
@@ -16,7 +17,7 @@ internal object VisualLayerOrder {
                     if (it.kind == LayerKind.IMAGE) 1 else 0
                 }.thenBy {
                     val order = byId.getValue(it.trackId).order
-                    if (it.kind == LayerKind.VIDEO) -order else order
+                    order
                 }.thenBy { it.id }
             )
     }

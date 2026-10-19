@@ -52,6 +52,8 @@ data class CompositorVideoPlan(
     companion object {
         fun from(timeline: LayerTimeline, videoDurationUs: Long): CompositorVideoPlan {
             val visual = VisualMixPlan.from(timeline, videoDurationUs)
+            // Highest track.order must be registered first because Media3
+            // draws input 0 last (on top). Preview uses the same order.
             val overlays = visual.filter { lane ->
                 lane.items.any { part ->
                     part is VisualPart.Clip && part.kind == LayerKind.VIDEO

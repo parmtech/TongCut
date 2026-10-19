@@ -87,7 +87,9 @@ object VideoCrossfadeEdits {
             )
         } else toTrack
         val slot = VisualOverlaySlots.slotFor(draft.layers, from)
-        val outgoingInFront = fromTrack.order < destinationTrack.order
+        // VideoLanePlan reverses ascending track order before Media3's
+        // reverse-index draw. The highest track order is front-most.
+        val outgoingInFront = fromTrack.order > destinationTrack.order
         val outgoing = from.copy(
             visualSlot = slot,
             fade = if (outgoingInFront) LayerFade(outUs = overlapUs) else from.fade

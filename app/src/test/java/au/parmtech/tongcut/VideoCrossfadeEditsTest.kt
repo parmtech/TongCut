@@ -28,8 +28,8 @@ class VideoCrossfadeEditsTest {
         assertNotEquals(a.trackId, b.trackId)
         assertEquals(3_500_000L, b.startUs)
         assertEquals(4_000_000L, a.endUs)
-        assertEquals(500_000L, a.fade.outUs)
-        assertEquals(LayerFade(), b.fade)
+        assertEquals(LayerFade(), a.fade)
+        assertEquals(500_000L, b.fade.inUs)
         assertEquals(VisualOverlaySlots.slotFor(changed.layers, a),
             VisualOverlaySlots.slotFor(changed.layers, b))
         assertEquals(2, changed.layers.activeAt(3_750_000L)
@@ -46,7 +46,7 @@ class VideoCrossfadeEditsTest {
         val cut = before.layers.layers.first().id
         val next = VideoCrossfadeEdits.crossfadeWithNext(before, cut, 1_000L)
         val byOrder = next.layers.tracks.associateBy { it.id }
-        val videos = next.layers.layers.sortedBy { byOrder.getValue(it.trackId).order }
+        val videos = next.layers.layers.sortedByDescending { byOrder.getValue(it.trackId).order }
         val front = videos.first()
         val back = videos.last()
         val at = 3_500_000L
@@ -57,7 +57,7 @@ class VideoCrossfadeEditsTest {
         assertEquals(1f, frontAlpha + (1f - frontAlpha) * backAlpha, 0.001f)
     }
 
-    @Test fun existingDistinctFrontToBackTracksUseIncomingFadeInstead() {
+    @Test fun existingDistinctTracksUseOutgoingFadeWhenOutgoingIsFront() {
         val timeline = LayerTimeline(
             tracks = listOf(
                 TimelineTrack("incoming", "Incoming", LayerKind.VIDEO, 0),
@@ -74,11 +74,11 @@ class VideoCrossfadeEditsTest {
         val changed = VideoCrossfadeEdits.crossfade(project, "a", "b", 500L)
         val a = changed.layers.layers.first { it.id == "a" }
         val b = changed.layers.layers.first { it.id == "b" }
-        assertEquals(LayerFade(), a.fade)
-        assertEquals(500_000L, b.fade.inUs)
+        assertEquals(500_000L, a.fade.outUs)
+        assertEquals(LayerFade(), b.fade)
         assertEquals(2_500_000L, b.startUs)
         assertEquals(2, changed.layers.tracks.size)
-        assertEquals(1f, b.fade.alphaAt(500_000L, b.durationUs), 0f)
+        assertEquals(0.5f, a.fade.alphaAt(1_750_000L, a.durationUs), 0.001f)
     }
 
     @Test fun previewDrawsMedia3RearFirstAndPostProcessPhotosLast() {
@@ -97,7 +97,7 @@ class VideoCrossfadeEditsTest {
                     sourceUri = "content://photo")
             )
         )
-        assertEquals(listOf("b", "a", "p"),
+        assertEquals(listOf("a", "b", "p"),
             VisualLayerOrder.forPreview(graph, 500_000L).map { it.id })
     }
 

@@ -22,6 +22,21 @@ class CompositorVideoPlanTest {
         assertEquals(1f,plan.alphaFor(2,4_999_999),0.0001f)
     }
 
+    @Test fun previewVideoDrawOrderMatchesMedia3CompositorInputOrder() {
+        val graph = LayerTimeline(tracks=listOf(bottom,top), layers=listOf(
+            TimelineLayer("b", "bottom", LayerKind.VIDEO, 0L, 3_000_000L,
+                sourceUri="content://red"),
+            TimelineLayer("t", "top", LayerKind.VIDEO, 0L, 3_000_000L,
+                sourceUri="content://green")
+        ))
+        val compositor = CompositorVideoPlan.from(graph, 3_000_000L)
+        val paintedTopFirst = compositor.overlayLanes.map { it.trackId }
+        val previewBackToFront = VisualLayerOrder.forPreview(graph, 1_000_000L)
+            .map { it.trackId }
+        assertEquals(paintedTopFirst, previewBackToFront.reversed())
+        assertEquals("top", previewBackToFront.last())
+    }
+
     @Test fun gapTransparencyPreventsBlackFrameObscuringBase() {
         val graph = LayerTimeline(tracks=listOf(bottom),layers=listOf(
             TimelineLayer("clip","bottom",LayerKind.VIDEO,2_000_000,1_000_000,
