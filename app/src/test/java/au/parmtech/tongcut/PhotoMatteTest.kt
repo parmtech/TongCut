@@ -44,6 +44,37 @@ class PhotoMatteTest {
     @Test(expected=IllegalArgumentException::class)
     fun invalidFeatherRejected() { PhotoEffects(feather=Float.NaN) }
 
+    @Test fun greenSpillIsRemovedWithoutDarkeningRedOrChangingAlpha() {
+        val key = PhotoChroma(spillSuppression = 1f)
+        val contaminated = 0x8896DC28.toInt()
+        val corrected = PhotoMatte.despill(contaminated, key)
+        assertEquals(0x88969628.toInt(), corrected)
+        assertEquals(contaminated,
+            PhotoMatte.despill(contaminated, key.copy(spillSuppression=0f)))
+        assertEquals(0xFFFF0000.toInt(),
+            PhotoMatte.despill(0xFFFF0000.toInt(),key))
+        val halfway = PhotoMatte.despill(contaminated,
+            key.copy(spillSuppression=0.5f))
+        assertEquals(185, (halfway ushr 8) and 255)
+        assertEquals(136, halfway ushr 24)
+    }
+
+    @Test fun neutralKeyDoesNotModifyColourAndBlueKeyTargetsBlueOnly() {
+        val neutral = PhotoChroma(keyArgb=0xFF888888.toInt(),spillSuppression=1f)
+        assertEquals(-1,PhotoMatte.dominantChannel(neutral.keyArgb))
+        assertEquals(0xFF7799BB.toInt(),
+            PhotoMatte.despill(0xFF7799BB.toInt(),neutral))
+        val blue = PhotoChroma(keyArgb=0xFF0000FF.toInt(),spillSuppression=1f)
+        assertEquals(2,PhotoMatte.dominantChannel(blue.keyArgb))
+        assertEquals(0xFF665566.toInt(),
+            PhotoMatte.despill(0xFF6655CC.toInt(),blue))
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun invalidSpillRejected() {
+        PhotoChroma(spillSuppression = Float.NaN)
+    }
+
     @Test(expected=IllegalArgumentException::class)
     fun invalidChromaRejected() { PhotoChroma(tolerance=1.2f) }
 }

@@ -15,11 +15,14 @@ enum class PhotoMask { NONE, CIRCLE, ROUNDED_RECT, LINEAR_WIPE }
 data class PhotoChroma(
     val keyArgb: Int = 0xFF00FF00.toInt(),
     val tolerance: Float = 0.18f,
-    val feather: Float = 0.12f
+    val feather: Float = 0.12f,
+    /** 0 disables despill; 1 removes key-colour channel dominance from opaque edges. */
+    val spillSuppression: Float = 0f
 ) {
     init {
         require(tolerance.isFinite() && tolerance in 0f..1f)
         require(feather.isFinite() && feather in 0f..1f)
+        require(spillSuppression.isFinite() && spillSuppression in 0f..1f)
     }
 }
 
@@ -87,6 +90,47 @@ object PhotoMatte {
         return smooth(key.tolerance, key.tolerance + key.feather, distance)
     }
 
+    /** Return dominant key-colour channel or -1 for approximately neutral keys. */
+    fun dominantChannel(keyArgb: Int): Int {
+        val r = ((keyArgb ushr 16) and 255) / 255f
+        val g = ((keyArgb ushr 8) and 255) / 255f
+        val b = (keyArgb and 255) / 255f
+        val primary = max(r, max(g, b))
+        val channel = when {
+            r >= g && r >= b -> 0
+            g >= r && g >= b -> 1
+            else -> 2
+        }
+        val other = when (channel) {
+            0 -> max(g, b)
+            1 -> max(r, b)
+            else -> max(r, g)
+        }
+        return if (primary - other >= 0.08f) channel else -1
+    }
+
+    /**
+     * Reduce edge contamination toward the larger other channel. Only a colour
+     * that is in excess of BOTH other components is suppressed; red skin and
+     * neutral highlights are not forced towards black. Alpha is unchanged.
+     */
+    fun despill(pixelArgb: Int, key: PhotoChroma): Int {
+        if (key.spillSuppression <= 0f) return pixelArgb
+        val channel = dominantChannel(key.keyArgb)
+        if (channel < 0) return pixelArgb
+        val rgb = intArrayOf(
+            (pixelArgb ushr 16) and 255,
+            (pixelArgb ushr 8) and 255,
+            pixelArgb and 255
+        )
+        val other = max(rgb[(channel + 1) % 3], rgb[(channel + 2) % 3])
+        val excess = (rgb[channel] - other).coerceAtLeast(0)
+        rgb[channel] = (rgb[channel] - excess * key.spillSuppression + 0.5f)
+            .toInt().coerceIn(0, 255)
+        return (pixelArgb and 0xFF000000.toInt()) or
+            (rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2]
+    }
+
     fun applyAlpha(pixelArgb: Int, x: Int, y: Int, width: Int, height: Int,
                    settings: PhotoEffects): Int {
         val current = pixelArgb ushr 24
@@ -94,6 +138,7 @@ object PhotoMatte {
         val mask = maskAlpha(x, y, width, height, settings.mask, settings.feather)
         val chroma = settings.chroma?.let { chromaAlpha(pixelArgb, it) } ?: 1f
         val next = (current * mask * chroma + 0.5f).toInt().coerceIn(0, 255)
-        return (pixelArgb and 0x00FFFFFF) or (next shl 24)
+        val corrected = settings.chroma?.let { despill(pixelArgb, it) } ?: pixelArgb
+        return (corrected and 0x00FFFFFF) or (next shl 24)
     }
 }

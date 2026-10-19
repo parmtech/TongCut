@@ -327,6 +327,18 @@ internal fun LayerTools(
                                 onChange(applyMatte(fx.copy(
                                     chroma=key.copy(tolerance=(key.tolerance+0.03f).coerceAtMost(1f)))))
                             }
+                            SmallLayerButton("Despill −") {
+                                onChange(applyMatte(fx.copy(
+                                    chroma=key.copy(spillSuppression=
+                                        (key.spillSuppression-0.25f).coerceAtLeast(0f)))))
+                            }
+                            Text("Despill ${(key.spillSuppression * 100).toInt()}%",
+                                color=Color.LightGray, fontSize=11.sp)
+                            SmallLayerButton("Despill +") {
+                                onChange(applyMatte(fx.copy(
+                                    chroma=key.copy(spillSuppression=
+                                        (key.spillSuppression+0.25f).coerceAtMost(1f)))))
+                            }
                         }
                     }
                     if (kind == LayerKind.VIDEO) {

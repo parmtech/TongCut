@@ -60,6 +60,12 @@ private class MatteShader(
         ))
         program.setFloatUniform("uTolerance", chroma?.tolerance ?: 0.18f)
         program.setFloatUniform("uKeyFeather", chroma?.feather ?: 0.12f)
+        program.setFloatUniform("uSpill", chroma?.spillSuppression ?: 0f)
+        program.setFloatUniform(
+            "uKeyDominant", (chroma?.let {
+                PhotoMatte.dominantChannel(it.keyArgb)
+            } ?: -1).toFloat()
+        )
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -114,6 +120,8 @@ private class MatteShader(
             uniform vec3 uKeyColor;
             uniform float uTolerance;
             uniform float uKeyFeather;
+            uniform float uSpill;
+            uniform float uKeyDominant;
             varying vec2 vTexSamplingCoord;
 
             float edge(float lo, float hi, float value) {
@@ -150,7 +158,20 @@ private class MatteShader(
                 // cyan fringe over a blue underlying video in TextureView.
                 // Premultiply the RGB by the actual matte before compositing.
                 float keyedAlpha = pixel.a * matte;
-                gl_FragColor = vec4(pixel.rgb * keyedAlpha, keyedAlpha);
+                vec3 corrected = pixel.rgb;
+                if (uUseChroma > 0.5 && uSpill > 0.0) {
+                    if (uKeyDominant > -0.5 && uKeyDominant < 0.5) {
+                        corrected.r -= max(0.0,
+                            corrected.r - max(corrected.g, corrected.b)) * uSpill;
+                    } else if (uKeyDominant >= 0.5 && uKeyDominant < 1.5) {
+                        corrected.g -= max(0.0,
+                            corrected.g - max(corrected.r, corrected.b)) * uSpill;
+                    } else if (uKeyDominant >= 1.5) {
+                        corrected.b -= max(0.0,
+                            corrected.b - max(corrected.r, corrected.g)) * uSpill;
+                    }
+                }
+                gl_FragColor = vec4(corrected * keyedAlpha, keyedAlpha);
             }
         """
     }

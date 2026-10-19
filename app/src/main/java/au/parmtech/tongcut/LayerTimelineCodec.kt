@@ -55,6 +55,7 @@ object LayerTimelineCodec {
                                 put("color", key.keyArgb)
                                 put("tolerance", key.tolerance.toDouble())
                                 put("feather", key.feather.toDouble())
+                                put("spill", key.spillSuppression.toDouble())
                             }
                         } ?: JSONObject.NULL)
                     })
@@ -138,7 +139,8 @@ object LayerTimelineCodec {
                             PhotoChroma(
                                 keyArgb = c.optInt("color",0xFF00FF00.toInt()),
                                 tolerance = c.optDouble("tolerance",0.18).toFloat(),
-                                feather = c.optDouble("feather",0.12).toFloat()
+                                feather = c.optDouble("feather",0.12).toFloat(),
+                                spillSuppression = c.optDouble("spill",0.0).toFloat()
                             )
                         }
                     )
