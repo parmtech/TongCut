@@ -103,9 +103,19 @@ class AudioOverlayEngine(private val context: Context) {
                 else SpeedRamp.speedAt(sourceOffsetUs, layer.speedRamp)
             val player = entry.player
             try {
-                player.setPlaybackSpeed(speed)
-                player.volume = tracks[layer.trackId]?.gain ?: 1f
-                if (cached == null || abs(player.currentPosition - offsetMs) > 120L) {
+                // Avoid rebuilding the audio processor on every ~90ms UI tick:
+                // speed ramps only need a new parameter at a source-clock keyframe.
+                // Repeated setPlaybackSpeed calls can cause audible clicks/glitches.
+                if (abs(player.playbackParameters.speed - speed) > 0.0001f) {
+                    player.setPlaybackSpeed(speed)
+                }
+                val targetGain = tracks[layer.trackId]?.gain ?: 1f
+                if (player.volume != targetGain) player.volume = targetGain
+                // The seek threshold is in SOURCE time. Scale it by playback
+                // speed so a 4x clip does not tolerate 4x project-time drift.
+                val allowedSourceDriftMs = (120f * speed).toLong().coerceAtLeast(30L)
+                if (cached == null ||
+                    abs(player.currentPosition - offsetMs) > allowedSourceDriftMs) {
                     player.seekTo(offsetMs)
                 }
                 if (playing) {
