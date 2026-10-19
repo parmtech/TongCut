@@ -120,4 +120,15 @@ class LayerEditsTest {
         LayerEdits.placeLayerAtFrame(second,b.id,a.startUs)
     }
 
+    @Test fun lockBlocksClipMoveButCanBeUndone() {
+        val initial = LayerEdits.addText(base(), 0, "Lock me")
+        val clip = initial.layers.layers.single()
+        val locked = LayerEdits.setTrackLocked(initial, clip.trackId, true)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.placeLayerAtFrame(locked,clip.id, 2_000_000L)
+        }
+        val restored = LayerEdits.setTrackLocked(locked,clip.trackId, false)
+        assertEquals(initial, restored)
+    }
+
 }

@@ -110,6 +110,9 @@ internal fun LayerTools(
                                 (track.gain + 0.1f).coerceAtMost(1f)))
                         }
                     }
+                    SmallLayerButton(if (track.locked) "Unlock" else "Lock") {
+                        onChange(LayerEdits.setTrackLocked(draft, track.id, !track.locked))
+                    }
                     SmallLayerButton("Delete") {
                         runCatching { LayerEdits.remove(draft, layer.id) }
                             .onSuccess(onChange).onFailure { onError(it.message ?: "Delete failed") }

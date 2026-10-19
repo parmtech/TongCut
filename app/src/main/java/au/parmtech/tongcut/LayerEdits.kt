@@ -84,6 +84,12 @@ object LayerEdits {
             if (it.id == trackId) it.copy(hidden = hidden) else it
         }))
 
+    /** Lock a lane while preserving its current edit state. Unlock remains available. */
+    fun setTrackLocked(draft: EditorDraft, trackId: String, locked: Boolean): EditorDraft {
+        require(draft.layers.tracks.any { it.id == trackId }) { "Missing track" }
+        return draft.copy(layers = draft.layers.setTrackLocked(trackId, locked))
+    }
+
     fun setTrackMuted(draft: EditorDraft, trackId: String, muted: Boolean): EditorDraft =
         draft.copy(layers = draft.layers.copy(tracks = draft.layers.tracks.map {
             if (it.id == trackId) it.copy(muted = muted) else it
