@@ -138,6 +138,7 @@
 - [x] **P4-01** P2 groundwork: multiple local independent audio lanes, track gain, timeline placement and mixed export.
 - [ ] **P4-02** Detach video audio, multitrack editing, split/trims, file/library music and editable SFX workflow.
 - [ ] **P4-03** Local voiceover capture, monitoring, waveform alignment, permission and interruption handling.
+- [ ] **P4-03a** Feature-first source (2026-10-20): local AAC voiceover recorder, runtime microphone permission and Record/Stop/Discard toolbar wired to timeline audio import. Commit [780f3394](https://github.com/manbir6-ux/TongCut/commit/780f33942501309cc40725b87073c8daa978e57b). Physical microphone, app lifecycle, pause/resume, sync and exporter acceptance remain UNVERIFIED.
 - [ ] **P4-04** Keyframed gain envelopes, fades, music ducking/side-chain and automatic loudness guard.
 - [ ] **P4-05** Time-stretch/pitch, clean voice/noise filtering, equalization and channel layout handling.
 - [ ] **P4-06** PCM-/frame-alignment tests for source sample rates, seek, offsets, gaps, drift and exported mix; low-end decoder tests.
@@ -149,7 +150,9 @@
 - [ ] **P5-03** LUT import/apply with safe size bounds, presets, strength and GPU preview/export parity.
 - [ ] **P5-04** Blur/sharpen/grain/stabilisation/crop/flip and layered original visual effects with tests.
 - [ ] **P5-05** Real editable stickers, texts, font/typography, animated templates, titles and licensed resource browser.
+- [ ] **P5-05a** Feature-first source: original TongCut caption palette, bold and size controls; project schema8, editor and Media3 styled text integrated. Current files: `CaptionStyle.kt`, `LayerTimelineCodec.kt`, `LayerTools.kt`, `TimedTextEffects.kt`, `EditorWorkspace.kt`. UI/exact preview-export typography not verified.
 - [ ] **P5-06** SRT/caption import/edit/export, multilingual subtitle timing and optional offline auto-caption UX.
+- [ ] **P5-06a** Feature-first source: strict local SRT parsing, import as persistent TEXT clips with overlapping lanes, document export and interactive editor captions panel. Source [d9d654cd](https://github.com/manbir6-ux/TongCut/commit/d9d654cd4ae81505e48c53b672742a848a0f36ae) and editor integration [40762572](https://github.com/manbir6-ux/TongCut/commit/40762572b063aab2d136107ab5030717fabf3a0d). Real-device and boundary input audit still needed.
 - [ ] **P5-07** Original/licensed templates, export visuals and screenshot/video comparisons on multiple devices.
 
 ## P6 — AI studio and APIs
@@ -185,6 +188,7 @@
 
 - [ ] **P9-01** Item-by-item owner-approved parity reference checklist verified with independently built TongCut functionality.
 - [ ] **P9-02** UI screenshot/gesture matches for Home, gallery, editor, panels, tool rails and export on actual phones; close issue #5.
+- [ ] **P9-02a** Feature-first editor workflow milestone: real selected-layer ID passed from `SequenceStrip` into `EditorWorkspace`, selected highlight, clip-specific quick edit rail, undoable Split/Trim/Duplicate/Keyframe/Mute/Delete, Back to global category toolbar, inspector shows selected clip first. Implementation [0b963ab5](https://github.com/manbir6-ux/TongCut/commit/0b963ab506eee6e5f13bbfda2fccd0a538b2480c); design contract [TONGCUT_UI_IDENTITY](TONGCUT_UI_IDENTITY.md). No claim of pixel-for-pixel CapCut imitation, no runtime acceptance yet.
 - [ ] **P9-03** All source/build/unit/Lint/instrumentation/integration/security/load tests green on final commit SHA.
 - [ ] **P9-04** All phases P0–P8 signed off, issues #1–#6 and outstanding acceptance issues closed with documented evidence.
 - [ ] **P9-05** Release signing, version/migration/upgrade test, privacy/policy/notices, crash rollback plan and owner approval.
