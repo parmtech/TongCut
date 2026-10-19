@@ -65,6 +65,35 @@ object LayerEdits {
         return updated
     }
 
+    /** Move one primary clip's embedded sound onto an editable audio lane. */
+    fun detachSourceAudio(draft: EditorDraft, clipIndex: Int): EditorDraft {
+        require(clipIndex in draft.clips.indices) { "Select a video clip first" }
+        val clip = draft.clips[clipIndex]
+        require(!clip.sourceAudioMuted) { "Audio is already detached from this clip" }
+        val timeline = SequentialTimeline(draft.clips)
+        val durationUs = Math.multiplyExact(clip.editedDurationMs, 1_000L)
+        val startUs = Math.multiplyExact(timeline.startOf(clipIndex), 1_000L)
+        val sourceInUs = Math.multiplyExact(clip.inMs, 1_000L)
+        val sourceDurationUs = Math.multiplyExact(clip.durationMs, 1_000L)
+        val (graph, trackId) = laneFor(draft.layers, LayerKind.AUDIO, startUs, startUs + durationUs)
+        val nextGraph = graph.addLayer(TimelineLayer(
+            id = UUID.randomUUID().toString(),
+            trackId = trackId,
+            kind = LayerKind.AUDIO,
+            startUs = startUs,
+            durationUs = durationUs,
+            sourceUri = clip.sourceUri,
+            sourceInUs = sourceInUs,
+            sourceDurationUs = sourceDurationUs
+        ))
+        val next = draft.copy(
+            clips = draft.clips.toMutableList().also { it[clipIndex] = clip.copy(sourceAudioMuted = true) },
+            layers = nextGraph
+        )
+        AudioMixPlan.from(next.layers, Math.multiplyExact(timeline.totalMs, 1_000L))
+        return next
+    }
+
     /** Add an independent visible clip above the primary video, preserving source media. */
     fun addVisual(
         draft: EditorDraft,
