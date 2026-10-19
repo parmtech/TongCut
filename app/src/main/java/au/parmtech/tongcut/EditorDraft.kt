@@ -41,6 +41,7 @@ data class EditorDraft(
     val clips: List<DraftClip> = emptyList(),
     val selectedIndex: Int = 0,
     val look: Look = Look.ORIGINAL,
+    val colorGrade: ColorGrade = ColorGrade(),
     val canvas: CanvasRatio = CanvasRatio.SOURCE,
     val shortSidePixels: Int = 1080,
     val muteOriginalAudio: Boolean = false,
@@ -100,7 +101,9 @@ data class EditorDraft(
                 }
             }.isSuccess
 
-    fun exportOptions() = ExportOptions(look, canvas, shortSidePixels, muteOriginalAudio)
+    fun exportOptions() = ExportOptions(
+        look, canvas, shortSidePixels, muteOriginalAudio, colorGrade
+    )
 }
 
 /** Bounded undo/redo history. The caller persists only current snapshot; not old UI states. */
@@ -148,3 +151,4 @@ class EditHistory<T>(initial: T, private val maxUndo: Int = 80) {
         return current
     }
 }
+
