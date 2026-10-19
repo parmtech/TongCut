@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import java.util.UUID
 import java.math.BigInteger
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /**
  * Non-destructive secondary track graph. The legacy main video sequence remains in
@@ -278,7 +279,7 @@ data class LayerTimeline(
         val audioPinned = layer.kind == LayerKind.AUDIO && layer.sourceSpanUs != null
         val consumedLeftUs = if (audioPinned) {
             ((leftDuration.toDouble() * layer.playbackSpeed / 1_000.0)
-                .let(kotlin.math::roundToLong) * 1_000L)
+                .roundToLong() * 1_000L)
         } else 0L
         if (audioPinned) require(
             consumedLeftUs >= 1_000L &&
@@ -326,7 +327,7 @@ data class LayerTimeline(
                     sourceSpanUs = if (it.kind == LayerKind.AUDIO &&
                         it.sourceSpanUs != null) {
                         (newDurationUs.toDouble() * it.playbackSpeed / 1_000.0)
-                            .let(kotlin.math::roundToLong) * 1_000L
+                            .roundToLong() * 1_000L
                     } else it.sourceSpanUs,
                     motion = trimmedMotion,
                     fade = LayerFade(fadeIn,fadeOut)
