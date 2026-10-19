@@ -34,10 +34,12 @@ data class ExportOptions(
     val look: Look = Look.ORIGINAL,
     val ratio: CanvasRatio = CanvasRatio.SOURCE,
     val shortSidePixels: Int = 1080,
-    val mute: Boolean = false
+    val mute: Boolean = false,
+    val colorGrade: ColorGrade = ColorGrade()
 )
 
 fun Long.asTimestamp(): String {
     val total = this.coerceAtLeast(0) / 1000
     return "%02d:%02d".format(total / 60, total % 60)
 }
+
