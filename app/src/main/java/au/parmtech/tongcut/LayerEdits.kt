@@ -167,8 +167,9 @@ object LayerEdits {
         val (withTrack, photoLaneId) = laneFor(
             movedVideo, LayerKind.IMAGE, actualCut, actualCut + freezeUs
         )
-        require(withTrack.tracks.count {
-            it.kind in setOf(LayerKind.VIDEO,LayerKind.IMAGE) && !it.hidden
+        require(withTrack.tracks.count { track ->
+            track.kind in setOf(LayerKind.VIDEO,LayerKind.IMAGE) &&
+                withTrack.layers.any { it.trackId == track.id }
         } <= VisualMixPlan.MAX_VISUAL_LANES) {
             "Freezing would exceed the three visible-overlay lane limit"
         }

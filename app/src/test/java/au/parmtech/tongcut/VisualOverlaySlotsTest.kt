@@ -66,4 +66,14 @@ class VisualOverlaySlotsTest {
         )
         VisualOverlaySlots.slotFor(tooMany,tooMany.layers.last())
     }
+    @Test fun hidingOtherVisualTrackDoesNotMoveExistingImage() {
+        val original=graph()
+        val still=original.layers.last()
+        val hiddenVideo=original.copy(tracks=original.tracks.map {
+            if (it.kind == LayerKind.VIDEO) it.copy(hidden=true) else it
+        })
+        assertEquals(1,VisualOverlaySlots.slotFor(original,still))
+        assertEquals(1,VisualOverlaySlots.slotFor(hiddenVideo,still))
+    }
+
 }

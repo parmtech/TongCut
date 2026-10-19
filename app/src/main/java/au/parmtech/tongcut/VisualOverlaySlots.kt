@@ -22,8 +22,7 @@ object VisualOverlaySlots {
         layer.visualSlot?.let { return it }
         val visualTracks = timeline.tracks
             .filter { track ->
-                (track.kind == LayerKind.VIDEO || track.kind == LayerKind.IMAGE) &&
-                    !track.hidden
+                track.kind == LayerKind.VIDEO || track.kind == LayerKind.IMAGE
             }
             .filter { track -> timeline.layers.any { it.trackId == track.id } }
             .sortedBy { it.order }
