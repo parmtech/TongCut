@@ -9,6 +9,7 @@
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/ic_tongcut"
         android:label="@string/app_name"
         android:supportsRtl="true"
@@ -22,3 +23,4 @@
         </activity>
     </application>
 </manifest>
+

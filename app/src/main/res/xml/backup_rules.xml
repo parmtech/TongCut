@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Keep private projects and media metadata out of legacy Android backups. -->
+    <exclude domain="root" path="." />
+</full-backup-content>
+

@@ -186,7 +186,7 @@
 
 - [ ] **P8-01** Full static/data-flow audit: URI permissions, intent/provider handling, corrupted input, exception cleanup and dependency/license issues.
 - [ ] **P8-02** Project and media privacy, Android backup rules, AI credentials, consent and network logging review.
-- [x] **P8-02a** Source audit (2026-10-20): Android auto-backup is disabled, cloud/device extraction rules exclude the private app-data root, and the app manifest declares no INTERNET permission; source search found no network client or credential/token persistence path in app main sources. This bounded inspection does not replace the full dependency/license, runtime data-flow, future AI consent/credential, or privacy acceptance review; P8-02 remains open.
+- [x] **P8-02a** Source audit and policy (2026-10-20): manifest sets `allowBackup=false`; Android 12+ cloud/device extraction rules and legacy Android 10–11 full-backup rules exclude private app data; app manifest declares no INTERNET permission; source search found no app-main network client or credential/token persistence path. OEM-specific device-transfer behavior remains unverified. This bounded check does not replace the full dependency/license, runtime data-flow, future AI consent/credential, or privacy acceptance review; P8-02 remains open.
 - [ ] **P8-03** Accessibility: contrast, screenreader labels, large font, 48dp touch, keyboard, insets, RTL and rotation.
 - [ ] **P8-04** Device matrix: Pixel/Samsung/low-end Android 10–latest, emulator and owner phone; audio, video, battery and thermal.
 - [ ] **P8-05** Crash/ANR/perf monitoring with opt-in only; secure offline first behavior.
