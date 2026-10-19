@@ -2,7 +2,7 @@
 
 **Status:** ACTIVE / INCOMPLETE — DO NOT DELETE YET
 **Branch:** development/capcut-parity
-**Last reconciled:** 2026-10-19
+**Last reconciled:** 2026-10-20
 **Scope:** P0 through P9; independently implemented CapCut Android 19.8.0 reference workflows plus TongCut improvements.
 **Owner rule:** Work on the earliest unresolved dependency first. Do not call a phase completed merely because a source file, button, unit test, emulator test, or APK exists.
 
@@ -137,7 +137,7 @@
 
 - [x] **P4-01** P2 groundwork: multiple local independent audio lanes, track gain, timeline placement and mixed export.
 - [ ] **P4-02** Detach video audio, multitrack editing, split/trims, file/library music and editable SFX workflow.
-- [ ] **P4-02a** Feature-first source: detach selected primary-video clip audio into a persistent, editable audio lane at the matching source trim and project time; source mute is saved, respected by preview and applied per item during export. Phone sync/export and post-detach split/reorder parity remain unverified.
+- [ ] **P4-02a** Feature-first source: detach selected primary-video clip audio into a persistent, editable audio lane at the matching source trim and project time; source mute is saved, respected by preview and applied per item during export. Added JVM regression coverage for trim/source anchoring, sequential timeline placement, immutability, and duplicate-detach rejection. Gradle verification is pending because this workstation lacks Java/Gradle/Android SDK; phone sync/export and post-detach split/reorder parity remain unverified.
 - [ ] **P4-03** Local voiceover capture, monitoring, waveform alignment, permission and interruption handling.
 - [ ] **P4-03a** Feature-first source (2026-10-20): local AAC voiceover recorder, runtime microphone permission and Record/Stop/Discard toolbar wired to timeline audio import. Commit [780f3394](https://github.com/manbir6-ux/TongCut/commit/780f33942501309cc40725b87073c8daa978e57b). Physical microphone, app lifecycle, pause/resume, sync and exporter acceptance remain UNVERIFIED.
 - [ ] **P4-04** Keyframed gain envelopes, fades, music ducking/side-chain and automatic loudness guard.
@@ -212,3 +212,4 @@
 - Long-audio waveforms estimate peaks by sampling distributed windows rather than decoding every frame.
 - A successful emulator render does not verify the owner's real Android device or production readiness.
 - Debug APKs, including any P2 TEST acceptance build, are diagnostic artifacts, not a release nor proof that P0–P9 are done.
+
