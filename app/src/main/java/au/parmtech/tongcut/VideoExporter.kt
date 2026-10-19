@@ -156,7 +156,7 @@ class VideoExporter(private val context: Context) {
                 .setEffects(Effects(emptyList(), compositionEffects))
             if (videoLanes.isNotEmpty()) {
                 compositionBuilder.setVideoCompositorSettings(
-                    VisualComposition.settings(videoLanes, overlayLayers)
+                    VisualComposition.settings(videoLanes, overlayLayers, baseVideoDurationUs)
                 )
             }
             val composition = compositionBuilder.build()

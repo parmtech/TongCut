@@ -35,27 +35,8 @@ object VisualComposition {
         0.55f to 0.55f
     )
 
-    fun exportLanes(timeline: LayerTimeline, totalUs: Long): List<VisualLanePlan> {
-        val plans = VisualMixPlan.from(timeline, totalUs)
-            .filter { lane -> lane.items.any {
-                it is VisualPart.Clip && it.kind == LayerKind.VIDEO
-            } }
-        require(plans.size <= 3)
-        plans.forEach { lane ->
-            require(lane.items.all {
-                it is VisualPart.Gap || (it is VisualPart.Clip && it.kind == LayerKind.VIDEO)
-            })
-            require(lane.items.sumOf { it.durationUs } <= totalUs)
-            lane.items.filterIsInstance<VisualPart.Clip>().forEach {
-                require(it.durationUs % 1_000L == 0L &&
-                    it.sourceInUs % 1_000L == 0L) {
-                    "Video overlays require millisecond-aligned source timestamps"
-                }
-            }
-        }
-        // Media3 draws input 0 on top. The highest-z video lane is first.
-        return plans.reversed()
-    }
+    fun exportLanes(timeline: LayerTimeline, totalUs: Long): List<VisualLanePlan> =
+        CompositorVideoPlan.from(timeline, totalUs).overlayLanes
 
     /** Audio/video media sources with a full-length black (transparent) gap tail. */
     fun sequences(plans: List<VisualLanePlan>, totalUs: Long): List<EditedMediaItemSequence> =
@@ -90,8 +71,13 @@ object VisualComposition {
      * The base video occupies input index plans.size.
      * For all other inputs, opaque video content is a 42% PiP rectangle.
      */
-    fun settings(plans: List<VisualLanePlan>, timeline: LayerTimeline): VideoCompositorSettings {
+    fun settings(
+        plans: List<VisualLanePlan>,
+        timeline: LayerTimeline,
+        videoDurationUs: Long
+    ): VideoCompositorSettings {
         require(plans.isNotEmpty())
+        val schedule = CompositorVideoPlan(videoDurationUs, plans)
         val byId = timeline.layers.associateBy { it.id }
         return object : VideoCompositorSettings {
             override fun getOutputSize(inputSizes: List<Size>): Size {
@@ -105,18 +91,8 @@ object VisualComposition {
             ): OverlaySettings {
                 if (inputId == plans.size) return base
                 if (inputId !in plans.indices) return base
-                val plan = plans[inputId]
-                var cursor = 0L
-                var active: TimelineLayer? = null
-                for (part in plan.items) {
-                    if (presentationTimeUs >= cursor &&
-                        presentationTimeUs < cursor + part.durationUs) {
-                        if (part is VisualPart.Clip) active = byId[part.layerId]
-                        break
-                    }
-                    cursor += part.durationUs
-                }
-                val layer = active
+                val layer = schedule.layerAt(inputId, presentationTimeUs)
+                    ?.let(byId::get)
                 val pose = if (layer != null) {
                     MotionCurve.at(layer.motion,
                         (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs))
@@ -130,7 +106,7 @@ object VisualComposition {
                     )
                     .setOverlayFrameAnchor(0f, 0f)
                     .setRotationDegrees(pose.rotation)
-                    .setAlphaScale(if (layer == null) 0f else pose.opacity)
+                    .setAlphaScale(schedule.alphaFor(inputId, presentationTimeUs) * pose.opacity)
                     .build()
             }
         }
