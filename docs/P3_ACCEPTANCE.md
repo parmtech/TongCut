@@ -31,3 +31,14 @@ The owner explicitly requires **both P2 and P3 complete** before a comprehensive
 [P2 acceptance](https://github.com/manbir6-ux/TongCut/issues/3) and [P3 acceptance](https://github.com/manbir6-ux/TongCut/issues/6).
 
 Source compilation passing is necessary but insufficient. Hardware validation has to compare pixels, output duration and audio sync against saved timeline state.
+
+
+## 2026-10-19 Speed increment (verified source, pending rendered output)
+- [x] VIDEO overlay constant playback speed 0.25×–4×: non-destructive timeline duration recalculation, source position mapping and trimmed source validation
+- [x] Independent visual lane plan carries speed and Media3 compositor applies constant SpeedProvider on the source
+- [x] ExoPlayer preview uses the saved speed and maps editor playhead into trimmed source position
+- [x] Speed changes preserve relative motion-keyframe positions, undo/redo and persist in schema 3; schema 1/2 loads speed 1×
+- [x] Unit tests for 2×, 0.5×, bounds, source cursor on splitting, saved draft migration
+- [x] Source verification [CI 39208642257](https://github.com/manbir6-ux/TongCut/actions/runs/39208642257) **passed** Kotlin, JVM tests and Android Lint
+- [ ] Test actual exported variable media codecs on Android for A/V sync and 0.25×–4× source speed
+- [ ] Speed **curves** and ramp UI (this increment is *constant speed only*)
