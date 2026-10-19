@@ -606,6 +606,23 @@ class LayerEditsTest {
         }
     }
 
+    @Test fun captionStyleEditsAreUndoableAndRespectTrackLock() {
+        val initial = LayerEdits.addText(base(), 0L, "Signature TongCut text")
+        val item = initial.layers.layers.single()
+        val style = CaptionStyle(CaptionTone.AQUA, size = 1.4f, bold = false)
+        val changed = LayerEdits.changeCaptionStyle(initial, item.id, style)
+        assertEquals(style, changed.layers.layers.single().captionStyle)
+        assertEquals(CaptionStyle(), initial.layers.layers.single().captionStyle)
+        val history = EditHistory(initial)
+        history.apply(changed)
+        assertEquals(initial, history.undo())
+        assertEquals(changed, history.redo())
+        val locked = LayerEdits.setTrackLocked(changed, item.trackId, true)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.changeCaptionStyle(locked, item.id, CaptionStyle())
+        }
+    }
+
     @Test fun trimmingPhotoAtStartPreservesAnimatedPoseOnSurvivingTail() {
         val initial = LayerEdits.addVisual(base(), 0L, LayerKind.IMAGE,
             "content://photo", 5_000L)
