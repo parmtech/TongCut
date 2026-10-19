@@ -92,7 +92,7 @@ object PhotoMatte {
                 smooth(-blur / 2f, blur / 2f, -outerDistance)
             }
             PhotoMask.LINEAR_WIPE -> {
-                val centre = width * 0.5f
+                val centre = width * (0.5f + centerX * 0.5f)
                 smooth(-blur / 2f, blur / 2f, centre - (x + 0.5f))
             }
             PhotoMask.ELLIPSE, PhotoMask.DIAMOND -> {
