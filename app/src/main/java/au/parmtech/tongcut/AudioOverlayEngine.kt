@@ -56,9 +56,16 @@ class AudioOverlayEngine(private val context: Context) {
                             .setEndPositionMs(endMs)
                             .build()
                     ).build()
-                player.setMediaItem(input)
-                player.prepare()
-                Entry(layer, player).also { active[layer.id] = it }
+                // A malformed URI, unsupported decoder, or Media3 preparation error
+                // must not leak the newly allocated player into the editor session.
+                try {
+                    player.setMediaItem(input)
+                    player.prepare()
+                    Entry(layer, player).also { active[layer.id] = it }
+                } catch (failure: Exception) {
+                    player.release()
+                    throw failure
+                }
             }
             val offsetMs = ((timeUs - layer.startUs) / 1_000L)
                 .coerceIn(0, (layer.durationUs / 1_000L).coerceAtLeast(0L))
