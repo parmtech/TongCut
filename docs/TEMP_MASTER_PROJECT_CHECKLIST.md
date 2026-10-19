@@ -19,7 +19,8 @@
 7. Use synthetic media in public CI. Do not upload the owner's private recordings/photos/screenshots, tokens, signing keys or credentials.
 8. Maintain backwards-compatible project schemas and undo/redo through every edit change.
 9. Use GitHub issues #1 (product parity), #2 (P1), #3 (P2), #4 (P6), #5 (UI) and #6 (P3) as supplementary evidence. This file is the cross-phase index.
-10. Owner's current instruction supersedes older notes: **prioritize full P2 verification, then a separately named P2 TEST APK for owner device acceptance.** A test APK is not proof of P2 completion. Later P3/full release remain separate gates.
+10. The P2 owner TEST APK was built and passed CI; physical phone acceptance remains open. The owner NOW requests: **finish P3 completely and verify its effects BEFORE beginning P4 audio studio**. P4 tasks remain queued, not started. A successful source build is NOT a P3 completion certificate.
+11. For P3, document implementation and verification separately: editor control + persistence + GPU export + mixed-media Android pixel test + owner hardware acceptance for each advanced effect.
 
 ## Phase completion dashboard
 
@@ -110,9 +111,11 @@
 - [ ] **P3-07** Video (not just photo) alpha masks, custom/freeform shapes, animated feather and opacity.
 - [ ] **P3-08** GPU video blend modes (multiply/screen/overlay/etc.) with exact preview and export.
 - [ ] **P3-09** Video chroma key: sampled key colour, edge refinement/spill suppression, alpha compositing and per-frame output checks.
-- [ ] **P3-10** Seamless clip-to-clip transitions/crossfades with valid overlap/duration and audio timeline policy.
+- [ ] **P3-10** General seamless transitions/crossfades with valid overlap/duration, primary footage handling and audio timeline policy; not complete.
+- [ ] **P3-10a** VIDEO PiP source-over red-to-green dissolve implementation and export pixel verification. [Commit e0d0cbb0](https://github.com/manbir6-ux/TongCut/commit/e0d0cbb0423920f955a4c9370ebcb35cd92ee710), [source CI](https://github.com/manbir6-ux/TongCut/actions/runs/39232810212) PASS; [Android synthetic MP4 test](https://github.com/manbir6-ux/TongCut/actions/runs/39232810198) PENDING at checkpoint. Mark checked only after actual sampled MP4 passes.
 - [ ] **P3-11** Object/face/camera motion tracking with confidence, editable motion keyframes and failure handling.
-- [ ] **P3-12** Multi-clip/group ripple/slip/duplicate editing, selectable easing and full gesture tests.
+- [x] **P3-12a** Immutable clip duplicate, time-safe source slip, same-lane ripple and multi-clip group-shift editing primitives with toolbar controls for duplicate/slip/ripple; preserves masks/fades/speed ramps and undo/redo. [Commit 4bd03f30](https://github.com/manbir6-ux/TongCut/commit/4bd03f3048ae789095498e5311221789d457cc8a), [source compilation/tests/Lint passed](https://github.com/manbir6-ux/TongCut/actions/runs/39232116313).
+- [ ] **P3-12b** Multi-selection/group gestures and full Android phone editing gesture acceptance; cross-kind selection and UI usability still pending.
 - [ ] **P3-13** P3 full API29–35/device/codec pixel tests, security audit, migration, cancellation, background, performance and preview/export parity.
 - [ ] **P3-14** Owner accepts P3 end-to-end. Close issue #6 only with per-effect evidence.
 
