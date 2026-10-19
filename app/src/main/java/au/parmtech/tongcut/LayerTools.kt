@@ -144,6 +144,50 @@ internal fun LayerTools(
                             motion { it.copy(opacity = (it.opacity + 0.1f).coerceAtMost(1f)) }
                         }
                     }
+                    if (kind == LayerKind.IMAGE) {
+                        val fx = layer.photoEffects
+                        SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {
+                            val modes = PhotoMask.entries
+                            val next = modes[(modes.indexOf(fx.mask) + 1) % modes.size]
+                            runCatching {
+                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(mask=next))
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Mask failed") }
+                        }
+                        SmallLayerButton("Edge −") {
+                            runCatching {
+                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                    feather=(fx.feather - 0.02f).coerceAtLeast(0f)))
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Feather failed") }
+                        }
+                        SmallLayerButton("Edge +") {
+                            runCatching {
+                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                    feather=(fx.feather + 0.02f).coerceAtMost(0.4f)))
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Feather failed") }
+                        }
+                        SmallLayerButton(if (fx.chroma == null) "Enable green key" else "Disable key") {
+                            runCatching {
+                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                    chroma=if(fx.chroma==null) PhotoChroma() else null))
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Chroma failed") }
+                        }
+                        fx.chroma?.let { key ->
+                            SmallLayerButton("Key: ${if(key.keyArgb==0xFF00FF00.toInt()) "Green" else "Blue"}") {
+                                val colour = if(key.keyArgb==0xFF00FF00.toInt())
+                                    0xFF0000FF.toInt() else 0xFF00FF00.toInt()
+                                onChange(LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                    chroma=key.copy(keyArgb=colour))))
+                            }
+                            SmallLayerButton("Tolerance −") {
+                                onChange(LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                    chroma=key.copy(tolerance=(key.tolerance-0.03f).coerceAtLeast(0f)))))
+                            }
+                            SmallLayerButton("Tolerance +") {
+                                onChange(LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                    chroma=key.copy(tolerance=(key.tolerance+0.03f).coerceAtMost(1f)))))
+                            }
+                        }
+                    }
                     if (kind == LayerKind.VIDEO) {
                         SmallLayerButton("Speed −") {
                             runCatching {

@@ -90,7 +90,8 @@ data class TimelineLayer(
     val motion: List<MotionKeyframe> = emptyList(),
     val playbackSpeed: Float = 1f,
     val sourceSpanUs: Long? = null,
-    val speedRamp: List<SpeedKeyframe> = emptyList()
+    val speedRamp: List<SpeedKeyframe> = emptyList(),
+    val photoEffects: PhotoEffects = PhotoEffects()
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -100,6 +101,9 @@ data class TimelineLayer(
         require(startUs <= Long.MAX_VALUE - durationUs)
         require(sourceInUs >= 0)
         MotionCurve.validate(motion, durationUs)
+        if (kind != LayerKind.IMAGE) require(photoEffects == PhotoEffects()) {
+            "Photo masks and chroma are supported only for image layers"
+        }
         require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
         if (kind != LayerKind.VIDEO) {
             require(playbackSpeed == 1f && sourceSpanUs == null && speedRamp.isEmpty())

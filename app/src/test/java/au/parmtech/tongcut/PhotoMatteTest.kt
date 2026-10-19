@@ -1,0 +1,49 @@
+package au.parmtech.tongcut
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class PhotoMatteTest {
+    @Test fun circularMaskIsTransparentInCornersAndOpaqueAtCentre() {
+        val solid = PhotoEffects(mask=PhotoMask.CIRCLE,feather=0.04f)
+        assertEquals(0, PhotoMatte.applyAlpha(0xFFFFFFFF.toInt(),0,0,100,100,solid) ushr 24)
+        assertEquals(255, PhotoMatte.applyAlpha(0xFFFFFFFF.toInt(),50,50,100,100,solid) ushr 24)
+    }
+
+    @Test fun circleStaysCircularForWidescreenPixels() {
+        assertTrue(PhotoMatte.maskAlpha(100,49,200,100,PhotoMask.CIRCLE,0.02f)>0.99f)
+        assertTrue(PhotoMatte.maskAlpha(0,49,200,100,PhotoMask.CIRCLE,0.02f)<0.01f)
+    }
+
+    @Test fun roundedRectAndWipeChangeAlpha() {
+        assertTrue(PhotoMatte.maskAlpha(0,0,100,100,PhotoMask.ROUNDED_RECT,0.03f)<0.1f)
+        assertTrue(PhotoMatte.maskAlpha(50,50,100,100,PhotoMask.ROUNDED_RECT,0.03f)>0.99f)
+        assertEquals(1f,PhotoMatte.maskAlpha(10,50,100,100,PhotoMask.LINEAR_WIPE,0f),0f)
+        assertEquals(0f,PhotoMatte.maskAlpha(90,50,100,100,PhotoMask.LINEAR_WIPE,0f),0f)
+    }
+
+    @Test fun greenScreenRemovesGreenButKeepsRed() {
+        val key = PhotoChroma()
+        assertEquals(0f,PhotoMatte.chromaAlpha(0xFF00FF00.toInt(),key),0f)
+        assertEquals(1f,PhotoMatte.chromaAlpha(0xFFFF0000.toInt(),key),0f)
+    }
+
+    @Test fun originalAlphaIsMultipliedRatherThanLost() {
+        val fx=PhotoEffects(chroma=PhotoChroma())
+        val redHalf=0x80FF0000.toInt()
+        assertEquals(128,PhotoMatte.applyAlpha(redHalf,10,10,20,20,fx) ushr 24)
+        val zero=PhotoMatte.applyAlpha(0x0000FF00,10,10,20,20,fx)
+        assertEquals(0,zero ushr 24)
+    }
+
+    @Test fun noOpKeepsPixelsIdentical() {
+        val pixel=0xAF573BB1.toInt()
+        assertEquals(pixel,PhotoMatte.applyAlpha(pixel,4,4,20,20,PhotoEffects()))
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun invalidFeatherRejected() { PhotoEffects(feather=Float.NaN) }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun invalidChromaRejected() { PhotoChroma(tolerance=1.2f) }
+}

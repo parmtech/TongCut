@@ -114,4 +114,45 @@ class LayerTimelineCodecTest {
         assertTrue(LayerTimelineCodec.decode(legacy).layers.all { it.playbackSpeed == 1f })
     }
 
+    @Test fun photoMaskAndChromaSurviveSchema5Save() {
+        val photo = TimelineTrack("photo5", "Photo", LayerKind.IMAGE, 7)
+        val edit = PhotoEffects(
+            mask = PhotoMask.CIRCLE,
+            feather = 0.12f,
+            chroma = PhotoChroma(
+                keyArgb = 0xFF0000FF.toInt(), tolerance = 0.25f, feather = 0.04f
+            )
+        )
+        val project = LayerTimeline(tracks = listOf(photo), layers = listOf(
+            TimelineLayer("still", photo.id, LayerKind.IMAGE, 0, 2_000_000,
+                sourceUri="content://image", photoEffects=edit)
+        ))
+        val json = LayerTimelineCodec.encode(project)
+        assertEquals(5,json.getInt("schema"))
+        assertEquals(project,LayerTimelineCodec.decode(json))
+    }
+
+    @Test fun schema4WithoutPhotoFxDefaultsToUnmodifiedPhoto() {
+        val photo = TimelineTrack("photo4", "Photo", LayerKind.IMAGE, 3)
+        val project = LayerTimeline(tracks=listOf(photo), layers=listOf(
+            TimelineLayer("image","photo4",LayerKind.IMAGE,0,500_000,sourceUri="content://pic")
+        ))
+        val raw = LayerTimelineCodec.encode(project)
+        raw.put("schema",4)
+        raw.getJSONArray("layers").getJSONObject(0).remove("photoFx")
+        val restored = LayerTimelineCodec.decode(raw)
+        assertEquals(PhotoEffects(),restored.layers.single().photoEffects)
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun rejectInvalidPhotoFeatherFromJson() {
+        val photo = TimelineTrack("photo", "Photo", LayerKind.IMAGE, 0)
+        val graph = LayerTimeline(tracks=listOf(photo), layers=listOf(
+            TimelineLayer("f","photo",LayerKind.IMAGE,0,1_000_000,sourceUri="content://i")
+        ))
+        val raw = LayerTimelineCodec.encode(graph)
+        raw.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx").put("feather",5.0)
+        LayerTimelineCodec.decode(raw)
+    }
+
 }

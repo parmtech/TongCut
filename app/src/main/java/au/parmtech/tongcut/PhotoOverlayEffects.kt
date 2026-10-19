@@ -2,7 +2,6 @@ package au.parmtech.tongcut
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.media3.common.OverlaySettings
 import androidx.media3.common.util.UnstableApi
@@ -34,21 +33,8 @@ object PhotoOverlayEffects {
                 override fun getBitmap(presentationTimeUs: Long): Bitmap {
                     image?.let { return it }
                     val uri = Uri.parse(requireNotNull(layer.sourceUri))
-                    // Decode a bounded texture; 4K phone photos must not cause OOM.
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    val metadataStream = context.contentResolver.openInputStream(uri)
-                        ?: throw IllegalArgumentException("Cannot read overlay photo")
-                    // decodeStream deliberately returns null in inJustDecodeBounds mode.
-                    metadataStream.use { BitmapFactory.decodeStream(it, null, bounds) }
-                    val largest = maxOf(bounds.outHeight, bounds.outWidth)
-                    require(largest > 0) { "Invalid image" }
-                    val scaled = BitmapFactory.Options().apply {
-                        inSampleSize = (largest / 1024).coerceAtLeast(1)
-                    }
-                    val bitmap = context.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it,null,scaled)
-                    } ?: throw IllegalArgumentException("Cannot decode overlay photo")
-                    return bitmap.also { image = it }
+                    return PhotoBitmapDecoder.decode(context, uri, layer.photoEffects)
+                        .also { image = it }
                 }
 
                 override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {

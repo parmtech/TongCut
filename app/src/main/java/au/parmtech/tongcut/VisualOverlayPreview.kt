@@ -2,6 +2,7 @@ package au.parmtech.tongcut
 
 import android.net.Uri
 import android.view.TextureView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -37,11 +42,30 @@ internal fun VisualOverlayPreview(
             scaleY = pose.scale
             rotationZ = pose.rotation
             alpha = pose.opacity
-        }.background(Color.Black),
+        }.then(if (layer.kind == LayerKind.VIDEO) Modifier.background(Color.Black) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         if (layer.kind == LayerKind.IMAGE) {
-            GalleryThumbnail(Uri.parse(requireNotNull(layer.sourceUri)),Modifier.fillMaxSize())
+            // Bitmap preview and exported Media3 BitmapOverlay consume identical matte pixels.
+            val bitmap by produceState<android.graphics.Bitmap?>(
+                initialValue = null, layer.sourceUri, layer.photoEffects
+            ) {
+                value = withContext(Dispatchers.IO) {
+                    runCatching {
+                        PhotoBitmapDecoder.decode(
+                            context, Uri.parse(requireNotNull(layer.sourceUri)), layer.photoEffects
+                        )
+                    }.getOrNull()
+                }
+            }
+            bitmap?.let { image ->
+                Image(
+                    bitmap = image.asImageBitmap(),
+                    contentDescription = "Photo with mask and chroma",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
         } else if (layer.kind == LayerKind.VIDEO) {
             val player = remember(context,layer.id,layer.sourceUri) {
                 ExoPlayer.Builder(context).build().apply { volume = 0f }

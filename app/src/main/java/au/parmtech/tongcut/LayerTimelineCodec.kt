@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 4)
+        put("schema", 5)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -40,6 +40,17 @@ object LayerTimelineCodec {
                     put("text", item.text ?: JSONObject.NULL)
                     put("playbackSpeed", item.playbackSpeed.toDouble())
                     put("sourceSpanUs", item.sourceSpanUs ?: JSONObject.NULL)
+                    put("photoFx", JSONObject().apply {
+                        put("mask", item.photoEffects.mask.name)
+                        put("feather", item.photoEffects.feather.toDouble())
+                        put("chroma", item.photoEffects.chroma?.let { key ->
+                            JSONObject().apply {
+                                put("color", key.keyArgb)
+                                put("tolerance", key.tolerance.toDouble())
+                                put("feather", key.feather.toDouble())
+                            }
+                        } ?: JSONObject.NULL)
+                    })
                     put("speedRamp", JSONArray().apply {
                         item.speedRamp.forEach { point ->
                             put(JSONObject().apply {
@@ -67,7 +78,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..4) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..5) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -103,6 +114,19 @@ object LayerTimelineCodec {
                 sourceDurationUs = if (item.has("sourceDurationUs") &&
                     !item.isNull("sourceDurationUs")) item.getLong("sourceDurationUs") else null,
                 text = item.takeNullableString("text"),
+                photoEffects = item.optJSONObject("photoFx")?.let { fx ->
+                    PhotoEffects(
+                        mask = PhotoMask.valueOf(fx.optString("mask","NONE")),
+                        feather = fx.optDouble("feather",0.04).toFloat(),
+                        chroma = fx.optJSONObject("chroma")?.let { c ->
+                            PhotoChroma(
+                                keyArgb = c.optInt("color",0xFF00FF00.toInt()),
+                                tolerance = c.optDouble("tolerance",0.18).toFloat(),
+                                feather = c.optDouble("feather",0.12).toFloat()
+                            )
+                        }
+                    )
+                } ?: PhotoEffects(),
                 playbackSpeed = item.optDouble("playbackSpeed", 1.0).toFloat(),
                 sourceSpanUs = if (item.has("sourceSpanUs") &&
                     !item.isNull("sourceSpanUs")) item.getLong("sourceSpanUs") else null,

@@ -220,4 +220,27 @@ class LayerEditsTest {
         LayerEdits.setVisualSpeed(initial,initial.layers.layers.single().id,0.25f)
     }
 
+    @Test fun photoMatteEditSupportsUndoAndLocks() {
+        val base = LayerEdits.addVisual(base(), 0, LayerKind.IMAGE, "content://photo", 3_000)
+        val photo = base.layers.layers.single()
+        val changed = LayerEdits.setPhotoEffects(base,photo.id,PhotoEffects(
+            PhotoMask.CIRCLE,0.1f,PhotoChroma()))
+        assertEquals(PhotoEffects(),base.layers.layers.single().photoEffects)
+        assertEquals(PhotoMask.CIRCLE,changed.layers.layers.single().photoEffects.mask)
+        val history = EditHistory(base)
+        history.apply(changed)
+        assertEquals(base,history.undo())
+        val locked = LayerEdits.setTrackLocked(changed,photo.trackId,true)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.setPhotoEffects(locked,photo.id,PhotoEffects(PhotoMask.LINEAR_WIPE))
+        }
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun videoCannotUsePhotoMatteOperation() {
+        val draft = LayerEdits.addVisual(base(),0,LayerKind.VIDEO,"content://movie",2_000)
+        LayerEdits.setPhotoEffects(draft,draft.layers.layers.single().id,
+            PhotoEffects(PhotoMask.CIRCLE))
+    }
+
 }

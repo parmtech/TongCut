@@ -142,4 +142,9 @@ class LayerTimelineTest {
         )
     }
 
+    @Test(expected=IllegalArgumentException::class)
+    fun photoMatteSettingsCannotAttachToAudioOrVideo() {
+        videoClip().copy(photoEffects=PhotoEffects(PhotoMask.CIRCLE))
+    }
+
 }

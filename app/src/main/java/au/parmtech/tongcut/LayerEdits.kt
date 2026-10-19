@@ -170,6 +170,18 @@ object LayerEdits {
         }))
     }
 
+    /** Change the persisted photograph alpha matte; both preview and export share the renderer. */
+    fun setPhotoEffects(draft: EditorDraft, id: String, effects: PhotoEffects): EditorDraft {
+        val photo = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.IMAGE }
+            ?: throw IllegalArgumentException("Photo layer not found")
+        require(!draft.layers.tracks.first { it.id == photo.trackId }.locked) {
+            "Unlock the photo track first"
+        }
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(photoEffects = effects) else it
+        }))
+    }
+
     fun changeText(draft: EditorDraft, id: String, text: String): EditorDraft {
         val clean = text.trim().take(300)
         require(clean.isNotEmpty()) { "Caption cannot be blank" }
