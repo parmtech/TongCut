@@ -208,7 +208,10 @@ fun VideoEditorScreen(
             }
             Spacer(Modifier.width(8.dp))
             Button(
-                onClick = { exportDialog = true },
+                onClick = {
+                    if (active.canExportWithLegacyRenderer) exportDialog = true
+                    else onUnavailable("Layered preview/export compositor")
+                },
                 enabled = active.clips.isNotEmpty() && !processing,
                 colors = ButtonDefaults.buttonColors(containerColor = ProCyan),
                 shape = RoundedCornerShape(11.dp),
@@ -467,7 +470,7 @@ fun VideoEditorScreen(
             },
             confirmButton = {
                 if (!processing) Button(
-                    enabled = active.clips.isNotEmpty(),
+                    enabled = active.clips.isNotEmpty() && active.canExportWithLegacyRenderer,
                     onClick = {
                         val inputs = runCatching {
                             active.clips.map {

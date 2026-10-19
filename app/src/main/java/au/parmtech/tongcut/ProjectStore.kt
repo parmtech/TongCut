@@ -31,7 +31,8 @@ class ProjectStore(context: Context, projectId: String? = null) {
             !File(file.baseFile.path + ".bak").exists()) return null
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
-        require(root.optInt("schema", -1) == 1) { "Unsupported project schema" }
+        val schema = root.optInt("schema", -1)
+        require(schema == 1 || schema == 2) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -53,20 +54,24 @@ class ProjectStore(context: Context, projectId: String? = null) {
             shortSidePixels = root.optInt("shortSide", 1080).takeIf {
                 it in listOf(720, 1080, 2160)
             } ?: 1080,
-            muteOriginalAudio = root.optBoolean("mute", false)
+            muteOriginalAudio = root.optBoolean("mute", false),
+            layers = if (schema >= 2) {
+                LayerTimelineCodec.decode(root.getJSONObject("layerTimeline"))
+            } else LayerTimeline()
         ).normalized()
     }
 
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 1)
+            put("schema", 2)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
             put("canvas", project.canvas.name)
             put("shortSide", project.shortSidePixels)
             put("mute", project.muteOriginalAudio)
+            put("layerTimeline", LayerTimelineCodec.encode(project.layers))
             put("clips", JSONArray().apply {
                 project.clips.forEach { clip ->
                     put(JSONObject().apply {

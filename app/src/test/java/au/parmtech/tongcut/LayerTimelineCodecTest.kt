@@ -1,0 +1,51 @@
+package au.parmtech.tongcut
+
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+
+class LayerTimelineCodecTest {
+    private val timeline = LayerTimeline(
+        rate = TimelineRate(30_000, 1001),
+        tracks = listOf(
+            TimelineTrack("video", "V2", LayerKind.VIDEO, 0),
+            TimelineTrack("text", "Captions", LayerKind.TEXT, 1, hidden = true)
+        ),
+        layers = listOf(
+            TimelineLayer(
+                "v1", "video", LayerKind.VIDEO, 0, 4_000_000,
+                sourceUri = "content://footage", sourceInUs = 1_000_000,
+                sourceDurationUs = 10_000_000
+            ),
+            TimelineLayer("t1", "text", LayerKind.TEXT, 1_000_000, 1_500_000, text="Hello, world")
+        )
+    )
+
+    @Test fun fullLayerRoundtripIncludingNulls() {
+        val result = LayerTimelineCodec.decode(LayerTimelineCodec.encode(timeline))
+        assertEquals(timeline, result)
+        assertEquals(2, result.layers.size)
+        assertEquals("Hello, world", result.layers.single { it.kind == LayerKind.TEXT }.text)
+        assertFalse(result.activeAt(2_000_000).any { it.kind == LayerKind.TEXT })
+    }
+
+    @Test fun emptyLayerTimelineRoundtrip() {
+        val result = LayerTimelineCodec.decode(LayerTimelineCodec.encode(LayerTimeline()))
+        assertEquals(LayerTimeline(), result)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsDuplicateLayerIds() {
+        val doc = LayerTimelineCodec.encode(timeline)
+        val arr = doc.getJSONArray("layers")
+        arr.put(JSONObject(arr.getJSONObject(0).toString()).put("trackId", "video"))
+        LayerTimelineCodec.decode(doc)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsMissingTrack() {
+        val obj = LayerTimelineCodec.encode(timeline)
+        obj.getJSONArray("layers").getJSONObject(0).put("trackId","missing")
+        LayerTimelineCodec.decode(obj)
+    }
+}

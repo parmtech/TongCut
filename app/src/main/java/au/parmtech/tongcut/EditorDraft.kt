@@ -42,7 +42,9 @@ data class EditorDraft(
     val look: Look = Look.ORIGINAL,
     val canvas: CanvasRatio = CanvasRatio.SOURCE,
     val shortSidePixels: Int = 1080,
-    val muteOriginalAudio: Boolean = false
+    val muteOriginalAudio: Boolean = false,
+    // Secondary audio/video/text/image lanes; legacy primary clips stay unchanged.
+    val layers: LayerTimeline = LayerTimeline()
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
@@ -78,6 +80,9 @@ data class EditorDraft(
         items.add(selectedIndex, halves.first)
         return copy(clips = items)
     }
+
+    /** Prevent silent omission of layered content by the older sequential renderer. */
+    val canExportWithLegacyRenderer: Boolean get() = !layers.hasUnrenderedLayers
 
     fun exportOptions() = ExportOptions(look, canvas, shortSidePixels, muteOriginalAudio)
 }
