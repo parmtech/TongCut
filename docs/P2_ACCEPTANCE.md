@@ -1,5 +1,13 @@
 # Phase 2 end-to-end acceptance — 2026-10-19
 
+## Current October 19 checkpoint (later milestones supersede historical descriptions below)
+
+- Working priority ledger: [TEMP_MASTER_PROJECT_CHECKLIST.md](TEMP_MASTER_PROJECT_CHECKLIST.md).
+- Synthetic API35 emulator encoded MP4 tests passed **11/11** on a96ae48c, including simultaneous dual VIDEO PiP, mixed video/photo/text/two audio frequencies, silent source with imported audio, portrait picture-in-picture, 2×/ramped speed and freeze. [Evidence](https://github.com/manbir6-ux/TongCut/actions/runs/39228992713).
+- Source/JVM/Lint passed at 8db31fb1 after photo bitmap cleanup: [run](https://github.com/manbir6-ux/TongCut/actions/runs/39229357315). Later audio recovery commit 837bb9b5 is being verified.
+- **Historical notes below saying VIDEO PiP was export-blocked, there was only a 90-second waveform, or owner builds are forbidden are superseded.** Corrected GPU input order enables experimental PiP export; long waveforms use bounded distributed sampling; isolated P2 owner TEST APK is now requested after CI.
+- **NOT COMPLETE:** Missing owner's physical Android device acceptance, source/preview vs rendered typography and transform parity, audio latency/codec matrix, permission revoke, background/force-stop recovery, low-end/thermal/accessibility and P1 sign-off. Keep Phase 2 OPEN. Test APK is not proof of phase completion.
+
 **Current status: SOURCE IMPLEMENTED, DEVICE ACCEPTANCE PENDING. NOT COMPLETE.**
 Work branch: `development/capcut-parity`. Latest source verification: [CI 39201885976](https://github.com/manbir6-ux/TongCut/actions/runs/39201885976) — **passed**. This is not a production release.
 

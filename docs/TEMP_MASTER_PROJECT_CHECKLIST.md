@@ -74,7 +74,10 @@
 - [x] **P2-09** Shared stable screen slots between Compose preview / PiP video / photo effects and preserved freeze photo slot in project schema.
 - [x] **P2-10** Overlay-media relink, source trim preservation, codec errors surfaced rather than dropping overlays.
 - [x] **P2-11** Baseline Android API 35 synthetic PiP encoded-pixel tests have passed, including 2× speed and freeze at earlier revisions.
-- [x] **P2-12** Synthetic *combined* export video/photo/caption/two separate 44.1/48 kHz audio track test added to CI; most recent pre-fix device run passed. Evidence: https://github.com/manbir6-ux/TongCut/actions/runs/39226856013
+- [x] **P2-12** Android API35 synthetic *combined* export video/photo/caption/two 44.1/48 kHz audio tracks tested and passed: https://github.com/manbir6-ux/TongCut/actions/runs/39226856013
+- [x] **P2-12a** Simultaneous dual VIDEO PiP + video-only base mixed with external audio added and **11/11 synthetic emulator tests passed** on source a96ae48c: https://github.com/manbir6-ux/TongCut/actions/runs/39228992713
+- [x] **P2-12b** Per-export photo bitmap cleanup on Media3 GL release implemented in 8db31fb1; source CI passed: https://github.com/manbir6-ux/TongCut/actions/runs/39229357315
+- [ ] **P2-12c** Audio-preview codec failure quarantine and retry-on-relink implemented in 837bb9b5; full same-head source + emulator result and real-device failure recovery still pending.
 - [x] **P2-13** Audio preview player resource-release path hardened on prepare exceptions; source CI passed. Evidence: https://github.com/manbir6-ux/TongCut/actions/runs/39227459234
 
 ### P2 acceptance — DO NOT CLOSE UNTIL ALL CHECKED
@@ -174,7 +177,10 @@
 
 - Latest source verification at commit 266d4e43: https://github.com/manbir6-ux/TongCut/actions/runs/39227459234 — PASS.
 - Previous latest combined emulator verified revision 9d4dbaa0: https://github.com/manbir6-ux/TongCut/actions/runs/39226856013 — PASS.
-- Same-HEAD 266d4e43 emulator: https://github.com/manbir6-ux/TongCut/actions/runs/39227459187 — in progress when this file was drafted; update after completion.
+- Same-HEAD 266d4e43 emulator: https://github.com/manbir6-ux/TongCut/actions/runs/39227459187 — PASS.
+- Dual PiP + silent-base-audio synthetic emulator (11 tests): https://github.com/manbir6-ux/TongCut/actions/runs/39228992713 — PASS.
+- Photo memory release 8db31fb1 source: https://github.com/manbir6-ux/TongCut/actions/runs/39229357315 — PASS.
+- Latest source 837bb9b5: https://github.com/manbir6-ux/TongCut/actions/runs/39230007295 — pending when this checkpoint was drafted; emulator https://github.com/manbir6-ux/TongCut/actions/runs/39230007112 — pending.
 - A prior emulator failure at e99b18c7 was caused by a synthetic PNG fixture size gate and fixed in subsequent revision, not evidence of full runtime parity.
 - Audio preview follows global playhead using separate ExoPlayers; it is NOT sample-accurate. Export uses Media3 and millisecond-aligned clipping.
 - Long-audio waveforms estimate peaks by sampling distributed windows rather than decoding every frame.
