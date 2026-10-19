@@ -6,8 +6,9 @@ import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * P3 photo matte settings are persisted on IMAGE layers. A photo effect is deliberately
- * not applied to VIDEO layers until a frame-level GPU processor has been tested.
+ * P3 matte settings are persisted for IMAGE and VIDEO overlays. Android bitmap
+ * photo preview uses the same alpha model; VIDEO GPU export needs separate pixel
+ * and real-time preview validation before it can be called fully accepted.
  */
 enum class PhotoMask { NONE, CIRCLE, ROUNDED_RECT, LINEAR_WIPE }
 

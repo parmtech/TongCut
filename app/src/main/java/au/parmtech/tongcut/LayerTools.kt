@@ -227,30 +227,40 @@ internal fun LayerTools(
                             motion { it.copy(opacity = (it.opacity + 0.1f).coerceAtMost(1f)) }
                         }
                     }
-                    if (kind == LayerKind.IMAGE) {
+                    if (kind == LayerKind.IMAGE || kind == LayerKind.VIDEO) {
+                        fun applyMatte(next: PhotoEffects): EditorDraft =
+                            if (kind == LayerKind.IMAGE) {
+                                LayerEdits.setPhotoEffects(draft, layer.id, next)
+                            } else {
+                                LayerEdits.setVideoEffects(draft, layer.id, next)
+                            }
+                        if (kind == LayerKind.VIDEO && layer.photoEffects != PhotoEffects()) {
+                            Text("Video matte exports via GPU; preview shader parity pending",
+                                color = Color(0xFFFFC987), fontSize = 10.sp)
+                        }
                         val fx = layer.photoEffects
                         SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {
                             val modes = PhotoMask.entries
                             val next = modes[(modes.indexOf(fx.mask) + 1) % modes.size]
                             runCatching {
-                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(mask=next))
+                                applyMatte(fx.copy(mask=next))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Mask failed") }
                         }
                         SmallLayerButton("Edge −") {
                             runCatching {
-                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                applyMatte(fx.copy(
                                     feather=(fx.feather - 0.02f).coerceAtLeast(0f)))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Feather failed") }
                         }
                         SmallLayerButton("Edge +") {
                             runCatching {
-                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                applyMatte(fx.copy(
                                     feather=(fx.feather + 0.02f).coerceAtMost(0.4f)))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Feather failed") }
                         }
                         SmallLayerButton(if (fx.chroma == null) "Enable green key" else "Disable key") {
                             runCatching {
-                                LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                applyMatte(fx.copy(
                                     chroma=if(fx.chroma==null) PhotoChroma() else null))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Chroma failed") }
                         }
@@ -258,15 +268,15 @@ internal fun LayerTools(
                             SmallLayerButton("Key: ${if(key.keyArgb==0xFF00FF00.toInt()) "Green" else "Blue"}") {
                                 val colour = if(key.keyArgb==0xFF00FF00.toInt())
                                     0xFF0000FF.toInt() else 0xFF00FF00.toInt()
-                                onChange(LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                onChange(applyMatte(fx.copy(
                                     chroma=key.copy(keyArgb=colour))))
                             }
                             SmallLayerButton("Tolerance −") {
-                                onChange(LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                onChange(applyMatte(fx.copy(
                                     chroma=key.copy(tolerance=(key.tolerance-0.03f).coerceAtLeast(0f)))))
                             }
                             SmallLayerButton("Tolerance +") {
-                                onChange(LayerEdits.setPhotoEffects(draft,layer.id,fx.copy(
+                                onChange(applyMatte(fx.copy(
                                     chroma=key.copy(tolerance=(key.tolerance+0.03f).coerceAtMost(1f)))))
                             }
                         }

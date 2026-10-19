@@ -11,6 +11,7 @@ import kotlin.math.roundToLong
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.Effects
 
 /**
  * Frame-order-aware Media3 compositor for VIDEO PiP.
@@ -35,7 +36,9 @@ object VisualComposition {
         CompositorVideoPlan.from(timeline, totalUs).overlayLanes
 
     /** Audio/video media sources with a full-length black (transparent) gap tail. */
-    fun sequences(plans: List<VisualLanePlan>, totalUs: Long): List<EditedMediaItemSequence> =
+    fun sequences(
+        plans: List<VisualLanePlan>, totalUs: Long, timeline: LayerTimeline
+    ): List<EditedMediaItemSequence> =
         plans.map { lane ->
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
             var duration = 0L
@@ -58,6 +61,17 @@ object VisualComposition {
                                     .build()
                             ).build()
                         val edited = EditedMediaItem.Builder(item).setRemoveAudio(true)
+                        val effects = timeline.layers.firstOrNull {
+                            it.id == part.layerId
+                        }?.photoEffects ?: PhotoEffects()
+                        if (effects != PhotoEffects()) {
+                            // Each source input has its own GL matte before layering.
+                            // Unsupported HDR fails explicitly; never drop the authored matte.
+                            edited.setEffects(Effects(
+                                emptyList(),
+                                listOf(VideoMatteEffect(effects))
+                            ))
+                        }
                         if (part.speedRamp.isNotEmpty()) {
                             // The provider's input clock begins at the clipped source zero.
                             // Motion preview reads the same source-based speed boundaries.

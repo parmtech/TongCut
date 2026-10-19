@@ -143,7 +143,7 @@ class VideoExporter(private val context: Context) {
             val allSequences = mutableListOf<EditedMediaItemSequence>()
             // Media3 composites in reverse sequence order, so PiP video lanes MUST
             // be registered before the fully opaque main video, then audio-only lanes.
-            allSequences.addAll(VisualComposition.sequences(videoLanes, baseVideoDurationUs))
+            allSequences.addAll(VisualComposition.sequences(videoLanes, baseVideoDurationUs, overlayLayers))
             allSequences += sequence
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))

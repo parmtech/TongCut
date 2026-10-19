@@ -112,8 +112,10 @@ data class TimelineLayer(
         if (kind == LayerKind.AUDIO) require(fade == LayerFade()) {
             "Audio fading requires a separate sound envelope"
         } else fade.validate(durationUs)
-        if (kind != LayerKind.IMAGE) require(photoEffects == PhotoEffects()) {
-            "Photo masks and chroma are supported only for image layers"
+        if (kind != LayerKind.IMAGE && kind != LayerKind.VIDEO) {
+            require(photoEffects == PhotoEffects()) {
+                "Visual masks and chroma apply only to video/photo overlays"
+            }
         }
         require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
         if (kind != LayerKind.VIDEO) {

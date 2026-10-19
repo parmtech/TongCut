@@ -382,6 +382,23 @@ object LayerEdits {
     }
 
     /**
+     * P3 video-only GPU matte, sharing the validated PhotoEffects model and
+     * serialized "photoFx" key for backward-compatible project migration.
+     * Preview warns until the real-time video shader is acceptance-tested.
+     */
+    fun setVideoEffects(draft: EditorDraft, id: String, effects: PhotoEffects): EditorDraft {
+        val video = draft.layers.layers.firstOrNull {
+            it.id == id && it.kind == LayerKind.VIDEO
+        } ?: throw IllegalArgumentException("Video overlay not found")
+        require(!draft.layers.tracks.first { it.id == video.trackId }.locked) {
+            "Unlock the video track before changing its matte"
+        }
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(photoEffects = effects) else it
+        }))
+    }
+
+    /**
      * Relink an overlay to replacement media WITHOUT resetting trims, speed
      * ramps, motion, fade or photomatte. Reject shorter sources rather than
      * silently shortening a clip and losing authored edits.
