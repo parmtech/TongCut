@@ -77,12 +77,12 @@
 - [x] **P2-12** Android API35 synthetic *combined* export video/photo/caption/two 44.1/48 kHz audio tracks tested and passed: https://github.com/manbir6-ux/TongCut/actions/runs/39226856013
 - [x] **P2-12a** Simultaneous dual VIDEO PiP + video-only base mixed with external audio added and **11/11 synthetic emulator tests passed** on source a96ae48c: https://github.com/manbir6-ux/TongCut/actions/runs/39228992713
 - [x] **P2-12b** Per-export photo bitmap cleanup on Media3 GL release implemented in 8db31fb1; source CI passed: https://github.com/manbir6-ux/TongCut/actions/runs/39229357315
-- [ ] **P2-12c** Audio-preview codec failure quarantine and retry-on-relink implemented in 837bb9b5; full same-head source + emulator result and real-device failure recovery still pending.
+- [x] **P2-12c** Audio-preview codec failure quarantine and retry-on-relink implemented in 837bb9b5; source [SUCCESS](https://github.com/manbir6-ux/TongCut/actions/runs/39230007295), emulator [SUCCESS](https://github.com/manbir6-ux/TongCut/actions/runs/39230007112). Real-device failure recovery still requires P2-20.
 - [x] **P2-13** Audio preview player resource-release path hardened on prepare exceptions; source CI passed. Evidence: https://github.com/manbir6-ux/TongCut/actions/runs/39227459234
 
 ### P2 acceptance — DO NOT CLOSE UNTIL ALL CHECKED
 
-- [ ] **P2-14** Latest HEAD full Kotlin build/JVM/unit/Lint success *and* same-HEAD Android instrumentation pass (including combined MP4 and recovery); record exact SHA, cases and run IDs.
+- [x] **P2-14** P2 APK source at 536b6e49 (same Kotlin code as 837bb9b5) passes 184/184 JVM tests, Android Lint 0 errors / 22 warnings and assembly [QA run](https://github.com/manbir6-ux/TongCut/actions/runs/39230378258); latest code-specific 837bb9b5 passed [source checks](https://github.com/manbir6-ux/TongCut/actions/runs/39230007295) and [11/11 API35 instrumentation tests](https://github.com/manbir6-ux/TongCut/actions/runs/39230007112). The release-workflow and documentation commits after 837bb9b5 do NOT modify Kotlin media code.
 - [ ] **P2-15** Owner Android handset: one export containing base video + 2 VIDEO PiP tracks + photo/chroma/mask + 2 captions + at least 2 mixed audio tracks; inspect actual MP4 pixels and audible tracks against preview.
 - [ ] **P2-16** Quantitative preview/export parity: photo/PiP size and anchors, text font/placement, fades, transparency, z-order, rotation and timing for SOURCE, 16:9, 9:16, square and portrait source.
 - [ ] **P2-17** Audio onset and gain measured within one video frame for AAC/MP3, 44.1/48 kHz, muted/hidden source, different clip trims; ensure no silent missing lane.
@@ -95,7 +95,8 @@
 - [ ] **P2-24** UX: touchscreen trim gestures on independent lanes, hit areas >=48dp, accessibility font sizes, insets/RTL/tablet, no overlaps and reference workflow parity.
 - [ ] **P2-25** Automated instrumentation for preview/output shape/anchor comparison, project recovery, media revoke handling and combined audio+video *on real hardware*, not only emulator.
 - [ ] **P2-26** P1 dependencies accepted; reproduce full device test checklist and close #3 only after signed-off results.
-- [ ] **P2-27** Build **isolated P2 TEST APK only after latest code/build/runtime checks**, verify manifest/package/install SHA256; label owner-test rather than final. Owner tests on phone and reports acceptance or mismatches.
+- [x] **P2-27a** Built **isolated P2 TEST APK** from 536b6e49 with 184/184 unit tests, Lint 0 errors, ZIP/DEX/Manifest integrity, package check: au.parmtech.tongcut.p2test. [QA](https://github.com/manbir6-ux/TongCut/actions/runs/39230378258), [artifact](https://github.com/manbir6-ux/TongCut/actions/runs/39230378258/artifacts/12176059405); APK 68,000,066 bytes, SHA-256 f09b6619ff3956fb24c9723c13eafd72d7f89b8bcd50a3b606933f338b8cbce7.
+- [ ] **P2-27b** Install on owner's phone, verify Android app opens, imported media permissions, simultaneous mixed-media export and recovery. APK is for diagnostic acceptance, NOT evidence Phase 2 is complete.
 - [ ] **P2-28** Record owner hands-on acceptance (device model, Android version, samples and reproducible results); then and only then mark P2 complete.
 
 ## P3 — Advanced edits and effects
@@ -180,7 +181,8 @@
 - Same-HEAD 266d4e43 emulator: https://github.com/manbir6-ux/TongCut/actions/runs/39227459187 — PASS.
 - Dual PiP + silent-base-audio synthetic emulator (11 tests): https://github.com/manbir6-ux/TongCut/actions/runs/39228992713 — PASS.
 - Photo memory release 8db31fb1 source: https://github.com/manbir6-ux/TongCut/actions/runs/39229357315 — PASS.
-- Latest source 837bb9b5: https://github.com/manbir6-ux/TongCut/actions/runs/39230007295 — pending when this checkpoint was drafted; emulator https://github.com/manbir6-ux/TongCut/actions/runs/39230007112 — pending.
+- Latest Kotlin source 837bb9b5: https://github.com/manbir6-ux/TongCut/actions/runs/39230007295 — PASS; emulator https://github.com/manbir6-ux/TongCut/actions/runs/39230007112 — PASS (11/11).
+- Isolated 536b6e49 P2 TEST APK: https://github.com/manbir6-ux/TongCut/actions/runs/39230378258 — PASS; 184/184 JVM, Android Lint 0 errors / 22 warnings, 68,000,066-byte APK, SHA-256 f09b6619ff3956fb24c9723c13eafd72d7f89b8bcd50a3b606933f338b8cbce7.
 - A prior emulator failure at e99b18c7 was caused by a synthetic PNG fixture size gate and fixed in subsequent revision, not evidence of full runtime parity.
 - Audio preview follows global playhead using separate ExoPlayers; it is NOT sample-accurate. Export uses Media3 and millisecond-aligned clipping.
 - Long-audio waveforms estimate peaks by sampling distributed windows rather than decoding every frame.
