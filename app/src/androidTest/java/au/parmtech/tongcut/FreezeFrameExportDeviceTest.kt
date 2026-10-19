@@ -73,34 +73,60 @@ class FreezeFrameExportDeviceTest {
             try {
                 MediaMetadataRetriever().use { media ->
                     media.setDataSource(app,uri)
-                    fun redPixels(at: Long): Int {
+                    data class ColourStats(
+                        val count: Int,
+                        val normX: Float,
+                        val normY: Float
+                    )
+                    fun redPixels(at: Long): ColourStats {
                         val frame=media.getFrameAtTime(
                             at,MediaMetadataRetriever.OPTION_CLOSEST
                         ) ?: throw AssertionError("Missing frame at $at")
                         var count=0
+                        var sumX=0L
+                        var sumY=0L
                         for (y in 0 until frame.height step 8) {
                             for (x in 0 until frame.width step 8) {
                                 val pixel=frame.getPixel(x,y)
                                 if (Color.red(pixel)>110 &&
                                     Color.red(pixel)>Color.green(pixel)*1.6 &&
-                                    Color.red(pixel)>Color.blue(pixel)*1.6) count++
+                                    Color.red(pixel)>Color.blue(pixel)*1.6) {
+                                    count++
+                                    sumX+=x.toLong()
+                                    sumY+=y.toLong()
+                                }
                             }
                         }
+                        val metrics=ColourStats(
+                            count,
+                            if (count>0) (sumX.toFloat()/count)/frame.width else 0f,
+                            if (count>0) (sumY.toFloat()/count)/frame.height else 0f
+                        )
                         frame.recycle()
-                        return count
+                        return metrics
                     }
                     val before=redPixels(500_000L)
                     val frozenMiddle=redPixels(1_500_000L)
                     val resumed=redPixels(2_500_000L)
                     assertTrue(
-                        "PiP red missing before freeze: $before", before>100
+                        "PiP red missing before freeze: $before", before.count>100
                     )
                     assertTrue(
                         "Captured still did not cover PiP gap: $frozenMiddle",
-                        frozenMiddle>100
+                        frozenMiddle.count>100
                     )
                     assertTrue(
-                        "Video did not resume after freeze: $resumed",resumed>100
+                        "Video did not resume after freeze: $resumed",resumed.count>100
+                    )
+                    // Both export paths must place the frozen photo at the same
+                    // screen position as its parent VIDEO overlay, not jump slots.
+                    assertTrue(
+                        "Freeze frame shifted horizontally: $before vs $frozenMiddle",
+                        kotlin.math.abs(before.normX-frozenMiddle.normX)<0.12f
+                    )
+                    assertTrue(
+                        "Freeze frame shifted vertically: $before vs $frozenMiddle",
+                        kotlin.math.abs(before.normY-frozenMiddle.normY)<0.12f
                     )
                 }
             } finally {
