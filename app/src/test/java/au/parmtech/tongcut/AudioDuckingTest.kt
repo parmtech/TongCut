@@ -65,6 +65,23 @@ class AudioDuckingTest {
             AudioDucking.gainAt(2_000_000L, windows), 0.001f)
     }
 
+    @Test fun denseSeparatedDialogueFailsWithAnActionableAutomationLimit() {
+        val musicClip = audio("music", "music", 0L, 10_000_000L)
+        val dialogue = (0 until 14).map { index ->
+            audio("speech-$index", "voice", index * 600_000L, 100_000L)
+        }
+        val graph = LayerTimeline(tracks = listOf(music, voice),
+            layers = listOf(musicClip) + dialogue)
+
+        try {
+            AudioMixPlan.from(graph, 10_000_000L)
+            fail("Dense dialogue must not silently truncate generated gain points")
+        } catch (error: IllegalArgumentException) {
+            assertTrue(error.message.orEmpty().contains("too many automation points"))
+            assertTrue(error.message.orEmpty().contains("music"))
+        }
+    }
+
     @Test fun rationalFrameSnappedLayerPositionsProduceMillisecondSafeKeys() {
         val musicClip = audio("music", "music", 1_033_333L, 4_000_000L)
         val speech = audio("speech", "voice", 2_100_000L, 1_000_000L)
