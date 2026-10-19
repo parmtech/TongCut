@@ -272,6 +272,18 @@ internal fun LayerTools(
                         }
                     }
                     if (kind == LayerKind.VIDEO) {
+                        SmallLayerButton("Dissolve 0.5s → next") {
+                            runCatching {
+                                VideoCrossfadeEdits.crossfadeWithNext(draft, layer.id, 500L)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Cannot crossfade these clips") }
+                        }
+                        SmallLayerButton("Dissolve 1s → next") {
+                            runCatching {
+                                VideoCrossfadeEdits.crossfadeWithNext(draft, layer.id, 1_000L)
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Cannot crossfade these clips") }
+                        }
                         SmallLayerButton("Freeze 1s") {
                             onFreezeVideo(layer.id,playheadMs)
                         }

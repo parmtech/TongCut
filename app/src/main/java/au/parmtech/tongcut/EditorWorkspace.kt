@@ -532,8 +532,7 @@ fun VideoEditorScreen(
             }
             // PiP previews are independent video decoders; Media3 export uses the
             // same saved layer timing and compositor layout. Hardware parity pending.
-            val overlays = active.layers.activeAt(playMs * 1_000L)
-                .filter { it.kind == LayerKind.IMAGE || it.kind == LayerKind.VIDEO }
+            val overlays = VisualLayerOrder.forPreview(active.layers, playMs * 1_000L)
             overlays.forEach { layer ->
                 key(layer.id) {
                     val position = when (VisualOverlaySlots.slotFor(active.layers,layer)) {
