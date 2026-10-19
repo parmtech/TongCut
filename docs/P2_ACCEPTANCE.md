@@ -61,3 +61,16 @@ Static IMAGE overlays are now applied via a separately time-gated `BitmapOverlay
 - [ ] Correct PiP location and z-order across all supported aspect ratios and screen sizes; performance on limited devices.
 
 **This update is not Phase 2 completion.** It increases coverage and explores the hardware path, but some acceptance steps depend on actual mobile codecs and exported video pixels. P3 acceptance is tracked in [issue #6](https://github.com/manbir6-ux/TongCut/issues/6).
+
+
+## 2026-10-19 — long-audio waveform coverage and stable visual locations
+
+- [x] Instead of truncating visual waveform peaks at the first 90 seconds, a new `WaveformScanPlan` scans **all** audio frames of shorter clips and samples 80 evenly spaced windows across the complete trimmed source of long recordings. Each long-media window is at most 750ms, so the decoder scans at most 60 seconds of distributed audio, keeping CPU and memory bounded.
+- [x] `WaveformScanPlanTest` verifies full short-clip scan, 90s boundary, long 20-minute coverage, scan budget, trim offsets and overflow validation. [Successful source CI](https://github.com/manbir6-ux/TongCut/actions/runs/39219120154).
+- [x] Added a shared `VisualOverlaySlots` model across live Compose preview, VIDEO compositor and photo post-effects to prevent visual repositioning when neighbouring clips start/end or tracks are hidden. A captured frozen still persists its source PiP slot through project JSON **schema 7**, backward compatible with 1–6.
+- [x] Persisted PiP freeze timeline model, snapshot capture and VIDEO continuation; [API35 emulator exported-MP4 freeze test passed](https://github.com/manbir6-ux/TongCut/actions/runs/39220329025) with **5/5 synthetic device tests** including PiP, speed and chroma.
+- [ ] Long-track waveform is a **sampled estimate**, not a full per-frame peak scan: sparse transients in unsampled intervals may be missed. Validate seek/PCM decoding across AAC, MP3, VBR, very long files and slow hardware before waveform acceptance.
+- [ ] Latest stable PiP slot/source migration commit needs its own complete [source CI](https://github.com/manbir6-ux/TongCut/actions/runs/39221289717) and [Android emulator](https://github.com/manbir6-ux/TongCut/actions/runs/39221289722) results plus real-phone comparison.
+- [ ] Real device media, frame-synchronization, long playback, project recovery, source permission revoke, HDR/VFR, resource usage, text/bitmap/video composites and UI parity remain OPEN.
+
+**P2 remains OPEN.** Do not publish the owner-facing Phase 2+3 TEST APK until both full phase acceptance gates pass.
