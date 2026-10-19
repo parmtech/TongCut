@@ -4,87 +4,128 @@ import android.content.Context
 import android.net.Uri
 import android.os.Looper
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlin.math.abs
 
 /**
- * Lightweight synchronized preview monitor for imported audio tracks.
- * It follows the sequential video player's global timeline position. Audio is
- * decoded by Android, and multiple ExoPlayers are mixed by the system.
+ * Lightweight Android-backed monitor for independently imported audio tracks.
+ * Final sample timing is still owned by the Media3 exporter; each playback decoder
+ * is only an approximate monitor until hardware sync acceptance has passed.
  *
- * This is NOT sample-accurate mixing: seek latency and device codec scheduling
- * can cause audible offsets. Hardware integration testing is required.
+ * Error handling prevents a missing file or unsupported decoder
+ * from being re-created on every timeline poll (~90 ms). The same failed source
+ * stays paused with an actionable message until it is relinked/changed.
  */
 class AudioOverlayEngine(private val context: Context) {
     private data class Entry(val layer: TimelineLayer, val player: ExoPlayer)
     private val active = LinkedHashMap<String, Entry>()
+    private val failures = AudioPreviewFailures()
 
     /** Called on Android's main thread with the main video playhead. */
     fun sync(graph: LayerTimeline, globalPositionMs: Long, playing: Boolean): String? {
         check(Looper.myLooper() == Looper.getMainLooper())
-        val timeUs = globalPositionMs.coerceAtLeast(0L) * 1_000L
-        val trackMap = graph.tracks.associateBy { it.id }
+        val timeUs = Math.multiplyExact(globalPositionMs.coerceAtLeast(0L), 1_000L)
+        val tracks = graph.tracks.associateBy { it.id }
         val audible = graph.layers.filter { layer ->
             layer.kind == LayerKind.AUDIO &&
-                trackMap[layer.trackId]?.muted == false &&
+                tracks[layer.trackId]?.muted == false &&
                 layer.startUs <= timeUs && timeUs < layer.endUs
-        }.sortedWith(compareBy<TimelineLayer> { trackMap[it.trackId]?.order ?: 0 }.thenBy { it.id })
+        }.sortedWith(
+            compareBy<TimelineLayer> { tracks[it.trackId]?.order ?: 0 }.thenBy { it.id }
+        )
+        failures.retain(graph.layers)
         if (audible.size > AudioMixPlan.MAX_MIXED_LANES) {
-            // Do not crash when a previously saved project has too many active lanes.
-            release()
-            return "Audio preview requires at most ${AudioMixPlan.MAX_MIXED_LANES} tracks"
+            releaseActivePlayers()
+            return "Audio preview supports at most ${AudioMixPlan.MAX_MIXED_LANES} active tracks"
         }
+
         val old = active.iterator()
         while (old.hasNext()) {
             val item = old.next()
-            val matching = audible.firstOrNull { it.id == item.key }
-            if (matching == null || matching != item.value.layer) {
+            val source = audible.firstOrNull { it.id == item.key }
+            if (source == null || source != item.value.layer ||
+                failures.messageFor(source) != null
+            ) {
                 item.value.player.release()
                 old.remove()
             }
         }
+
+        var warning: String? = null
         audible.forEach { layer ->
-            val wasCached = active.containsKey(layer.id)
-            val entry = active[layer.id] ?: run {
-                val player = ExoPlayer.Builder(context).build()
-                val startMs = layer.sourceInUs / 1_000L
-                val endMs = (layer.sourceInUs + layer.durationUs) / 1_000L
-                val input = MediaItem.Builder().setUri(Uri.parse(requireNotNull(layer.sourceUri)))
-                    .setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder()
-                            .setStartPositionMs(startMs)
-                            .setEndPositionMs(endMs)
-                            .build()
-                    ).build()
-                // A malformed URI, unsupported decoder, or Media3 preparation error
-                // must not leak the newly allocated player into the editor session.
+            val blocked = failures.messageFor(layer)
+            if (blocked != null) {
+                if (warning == null) warning = blocked
+                return@forEach
+            }
+            val cached = active[layer.id]
+            val entry = cached ?: run {
+                var created: ExoPlayer? = null
                 try {
-                    player.setMediaItem(input)
+                    val player = ExoPlayer.Builder(context).build()
+                    created = player
+                    val startMs = layer.sourceInUs / 1_000L
+                    val endMs = (layer.sourceInUs + layer.durationUs) / 1_000L
+                    val media = MediaItem.Builder()
+                        .setUri(Uri.parse(requireNotNull(layer.sourceUri)))
+                        .setClippingConfiguration(
+                            MediaItem.ClippingConfiguration.Builder()
+                                .setStartPositionMs(startMs)
+                                .setEndPositionMs(endMs)
+                                .build()
+                        ).build()
+                    player.addListener(object : Player.Listener {
+                        override fun onPlayerError(error: PlaybackException) {
+                            if (active[layer.id]?.player === player) {
+                                failures.record(layer, error.message ?: "Unsupported audio")
+                            }
+                        }
+                    })
+                    player.setMediaItem(media)
                     player.prepare()
                     Entry(layer, player).also { active[layer.id] = it }
-                } catch (failure: Exception) {
-                    player.release()
-                    throw failure
+                } catch (error: Exception) {
+                    created?.release()
+                    val message = failures.record(
+                        layer, error.message ?: "Audio decoder unavailable"
+                    )
+                    if (warning == null) warning = message
+                    null
                 }
             }
+            if (entry == null) return@forEach
             val offsetMs = ((timeUs - layer.startUs) / 1_000L)
-                .coerceIn(0, (layer.durationUs / 1_000L).coerceAtLeast(0L))
-            val decoder = entry.player
-            decoder.volume = trackMap[layer.trackId]?.gain ?: 1f
-            // Resynchronise after scrubbing / large drift, not every 90ms tick.
-            if (!wasCached || abs(decoder.currentPosition - offsetMs) > 240L) {
-                decoder.seekTo(offsetMs)
+                .coerceIn(0L, layer.durationUs / 1_000L)
+            val player = entry.player
+            try {
+                player.volume = tracks[layer.trackId]?.gain ?: 1f
+                if (cached == null || abs(player.currentPosition - offsetMs) > 120L) {
+                    player.seekTo(offsetMs)
+                }
+                if (playing) {
+                    if (!player.isPlaying) player.play()
+                } else player.pause()
+            } catch (error: Exception) {
+                val message = failures.record(
+                    layer, error.message ?: "Audio player failed"
+                )
+                if (warning == null) warning = message
+                active.remove(layer.id)?.player?.release()
             }
-            if (playing) {
-                if (!decoder.isPlaying) decoder.play()
-            } else decoder.pause()
         }
-        return null
+        return warning
+    }
+
+    private fun releaseActivePlayers() {
+        active.values.forEach { it.player.release() }
+        active.clear()
     }
 
     fun release() {
         check(Looper.myLooper() == Looper.getMainLooper())
-        active.values.forEach { it.player.release() }
-        active.clear()
+        releaseActivePlayers()
+        failures.clear()
     }
 }
