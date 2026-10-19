@@ -23,6 +23,7 @@ internal fun LayerTools(
     onAddVisual: (LayerKind) -> Unit = {},
     onFreezeVideo: (String, Long) -> Unit = { _, _ -> },
     onError: (String) -> Unit,
+    focusedLayerId: String? = null,
     selectedGroupIds: Set<String> = emptySet(),
     onGroupToggle: (String) -> Unit = {},
     onGroupClear: () -> Unit = {}
@@ -33,7 +34,9 @@ internal fun LayerTools(
     var pickerAtMs by remember { mutableLongStateOf(0L) }
     val layers = draft.layers.layers
         .filter { it.kind == kind }
-        .sortedWith(compareBy<TimelineLayer> { it.startUs }.thenBy { it.id })
+        // Selected clip first: avoid scrolling through an unrelated full-page form.
+        .sortedWith(compareBy<TimelineLayer> { if (it.id == focusedLayerId) 0 else 1 }
+            .thenBy { it.startUs }.thenBy { it.id })
     val validGroup = selectedGroupIds.intersect(draft.layers.layers.map { it.id }.toSet())
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -100,6 +103,9 @@ internal fun LayerTools(
                     .padding(horizontal = 9.dp, vertical = 4.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (layer.id == focusedLayerId) {
+                        Text("◆ ", color = ProCyan, fontSize = 12.sp)
+                    }
                     Text(
                         when (kind) {
                             LayerKind.TEXT -> layer.text.orEmpty()
