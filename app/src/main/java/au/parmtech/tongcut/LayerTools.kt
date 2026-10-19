@@ -304,6 +304,38 @@ internal fun LayerTools(
                                 color = Color(0xFFFFC987), fontSize = 10.sp)
                         }
                         val fx = layer.photoEffects
+                        fun grade(next: ColorGrade) {
+                            runCatching { applyMatte(fx.copy(colorGrade = next)) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Color adjustment failed") }
+                        }
+                        SmallLayerButton("Exp −") {
+                            grade(fx.colorGrade.copy(exposure =
+                                (fx.colorGrade.exposure - 0.25f).coerceAtLeast(-2f)))
+                        }
+                        SmallLayerButton("Exp +") {
+                            grade(fx.colorGrade.copy(exposure =
+                                (fx.colorGrade.exposure + 0.25f).coerceAtMost(2f)))
+                        }
+                        SmallLayerButton("Sat −") {
+                            grade(fx.colorGrade.copy(saturation =
+                                (fx.colorGrade.saturation - 0.25f).coerceAtLeast(0f)))
+                        }
+                        SmallLayerButton("Sat +") {
+                            grade(fx.colorGrade.copy(saturation =
+                                (fx.colorGrade.saturation + 0.25f).coerceAtMost(2f)))
+                        }
+                        SmallLayerButton("Warm") {
+                            grade(fx.colorGrade.copy(temperature =
+                                (fx.colorGrade.temperature + 0.25f).coerceAtMost(1f)))
+                        }
+                        SmallLayerButton("Cool") {
+                            grade(fx.colorGrade.copy(temperature =
+                                (fx.colorGrade.temperature - 0.25f).coerceAtLeast(-1f)))
+                        }
+                        if (fx.colorGrade != ColorGrade()) {
+                            SmallLayerButton("Reset colour") { grade(ColorGrade()) }
+                        }
                         SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {
                             val modes = PhotoMask.entries
                             val next = modes[(modes.indexOf(fx.mask) + 1) % modes.size]
@@ -736,3 +768,4 @@ private fun SmallLayerButton(label: String, click: () -> Unit) {
         Text(label, color = ProCyan, fontSize = 11.sp)
     }
 }
+
