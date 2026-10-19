@@ -88,7 +88,6 @@ data class TimelineLayer(
     val sourceInUs: Long = 0,
     val sourceDurationUs: Long? = null,
     val text: String? = null,
-    val captionStyle: CaptionStyle = CaptionStyle(),
     val motion: List<MotionKeyframe> = emptyList(),
     val playbackSpeed: Float = 1f,
     val sourceSpanUs: Long? = null,
@@ -96,7 +95,8 @@ data class TimelineLayer(
     val photoEffects: PhotoEffects = PhotoEffects(),
     val fade: LayerFade = LayerFade(),
     // An explicit PiP screen slot is required for a freeze still to cover its source video.
-    val visualSlot: Int? = null
+    val visualSlot: Int? = null,
+    val captionStyle: CaptionStyle = CaptionStyle()
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
