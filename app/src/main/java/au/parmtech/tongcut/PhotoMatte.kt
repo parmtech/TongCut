@@ -10,7 +10,7 @@ import kotlin.math.sqrt
  * photo preview uses the same alpha model; VIDEO GPU export needs separate pixel
  * and real-time preview validation before it can be called fully accepted.
  */
-enum class PhotoMask { NONE, CIRCLE, ROUNDED_RECT, LINEAR_WIPE }
+enum class PhotoMask { NONE, CIRCLE, ROUNDED_RECT, LINEAR_WIPE, ELLIPSE, DIAMOND }
 
 data class PhotoChroma(
     val keyArgb: Int = 0xFF00FF00.toInt(),
@@ -30,9 +30,21 @@ data class PhotoEffects(
     val mask: PhotoMask = PhotoMask.NONE,
     /** Normalized feather distance, 0..0.4 relative to smallest image dimension. */
     val feather: Float = 0.04f,
-    val chroma: PhotoChroma? = null
+    val chroma: PhotoChroma? = null,
+    /** Shape-specific center in -1..1 editor-frame coordinates. */
+    val maskCenterX: Float = 0f,
+    val maskCenterY: Float = 0f,
+    /** Ellipse/diamond radii relative to the video/photo frame. */
+    val maskScaleX: Float = 1f,
+    val maskScaleY: Float = 1f
 ) {
-    init { require(feather.isFinite() && feather in 0f..0.4f) }
+    init {
+        require(feather.isFinite() && feather in 0f..0.4f)
+        require(maskCenterX.isFinite() && maskCenterX in -1f..1f)
+        require(maskCenterY.isFinite() && maskCenterY in -1f..1f)
+        require(maskScaleX.isFinite() && maskScaleX in 0.1f..1f)
+        require(maskScaleY.isFinite() && maskScaleY in 0.1f..1f)
+    }
 }
 
 /** Pure pixel-matte math, shared by Android bitmap processing and JVM tests. */
@@ -47,7 +59,12 @@ object PhotoMatte {
      * Coordinates are pixel centres. Mask is evaluated in physical pixels, not
      * stretched normalized circles, so a CIRCLE remains circular in a wide photo.
      */
-    fun maskAlpha(x: Int, y: Int, width: Int, height: Int, mask: PhotoMask, feather: Float): Float {
+    fun maskAlpha(
+        x: Int, y: Int, width: Int, height: Int,
+        mask: PhotoMask, feather: Float,
+        centerX: Float = 0f, centerY: Float = 0f,
+        scaleX: Float = 1f, scaleY: Float = 1f
+    ): Float {
         require(width > 0 && height > 0)
         require(x in 0 until width && y in 0 until height)
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -75,6 +92,20 @@ object PhotoMatte {
             PhotoMask.LINEAR_WIPE -> {
                 val centre = width * 0.5f
                 smooth(-blur / 2f, blur / 2f, centre - (x + 0.5f))
+            }
+            PhotoMask.ELLIPSE, PhotoMask.DIAMOND -> {
+                // Reproduce the GPU shader's distance field in source pixels.
+                val dx = px - centerX * width * 0.5f
+                val dy = py - centerY * height * 0.5f
+                val radiusX = width * 0.48f * scaleX
+                val radiusY = height * 0.48f * scaleY
+                val nx = dx / radiusX
+                val ny = dy / radiusY
+                val distance = if (mask == PhotoMask.ELLIPSE) {
+                    sqrt(nx * nx + ny * ny)
+                } else abs(nx) + abs(ny)
+                val inside = (1f - distance) * min(radiusX, radiusY)
+                smooth(-blur / 2f, blur / 2f, inside)
             }
         }
     }
@@ -135,7 +166,11 @@ object PhotoMatte {
                    settings: PhotoEffects): Int {
         val current = pixelArgb ushr 24
         if (current == 0) return pixelArgb
-        val mask = maskAlpha(x, y, width, height, settings.mask, settings.feather)
+        val mask = maskAlpha(
+            x, y, width, height, settings.mask, settings.feather,
+            settings.maskCenterX, settings.maskCenterY,
+            settings.maskScaleX, settings.maskScaleY
+        )
         val chroma = settings.chroma?.let { chromaAlpha(pixelArgb, it) } ?: 1f
         val next = (current * mask * chroma + 0.5f).toInt().coerceIn(0, 255)
         val corrected = settings.chroma?.let { despill(pixelArgb, it) } ?: pixelArgb
