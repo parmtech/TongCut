@@ -53,6 +53,7 @@ private class MatteShader(
         program.setFloatUniform("uMaskMode", settings.mask.ordinal.toFloat())
         program.setFloatUniform("uMaskFeather", settings.feather)
         program.setFloatUniform("uInvertMask", if (settings.invertMask) 1f else 0f)
+        program.setFloatUniform("uMaskRotation", settings.maskRotationDegrees)
         program.setFloatsUniform(
             "uMaskCenter", floatArrayOf(settings.maskCenterX, settings.maskCenterY)
         )
@@ -124,6 +125,7 @@ private class MatteShader(
             uniform float uMaskMode;
             uniform float uMaskFeather;
             uniform float uInvertMask;
+            uniform float uMaskRotation;
             uniform vec2 uMaskCenter;
             uniform vec2 uMaskScale;
             uniform float uUseChroma;
@@ -160,7 +162,14 @@ private class MatteShader(
                 } else if (uMaskMode > 3.5 && uMaskMode < 5.5) {
                     vec2 radii = uFrameSize * 0.48 * uMaskScale;
                     vec2 centered = point - uMaskCenter * uFrameSize * 0.5;
-                    vec2 normalized = centered / radii;
+                    float angle = radians(uMaskRotation);
+                    float c = cos(angle);
+                    float s = sin(angle);
+                    vec2 rotated = vec2(
+                        c * centered.x + s * centered.y,
+                        -s * centered.x + c * centered.y
+                    );
+                    vec2 normalized = rotated / radii;
                     float distance = (uMaskMode < 4.5)
                         ? length(normalized)
                         : abs(normalized.x) + abs(normalized.y);
