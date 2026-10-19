@@ -282,6 +282,11 @@ internal fun LayerTools(
                             .onSuccess(onChange).onFailure { onError(it.message ?: "Delete failed") }
                     }
                 }
+                if (kind in setOf(LayerKind.VIDEO, LayerKind.IMAGE, LayerKind.TEXT) &&
+                    layer.motion.isNotEmpty()
+                ) {
+                    MotionKeyframeEditor(draft, layer, onChange, onError)
+                }
             }
         }
     }

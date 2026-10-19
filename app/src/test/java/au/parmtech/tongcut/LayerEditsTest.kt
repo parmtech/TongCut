@@ -300,4 +300,56 @@ class LayerEditsTest {
         LayerEdits.relinkLayer(locked,id,"content://replacement",3_000)
     }
 
+
+    @Test fun advancedKeyframeEditsAreUndoableAndPreserveOtherKeys() {
+        var draft = LayerEdits.addText(base(), 0, "Animated")
+        val id = draft.layers.layers.single().id
+        draft = LayerEdits.setMotionAt(draft,id,0L) { it.copy(opacity=0f) }
+        draft = LayerEdits.setMotionAt(draft,id,2_000L) { it.copy(opacity=1f) }
+        val keys = draft.layers.layers.single().motion
+        assertEquals(2,keys.size)
+        val firstUs = keys.first().timeUs
+        val edited = LayerEdits.setMotionKeyInterpolation(
+            draft,id,firstUs,MotionInterpolation.SMOOTH
+        )
+        assertEquals(MotionInterpolation.SMOOTH,edited.layers.layers.single().motion.first().interpolation)
+        val mid = MotionCurve.at(edited.layers.layers.single().motion,400_000L)
+        assertTrue(mid.opacity < 0.2f)
+        val moved = LayerEdits.moveMotionKey(edited,id,firstUs,200_000L)
+        assertEquals(moved.layers.rate.nearestFrameUs(200_000L),
+            moved.layers.layers.single().motion.first().timeUs)
+        val next = LayerEdits.setMotionKeyPose(moved,id,
+            moved.layers.layers.single().motion.first().timeUs, MotionPose(scale=1.5f))
+        assertEquals(1.5f,next.layers.layers.single().motion.first().pose.scale,0.0001f)
+        val history = EditHistory(draft)
+        history.apply(edited)
+        assertEquals(draft,history.undo())
+        assertEquals(edited,history.redo())
+        val removed = LayerEdits.removeMotionKey(edited,id,firstUs)
+        assertEquals(1,removed.layers.layers.single().motion.size)
+        assertEquals(2,edited.layers.layers.single().motion.size)
+    }
+
+    @Test fun lockedTrackCannotChangeKeyframes() {
+        val start=LayerEdits.addText(base(),0,"Locked")
+        val id=start.layers.layers.single().id
+        val keyed=LayerEdits.setMotionAt(start,id,0L) { it.copy(x=0.5f) }
+        val locked=LayerEdits.setTrackLocked(keyed,keyed.layers.layers.single().trackId,true)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.setMotionKeyInterpolation(locked,id,0L,MotionInterpolation.HOLD)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.removeMotionKey(locked,id,0L)
+        }
+    }
+
+    @Test fun movingKeyframeOntoAnotherKeyIsRejected() {
+        val first=LayerEdits.addText(base(),0,"Overlap")
+        val id=first.layers.layers.single().id
+        val a=LayerEdits.setMotionAt(first,id,0L) { it.copy(x=0f) }
+        val b=LayerEdits.setMotionAt(a,id,1_000L) { it.copy(x=1f) }
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.moveMotionKey(b,id,0L,1_000_000L)
+        }
+    }
 }

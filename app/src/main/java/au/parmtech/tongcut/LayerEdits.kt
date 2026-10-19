@@ -296,6 +296,66 @@ object LayerEdits {
         ))
     }
 
+    /** Edits one existing key, preserving clip duration and other animation tracks. */
+    private fun changeMotionKey(
+        draft: EditorDraft, layerId: String, keyTimeUs: Long,
+        change: (MotionKeyframe) -> MotionKeyframe
+    ): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == layerId }
+            ?: throw IllegalArgumentException("Motion layer missing")
+        require(layer.kind in setOf(LayerKind.VIDEO, LayerKind.IMAGE, LayerKind.TEXT))
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the track first"
+        }
+        require(layer.motion.any { it.timeUs == keyTimeUs }) { "Selected keyframe no longer exists" }
+        val keys = layer.motion.map { if (it.timeUs == keyTimeUs) change(it) else it }
+            .sortedBy { it.timeUs }
+        MotionCurve.validate(keys, layer.durationUs)
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == layerId) it.copy(motion = keys) else it
+        }))
+    }
+
+    fun setMotionKeyPose(
+        draft: EditorDraft, layerId: String, keyTimeUs: Long, pose: MotionPose
+    ): EditorDraft = changeMotionKey(draft, layerId, keyTimeUs) { it.copy(pose = pose) }
+
+    fun setMotionKeyInterpolation(
+        draft: EditorDraft, layerId: String, keyTimeUs: Long,
+        interpolation: MotionInterpolation
+    ): EditorDraft = changeMotionKey(draft, layerId, keyTimeUs) {
+        it.copy(interpolation = interpolation)
+    }
+
+    fun moveMotionKey(
+        draft: EditorDraft, layerId: String, keyTimeUs: Long, destinationUs: Long
+    ): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == layerId }
+            ?: throw IllegalArgumentException("Motion layer missing")
+        require(destinationUs >= 0L) { "Keyframe cannot move before the clip" }
+        val snapped = draft.layers.rate.nearestFrameUs(
+            destinationUs.coerceAtMost(layer.durationUs)
+        ).coerceAtMost(layer.durationUs)
+        require(layer.motion.none { it.timeUs == snapped && it.timeUs != keyTimeUs }) {
+            "A keyframe already exists on this frame"
+        }
+        return changeMotionKey(draft, layerId, keyTimeUs) { it.copy(timeUs = snapped) }
+    }
+
+    fun removeMotionKey(draft: EditorDraft, layerId: String, keyTimeUs: Long): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == layerId }
+            ?: throw IllegalArgumentException("Motion layer missing")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the track first"
+        }
+        require(layer.motion.any { it.timeUs == keyTimeUs }) { "Selected keyframe missing" }
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == layerId) it.copy(
+                motion = it.motion.filterNot { key -> key.timeUs == keyTimeUs }
+            ) else it
+        }))
+    }
+
     fun trimLayer(draft: EditorDraft, id: String, durationUs: Long): EditorDraft =
         draft.copy(layers = draft.layers.resizeLayer(id, durationUs.coerceAtLeast(1_000L)))
 
