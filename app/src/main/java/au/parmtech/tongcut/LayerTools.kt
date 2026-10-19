@@ -281,6 +281,16 @@ internal fun LayerTools(
                                 applyMatte(fx.copy(mask=next))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Mask failed") }
                         }
+                        if (fx.mask != PhotoMask.NONE) {
+                            SmallLayerButton(
+                                if (fx.invertMask) "Mask: inside" else "Mask: invert"
+                            ) {
+                                runCatching {
+                                    applyMatte(fx.copy(invertMask = !fx.invertMask))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Mask inversion failed") }
+                            }
+                        }
                         if (fx.mask == PhotoMask.ELLIPSE ||
                             fx.mask == PhotoMask.DIAMOND) {
                             fun changeShape(next: PhotoEffects) {
