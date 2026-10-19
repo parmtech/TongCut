@@ -74,30 +74,43 @@ fun VideoEditorScreen(
     val active = previewDraft ?: draft
     val clip = active.selectedClip
     DisposableEffect(player) { onDispose { player.release() } }
-    LaunchedEffect(clip?.sourceUri, active.selectedIndex) {
+    val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
+
+    // A single ExoPlayer playlist plays trimmed media clips consecutively.
+    // source URI and clipping window are the same values sent to Transformer.
+    LaunchedEffect(active.clips, active.selectedIndex) {
+        val resume = player.isPlaying
         player.pause()
         playing = false
-        if (clip != null) {
-            player.setMediaItem(MediaItem.fromUri(clip.sourceUri.toUri()))
-            player.prepare()
-            player.seekTo(clip.inMs)
-            playMs = clip.inMs
-        } else {
+        val mediaItems = active.clips.map { item ->
+            MediaItem.Builder().setUri(item.sourceUri.toUri())
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(item.inMs)
+                        .setEndPositionMs(item.outMs)
+                        .build()
+                ).build()
+        }
+        if (mediaItems.isEmpty()) {
             player.clearMediaItems()
-            playMs = 0
+            playMs = 0L
+        } else {
+            player.setMediaItems(mediaItems)
+            player.prepare()
+            val selected = active.selectedIndex.coerceIn(0, mediaItems.lastIndex)
+            player.seekTo(selected, 0)
+            playMs = editTimeline.startOf(selected)
+            if (resume) player.play()
         }
     }
-    LaunchedEffect(player, clip?.sourceUri, clip?.outMs) {
+    LaunchedEffect(player, editTimeline) {
         while (true) {
-            val now = player.currentPosition
-            playMs = now
-            playing = player.isPlaying
-            if (clip != null && player.isPlaying && now >= clip.outMs) {
-                player.pause()
-                player.seekTo(clip.inMs)
-                playing = false
+            if (player.mediaItemCount > 0 && player.currentMediaItemIndex in editTimeline.clips.indices) {
+                val index = player.currentMediaItemIndex
+                playMs = editTimeline.timeOf(index, player.currentPosition)
             }
-            delay(120)
+            playing = player.isPlaying
+            delay(90)
         }
     }
 
@@ -170,8 +183,8 @@ fun VideoEditorScreen(
             }
             IconButton(onClick = {
                 if (player.isPlaying) player.pause()
-                else if (clip != null) {
-                    if (player.currentPosition >= clip.outMs) player.seekTo(clip.inMs)
+                else if (active.clips.isNotEmpty()) {
+                    if (playMs >= editTimeline.totalMs) player.seekTo(0, 0)
                     player.play()
                 }
             }) {
@@ -192,135 +205,26 @@ fun VideoEditorScreen(
         }
 
         if (!fullscreen) {
-            Column(
-                Modifier.fillMaxWidth().height(245.dp).background(Color(0xFF161616))
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().height(34.dp).padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("${(playMs.coerceAtLeast(0)).asTimestamp()} / ${active.clips.sumOf { it.editedDurationMs }.asTimestamp()}",
-                        color = Color.White, fontSize = 12.sp)
-                    Spacer(Modifier.width(20.dp))
-                    val total = active.clips.sumOf { it.editedDurationMs }
-                    Row(Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(23.dp)) {
-                        val maxTick = (total / 1000).coerceIn(4, 20).toInt()
-                        (0..maxTick step 2).forEach { second ->
-                            Text("00:${second.toString().padStart(2, '0')}",
-                                color = Color.LightGray, fontSize = 11.sp)
-                        }
+            SequenceStrip(
+                draft = active,
+                positionMs = playMs,
+                onSeek = { point ->
+                    player.pause()
+                    player.seekTo(point.clipIndex, point.offsetMs)
+                    playMs = point.timelineMs
+                },
+                onSelect = { index ->
+                    if (index != active.selectedIndex) onChange(active.copy(selectedIndex = index))
+                    else {
+                        player.pause()
+                        player.seekTo(index, 0)
+                        playMs = editTimeline.startOf(index)
                     }
-                }
-
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    Row(Modifier.fillMaxSize()) {
-                        Column(
-                            Modifier.width(105.dp).fillMaxHeight()
-                                .background(Color(0xFF171717)).padding(start = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(7.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                                modifier = Modifier.height(68.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable {
-                                        onChange(active.copy(muteOriginalAudio = !active.muteOriginalAudio))
-                                    }
-                                ) {
-                                    Icon(if (active.muteOriginalAudio) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                        "Mute source", tint = Color.LightGray)
-                                    Text("Mute", fontSize = 10.sp, color = Color.White)
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable { onUnavailable("AI clipper") }
-                                ) {
-                                    Icon(Icons.Default.ContentCut, "AI clipper", tint = ProCyan)
-                                    Text("AI", fontSize = 10.sp, color = Color.White)
-                                }
-                            }
-                            Icon(Icons.Default.MusicNote, "Audio lane", tint = Color.Gray,
-                                modifier = Modifier.align(Alignment.End))
-                            Icon(Icons.Default.TextFields, "Text lane", tint = Color.Gray,
-                                modifier = Modifier.align(Alignment.End))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth().height(70.dp),
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                itemsIndexed(active.clips) { index, item ->
-                                    Surface(
-                                        color = Color(0xFF303030),
-                                        border = BorderStroke(
-                                            if (index == active.selectedIndex) 2.dp else 0.dp,
-                                            if (index == active.selectedIndex) Color.White else Color.Transparent
-                                        ),
-                                        shape = RoundedCornerShape(5.dp),
-                                        modifier = Modifier.width(
-                                            ((item.editedDurationMs / 1000f) * 55f)
-                                                .coerceIn(110f, 350f).dp
-                                        ).fillMaxHeight().clickable {
-                                            onChange(active.copy(selectedIndex = index))
-                                            panel = "Edit"
-                                        }
-                                    ) {
-                                        Box {
-                                            Row(Modifier.fillMaxSize()) {
-                                                repeat(4) {
-                                                    GalleryThumbnail(item.sourceUri.toUri(),
-                                                        Modifier.weight(1f).fillMaxHeight())
-                                                }
-                                            }
-                                            Text(item.label, color = Color.White, fontSize = 10.sp,
-                                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.align(Alignment.BottomStart)
-                                                    .background(Color(0xA0000000))
-                                                    .padding(horizontal = 5.dp, vertical = 2.dp))
-                                        }
-                                    }
-                                }
-                                item {
-                                    Box(
-                                        Modifier.size(66.dp).background(Color(0xFF333333),
-                                            RoundedCornerShape(7.dp)).clickable(onClick = onMedia),
-                                        contentAlignment = Alignment.Center
-                                    ) { Icon(Icons.Default.Add, "Add video", tint = Color.White) }
-                                }
-                            }
-                            Spacer(Modifier.height(7.dp))
-                            Surface(
-                                onClick = { onUnavailable("Audio tracks") },
-                                color = Color(0xFF262626),
-                                modifier = Modifier.fillMaxWidth().height(43.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp)) {
-                                    Text("+  Add audio", color = Color.LightGray, fontSize = 13.sp)
-                                }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Surface(
-                                onClick = { onUnavailable("Text tracks") },
-                                color = Color(0xFF262626),
-                                modifier = Modifier.fillMaxWidth().height(43.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 12.dp)) {
-                                    Text("+  Add text", color = Color.LightGray, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-                    // A central playhead gives a visual editing reference; precise sync is P2.
-                    Box(
-                        Modifier.align(Alignment.Center).padding(start = 105.dp)
-                            .width(2.dp).fillMaxHeight().background(Color.White)
-                    )
-                }
-            }
+                    panel = "Edit"
+                },
+                onAddMedia = onMedia,
+                onUnavailable = onUnavailable
+            )
         }
 
         panel?.let { opened ->
@@ -341,8 +245,11 @@ fun VideoEditorScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.horizontalScroll(rememberScrollState())) {
                             ToolPill("Split") {
-                                val split = active.splitSelected(playMs)
-                                if (split == null) onInfo("Move playhead inside the clip before splitting.")
+                                val at = editTimeline.pointAt(playMs)
+                                val split = at?.let {
+                                    active.copy(selectedIndex = it.clipIndex).splitSelected(it.sourceMs)
+                                }
+                                if (split == null) onInfo("Move playhead inside a clip before splitting.")
                                 else onChange(split)
                             }
                             ToolPill("←") {
