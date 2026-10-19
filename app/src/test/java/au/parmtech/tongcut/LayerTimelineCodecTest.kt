@@ -63,4 +63,19 @@ class LayerTimelineCodecTest {
         val changed = timeline.copy(tracks = timeline.tracks.map { it.copy(gain = 0.35f) })
         assertEquals(changed, LayerTimelineCodec.decode(LayerTimelineCodec.encode(changed)))
     }
+    @Test fun importedPhotoAndVideoSurviveRestartCodec() {
+        val photo = TimelineTrack("photo", "Photo", LayerKind.IMAGE, 3, hidden = false)
+        val video = TimelineTrack("overlay", "Overlay", LayerKind.VIDEO, 4, locked = true)
+        val graph = LayerTimeline(
+            tracks = listOf(photo,video),
+            layers = listOf(
+                TimelineLayer("img","photo",LayerKind.IMAGE,1_000_000,5_000_000,
+                    sourceUri="content://images/1"),
+                TimelineLayer("vid","overlay",LayerKind.VIDEO,3_000_000,3_000_000,
+                    sourceUri="content://videos/2",sourceInUs=500_000,sourceDurationUs=10_000_000)
+            )
+        )
+        assertEquals(graph,LayerTimelineCodec.decode(LayerTimelineCodec.encode(graph)))
+    }
+
 }
