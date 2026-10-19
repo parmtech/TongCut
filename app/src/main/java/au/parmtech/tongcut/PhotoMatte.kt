@@ -36,7 +36,9 @@ data class PhotoEffects(
     val maskCenterY: Float = 0f,
     /** Ellipse/diamond radii relative to the video/photo frame. */
     val maskScaleX: Float = 1f,
-    val maskScaleY: Float = 1f
+    val maskScaleY: Float = 1f,
+    /** Retain the exterior instead of the interior of a selected shape. */
+    val invertMask: Boolean = false
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -172,7 +174,9 @@ object PhotoMatte {
             settings.maskScaleX, settings.maskScaleY
         )
         val chroma = settings.chroma?.let { chromaAlpha(pixelArgb, it) } ?: 1f
-        val next = (current * mask * chroma + 0.5f).toInt().coerceIn(0, 255)
+        val shaped = if (settings.invertMask && settings.mask != PhotoMask.NONE)
+            1f - mask else mask
+        val next = (current * shaped * chroma + 0.5f).toInt().coerceIn(0, 255)
         val corrected = settings.chroma?.let { despill(pixelArgb, it) } ?: pixelArgb
         return (corrected and 0x00FFFFFF) or (next shl 24)
     }
