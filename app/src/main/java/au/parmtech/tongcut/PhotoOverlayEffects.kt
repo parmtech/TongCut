@@ -28,16 +28,6 @@ object PhotoOverlayEffects {
                 1 -> -0.55f to -0.55f
                 else -> 0.55f to 0.55f
             }
-            val visible = StaticOverlaySettings.Builder()
-                .setScale(0.42f, 0.42f)
-                .setBackgroundFrameAnchor(position.first,position.second)
-                .setOverlayFrameAnchor(0f,0f)
-                .setAlphaScale(1f).build()
-            val hidden = StaticOverlaySettings.Builder()
-                .setScale(0.42f,0.42f)
-                .setBackgroundFrameAnchor(position.first,position.second)
-                .setOverlayFrameAnchor(0f,0f)
-                .setAlphaScale(0f).build()
             object : BitmapOverlay() {
                 private var image: Bitmap? = null
 
@@ -61,9 +51,24 @@ object PhotoOverlayEffects {
                     return bitmap.also { image = it }
                 }
 
-                override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings =
-                    if (presentationTimeUs >= layer.startUs && presentationTimeUs < layer.endUs)
-                        visible else hidden
+                override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                    val pose = MotionCurve.at(
+                        layer.motion,
+                        (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
+                    )
+                    return StaticOverlaySettings.Builder()
+                        .setScale(0.42f * pose.scale, 0.42f * pose.scale)
+                        .setBackgroundFrameAnchor(
+                            (position.first + pose.x).coerceIn(-1f, 1f),
+                            (position.second + pose.y).coerceIn(-1f, 1f)
+                        )
+                        .setOverlayFrameAnchor(0f, 0f)
+                        .setRotationDegrees(pose.rotation)
+                        .setAlphaScale(
+                            if (presentationTimeUs >= layer.startUs &&
+                                presentationTimeUs < layer.endUs) pose.opacity else 0f
+                        ).build()
+                }
             }
         }
     }

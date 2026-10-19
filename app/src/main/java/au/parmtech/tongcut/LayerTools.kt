@@ -117,6 +117,33 @@ internal fun LayerTools(
                     SmallLayerButton(if (track.hidden) "Show" else "Hide") {
                         onChange(LayerEdits.setTrackVisibility(draft, track.id, !track.hidden))
                     }
+                    if (kind != LayerKind.AUDIO && kind != LayerKind.STICKER) {
+                        fun motion(update: (MotionPose) -> MotionPose) {
+                            runCatching {
+                                LayerEdits.setMotionAt(draft, layer.id, playheadMs, update)
+                            }.onSuccess(onChange).onFailure { onError(it.message ?: "Motion failed") }
+                        }
+                        SmallLayerButton("◆ Keyframe") { motion { it } }
+                        SmallLayerButton("X −") { motion { it.copy(x = (it.x - 0.1f).coerceAtLeast(-1f)) } }
+                        SmallLayerButton("X +") { motion { it.copy(x = (it.x + 0.1f).coerceAtMost(1f)) } }
+                        SmallLayerButton("Y −") { motion { it.copy(y = (it.y - 0.1f).coerceAtLeast(-1f)) } }
+                        SmallLayerButton("Y +") { motion { it.copy(y = (it.y + 0.1f).coerceAtMost(1f)) } }
+                        SmallLayerButton("Zoom −") {
+                            motion { it.copy(scale = (it.scale - 0.1f).coerceAtLeast(0.1f)) }
+                        }
+                        SmallLayerButton("Zoom +") {
+                            motion { it.copy(scale = (it.scale + 0.1f).coerceAtMost(4f)) }
+                        }
+                        SmallLayerButton("↻ 15°") {
+                            motion { it.copy(rotation = (it.rotation + 15f).coerceAtMost(360f)) }
+                        }
+                        SmallLayerButton("Opacity −") {
+                            motion { it.copy(opacity = (it.opacity - 0.1f).coerceAtLeast(0f)) }
+                        }
+                        SmallLayerButton("Opacity +") {
+                            motion { it.copy(opacity = (it.opacity + 0.1f).coerceAtMost(1f)) }
+                        }
+                    }
                     if (kind == LayerKind.AUDIO) {
                         SmallLayerButton(if (track.muted) "Unmute" else "Mute") {
                             onChange(LayerEdits.setTrackMuted(draft, track.id, !track.muted))

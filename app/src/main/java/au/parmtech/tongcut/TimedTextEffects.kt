@@ -47,14 +47,26 @@ object TimedTextEffects {
                 }
                 // Never return an empty string to TextOverlay: it can create a
                 // zero-width Bitmap and crash the GL export worker.
-                val shown = StaticOverlaySettings.Builder().setAlphaScale(1f).build()
-                val hidden = StaticOverlaySettings.Builder().setAlphaScale(0f).build()
+                // Per-frame layout settings animate position, size, opacity and rotation.
                 object : TextOverlay() {
                     override fun getText(presentationTimeUs: Long): SpannableString = styled
 
-                    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings =
-                        if (visible && presentationTimeUs >= layer.startUs &&
-                            presentationTimeUs < layer.endUs) shown else hidden
+                    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                        val pose = MotionCurve.at(
+                            layer.motion,
+                            (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
+                        )
+                        return StaticOverlaySettings.Builder()
+                            .setBackgroundFrameAnchor(
+                                pose.x.coerceIn(-1f, 1f), pose.y.coerceIn(-1f, 1f)
+                            )
+                            .setScale(pose.scale, pose.scale)
+                            .setRotationDegrees(pose.rotation)
+                            .setAlphaScale(
+                                if (visible && presentationTimeUs >= layer.startUs &&
+                                    presentationTimeUs < layer.endUs) pose.opacity else 0f
+                            ).build()
+                    }
                 }
             }
         return overlays

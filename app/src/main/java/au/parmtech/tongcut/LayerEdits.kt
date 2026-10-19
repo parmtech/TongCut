@@ -137,6 +137,27 @@ object LayerEdits {
         }))
     }
 
+    /** Set or replace a motion keyframe at the closest rational project frame. */
+    fun setMotionAt(
+        draft: EditorDraft,
+        id: String,
+        playheadMs: Long,
+        mutate: (MotionPose) -> MotionPose,
+        interpolation: MotionInterpolation = MotionInterpolation.LINEAR
+    ): EditorDraft {
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Missing visual layer")
+        require(layer.kind != LayerKind.AUDIO) { "Audio motion is unsupported" }
+        val requested = Math.multiplyExact(playheadMs, 1_000L) - layer.startUs
+        val relative = draft.layers.rate.nearestFrameUs(
+            requested.coerceIn(0L, layer.durationUs)
+        ).coerceIn(0L, layer.durationUs)
+        val pose = MotionCurve.at(layer.motion, relative)
+        return draft.copy(layers = draft.layers.upsertMotion(
+            id, MotionKeyframe(relative, mutate(pose), interpolation)
+        ))
+    }
+
     fun trimLayer(draft: EditorDraft, id: String, durationUs: Long): EditorDraft =
         draft.copy(layers = draft.layers.resizeLayer(id, durationUs.coerceAtLeast(1_000L)))
 

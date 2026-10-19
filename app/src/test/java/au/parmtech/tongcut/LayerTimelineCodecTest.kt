@@ -78,4 +78,27 @@ class LayerTimelineCodecTest {
         assertEquals(graph,LayerTimelineCodec.decode(LayerTimelineCodec.encode(graph)))
     }
 
+    @Test fun motionKeyframesSurviveJsonRoundtrip() {
+        val base = timeline.layers.first()
+        val animated = base.copy(motion = listOf(
+            MotionKeyframe(0L, MotionPose(x = -0.5f, scale = 0.5f)),
+            MotionKeyframe(3_000_000L,
+                MotionPose(y = 0.4f, rotation = 90f, opacity = 0.3f),
+                MotionInterpolation.SMOOTH)
+        ))
+        val graph = timeline.copy(layers = listOf(animated) + timeline.layers.drop(1))
+        assertEquals(graph, LayerTimelineCodec.decode(LayerTimelineCodec.encode(graph)))
+    }
+
+    @Test fun schema1WithoutMotionLoadsWithStaticPoses() {
+        val encoded = LayerTimelineCodec.encode(timeline)
+        encoded.put("schema", 1)
+        val clips = encoded.getJSONArray("layers")
+        for (i in 0 until clips.length()) {
+            clips.getJSONObject(i).remove("motion")
+        }
+        val graph = LayerTimelineCodec.decode(encoded)
+        assertTrue(graph.layers.all { it.motion.isEmpty() })
+    }
+
 }

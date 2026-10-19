@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -24,7 +25,21 @@ internal fun VisualOverlayPreview(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+    val pose = MotionCurve.at(
+        layer.motion,
+        (timelineMs * 1_000L - layer.startUs).coerceIn(0L, layer.durationUs)
+    )
+    Box(
+        modifier.graphicsLayer {
+            translationX = pose.x * size.width
+            translationY = -pose.y * size.height
+            scaleX = pose.scale
+            scaleY = pose.scale
+            rotationZ = pose.rotation
+            alpha = pose.opacity
+        }.background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
         if (layer.kind == LayerKind.IMAGE) {
             GalleryThumbnail(Uri.parse(requireNotNull(layer.sourceUri)),Modifier.fillMaxSize())
         } else if (layer.kind == LayerKind.VIDEO) {

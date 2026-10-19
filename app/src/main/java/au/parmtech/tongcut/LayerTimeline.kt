@@ -86,7 +86,8 @@ data class TimelineLayer(
     val sourceUri: String? = null,
     val sourceInUs: Long = 0,
     val sourceDurationUs: Long? = null,
-    val text: String? = null
+    val text: String? = null,
+    val motion: List<MotionKeyframe> = emptyList()
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -95,6 +96,7 @@ data class TimelineLayer(
         require(durationUs >= 1_000L)
         require(startUs <= Long.MAX_VALUE - durationUs)
         require(sourceInUs >= 0)
+        MotionCurve.validate(motion, durationUs)
         if (kind == LayerKind.TEXT) {
             require(!text.isNullOrBlank() && text.length <= 10_000)
             require(sourceUri == null)
@@ -185,12 +187,15 @@ data class LayerTimeline(
             "Split too close to clip edge"
         }
         val leftDuration = atUs - layer.startUs
-        val left = layer.copy(durationUs = leftDuration)
+        val (leftMotion, rightMotion) =
+            MotionCurve.split(layer.motion, leftDuration, layer.durationUs)
+        val left = layer.copy(durationUs = leftDuration, motion = leftMotion)
         val right = layer.copy(
             id = rightId,
             startUs = atUs,
             durationUs = layer.durationUs - leftDuration,
-            sourceInUs = layer.sourceInUs + leftDuration
+            sourceInUs = layer.sourceInUs + leftDuration,
+            motion = rightMotion
         )
         return copy(layers = layers.filterNot { it.id == id } + left + right)
     }
@@ -199,8 +204,21 @@ data class LayerTimeline(
         val layer = layers.firstOrNull { it.id == id } ?: throw IllegalArgumentException("Missing clip")
         require(!tracks.first { it.id == layer.trackId }.locked)
         return copy(layers = layers.map {
-            if (it.id == id) it.copy(durationUs = newDurationUs) else it
+            if (it.id == id) {
+                require(newDurationUs >= 1_000L)
+                val trimmedMotion = it.motion.filter { key -> key.timeUs <= newDurationUs }
+                it.copy(durationUs = newDurationUs, motion = trimmedMotion)
+            } else it
         })
+    }
+
+    fun upsertMotion(id: String, frame: MotionKeyframe): LayerTimeline {
+        val layer = layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Missing layer")
+        require(!tracks.first { it.id == layer.trackId }.locked) { "Track locked" }
+        require(layer.kind != LayerKind.AUDIO) { "Audio gain is edited separately" }
+        val motion = MotionCurve.upsert(layer.motion, frame, layer.durationUs)
+        return copy(layers = layers.map { if (it.id == id) it.copy(motion = motion) else it })
     }
 
     fun setTrackLocked(id: String, locked: Boolean): LayerTimeline =

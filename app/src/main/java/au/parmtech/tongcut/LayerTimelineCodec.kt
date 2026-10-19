@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 1)
+        put("schema", 2)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -38,13 +38,26 @@ object LayerTimelineCodec {
                     put("sourceInUs", item.sourceInUs)
                     put("sourceDurationUs", item.sourceDurationUs ?: JSONObject.NULL)
                     put("text", item.text ?: JSONObject.NULL)
+                    put("motion", JSONArray().apply {
+                        item.motion.forEach { frame ->
+                            put(JSONObject().apply {
+                                put("timeUs", frame.timeUs)
+                                put("mode", frame.interpolation.name)
+                                put("x", frame.pose.x.toDouble())
+                                put("y", frame.pose.y.toDouble())
+                                put("scale", frame.pose.scale.toDouble())
+                                put("rotation", frame.pose.rotation.toDouble())
+                                put("opacity", frame.pose.opacity.toDouble())
+                            })
+                        }
+                    })
                 })
             }
         })
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") == 1) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..2) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -79,7 +92,26 @@ object LayerTimelineCodec {
                 sourceInUs = item.optLong("sourceInUs", 0L),
                 sourceDurationUs = if (item.has("sourceDurationUs") &&
                     !item.isNull("sourceDurationUs")) item.getLong("sourceDurationUs") else null,
-                text = item.takeNullableString("text")
+                text = item.takeNullableString("text"),
+                motion = item.optJSONArray("motion")?.let { frames ->
+                    require(frames.length() <= MotionCurve.MAX_KEYFRAMES)
+                    (0 until frames.length()).map { index ->
+                        val data = frames.getJSONObject(index)
+                        MotionKeyframe(
+                            timeUs = data.getLong("timeUs"),
+                            interpolation = MotionInterpolation.valueOf(
+                                data.optString("mode", "LINEAR")
+                            ),
+                            pose = MotionPose(
+                                x = data.getDouble("x").toFloat(),
+                                y = data.getDouble("y").toFloat(),
+                                scale = data.getDouble("scale").toFloat(),
+                                rotation = data.getDouble("rotation").toFloat(),
+                                opacity = data.getDouble("opacity").toFloat()
+                            )
+                        )
+                    }
+                } ?: emptyList()
             )
         }
         return LayerTimeline(rate, tracks, clips)

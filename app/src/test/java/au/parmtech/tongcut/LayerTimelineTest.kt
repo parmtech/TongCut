@@ -94,4 +94,28 @@ class LayerTimelineTest {
         assertEquals(0L, timeline.endUs)
         assertEquals(emptyList<TimelineLayer>(), timeline.activeAt(0))
     }
+    @Test fun videoSplitRetainsInterpolatedMotion() {
+        val clip = videoClip().copy(motion = listOf(
+            MotionKeyframe(0, MotionPose(x = 0f)),
+            MotionKeyframe(3_000_000, MotionPose(x = 1f))
+        ))
+        val graph = LayerTimeline(tracks = listOf(video), layers = listOf(clip))
+        val pieces = graph.splitLayer(clip.id, 1_500_000L, "right")
+        val left = pieces.layers.first { it.id == clip.id }
+        val right = pieces.layers.first { it.id == "right" }
+        assertEquals(0.5f, MotionCurve.at(left.motion, 1_500_000L).x, 0.0001f)
+        assertEquals(0.5f, MotionCurve.at(right.motion, 0L).x, 0.0001f)
+        assertEquals(1f, MotionCurve.at(right.motion, 1_500_000L).x, 0.0001f)
+        val trimmed = pieces.resizeLayer("right", 800_000L)
+        assertTrue(trimmed.layers.single { it.id == "right" }.motion
+            .all { it.timeUs <= 800_000L })
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsKeyframesAfterLayerEnd() {
+        videoClip().copy(motion = listOf(MotionKeyframe(
+            4_000_000L, MotionPose()
+        )))
+    }
+
 }

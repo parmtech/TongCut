@@ -162,4 +162,26 @@ class LayerEditsTest {
         assertTrue(hidden.canExportWithLegacyRenderer)
     }
 
+    @Test fun motionKeysAreFrameSnappedAndUndoable() {
+        val start = LayerEdits.addText(base(), 1_000L, "Title")
+        val id = start.layers.layers.single().id
+        val animated = LayerEdits.setMotionAt(start, id, 1_730L) {
+            it.copy(x = 0.3f, opacity = 0.6f)
+        }
+        val relative = animated.layers.layers.single().motion.single().timeUs
+        assertEquals(animated.layers.rate.nearestFrameUs(730_000L), relative)
+        val history = EditHistory(start)
+        history.apply(animated)
+        assertEquals(start, history.undo())
+        assertEquals(animated, history.redo())
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun motionOnLockedTrackIsRejected() {
+        val draft = LayerEdits.addText(base(), 0, "Locked")
+        val item = draft.layers.layers.single()
+        val locked = LayerEdits.setTrackLocked(draft, item.trackId, true)
+        LayerEdits.setMotionAt(locked, item.id, 100) { it.copy(x = 1f) }
+    }
+
 }
