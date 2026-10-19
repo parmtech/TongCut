@@ -52,6 +52,12 @@ private class MatteShader(
         val key = chroma?.keyArgb ?: 0xFF00FF00.toInt()
         program.setFloatUniform("uMaskMode", settings.mask.ordinal.toFloat())
         program.setFloatUniform("uMaskFeather", settings.feather)
+        program.setFloatsUniform(
+            "uMaskCenter", floatArrayOf(settings.maskCenterX, settings.maskCenterY)
+        )
+        program.setFloatsUniform(
+            "uMaskScale", floatArrayOf(settings.maskScaleX, settings.maskScaleY)
+        )
         program.setFloatUniform("uUseChroma", if (chroma == null) 0f else 1f)
         program.setFloatsUniform("uKeyColor", floatArrayOf(
             ((key ushr 16) and 255) / 255f,
@@ -116,6 +122,8 @@ private class MatteShader(
             uniform vec2 uFrameSize;
             uniform float uMaskMode;
             uniform float uMaskFeather;
+            uniform vec2 uMaskCenter;
+            uniform vec2 uMaskScale;
             uniform float uUseChroma;
             uniform vec3 uKeyColor;
             uniform float uTolerance;
@@ -143,9 +151,18 @@ private class MatteShader(
                     float signedDistance = length(max(q, vec2(0.0)))
                         + min(max(q.x, q.y), 0.0) - radius;
                     matte = edge(-blur * 0.5, blur * 0.5, -signedDistance);
-                } else if (uMaskMode > 2.5) {
+                } else if (uMaskMode > 2.5 && uMaskMode < 3.5) {
                     float inside = uFrameSize.x * 0.5 -
                         (vTexSamplingCoord.x * uFrameSize.x);
+                    matte = edge(-blur * 0.5, blur * 0.5, inside);
+                } else if (uMaskMode > 3.5 && uMaskMode < 5.5) {
+                    vec2 radii = uFrameSize * 0.48 * uMaskScale;
+                    vec2 centered = point - uMaskCenter * uFrameSize * 0.5;
+                    vec2 normalized = centered / radii;
+                    float distance = (uMaskMode < 4.5)
+                        ? length(normalized)
+                        : abs(normalized.x) + abs(normalized.y);
+                    float inside = (1.0 - distance) * min(radii.x, radii.y);
                     matte = edge(-blur * 0.5, blur * 0.5, inside);
                 }
                 if (uUseChroma > 0.5) {
