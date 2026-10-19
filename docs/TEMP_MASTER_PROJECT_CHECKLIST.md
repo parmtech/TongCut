@@ -141,6 +141,7 @@
 - [ ] **P4-03a** Feature-first source (2026-10-20): local AAC voiceover recorder, runtime microphone permission and Record/Stop/Discard toolbar wired to timeline audio import. Commit [780f3394](https://github.com/manbir6-ux/TongCut/commit/780f33942501309cc40725b87073c8daa978e57b). Physical microphone, app lifecycle, pause/resume, sync and exporter acceptance remain UNVERIFIED.
 - [ ] **P4-04** Keyframed gain envelopes, fades, music ducking/side-chain and automatic loudness guard.
 - [ ] **P4-04a** Feature-first source (2026-10-20): per-clip linear gain-envelope keyframes persist in schema 9, remain continuous through split/trim, drive the independent audio monitor and Media3 export `GainProcessor`, with editor controls. Ducking, automatic loudness protection and device/export acceptance remain unverified.
+- [ ] **P4-04b** Feature-first source: editable 0.5s clip fade-in/fade-out actions authored as envelope points and rendered by the same preview/export paths. Device audibility, export ramp smoothness and interaction with custom curves remain unverified.
 - [ ] **P4-05** Time-stretch/pitch, clean voice/noise filtering, equalization and channel layout handling.
 - [ ] **P4-06** PCM-/frame-alignment tests for source sample rates, seek, offsets, gaps, drift and exported mix; low-end decoder tests.
 

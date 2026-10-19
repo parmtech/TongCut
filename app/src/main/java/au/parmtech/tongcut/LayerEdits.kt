@@ -521,6 +521,25 @@ object LayerEdits {
         }))
     }
 
+    /** Replace a clip envelope with project-time fade handles as one undoable edit. */
+    fun setAudioFades(
+        draft: EditorDraft, id: String, fadeInMs: Long, fadeOutMs: Long
+    ): EditorDraft {
+        require(fadeInMs >= 0L && fadeOutMs >= 0L)
+        val layer = draft.layers.layers.firstOrNull { it.id == id && it.kind == LayerKind.AUDIO }
+            ?: throw IllegalArgumentException("Audio clip not found")
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock the audio track first"
+        }
+        val envelope = AudioEnvelope.fades(
+            layer.durationUs, Math.multiplyExact(fadeInMs, 1_000L),
+            Math.multiplyExact(fadeOutMs, 1_000L)
+        )
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(audioEnvelope = envelope) else it
+        }))
+    }
+
     /** Set or replace a motion keyframe at the closest rational project frame. */
     fun setMotionAt(
         draft: EditorDraft,

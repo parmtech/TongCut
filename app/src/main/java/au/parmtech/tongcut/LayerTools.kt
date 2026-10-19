@@ -554,6 +554,21 @@ internal fun LayerTools(
                         }
                     }
                     if (kind == LayerKind.AUDIO) {
+                        SmallLayerButton("Fade in 0.5s") {
+                            runCatching { LayerEdits.setAudioFades(draft, layer.id, 500L, 0L) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Fade in failed") }
+                        }
+                        SmallLayerButton("Fade out 0.5s") {
+                            runCatching { LayerEdits.setAudioFades(draft, layer.id, 0L, 500L) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Fade out failed") }
+                        }
+                        SmallLayerButton("Fade both 0.5s") {
+                            runCatching { LayerEdits.setAudioFades(draft, layer.id, 500L, 500L) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Audio fades failed") }
+                        }
                         SmallLayerButton("Audio 0.5×") {
                             runCatching {
                                 AudioSpeedEdits.setConstant(draft,layer.id,0.5f)

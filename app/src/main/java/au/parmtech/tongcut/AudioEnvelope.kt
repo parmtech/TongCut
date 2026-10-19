@@ -57,4 +57,25 @@ object AudioEnvelope {
         }, AudioGainKeyframe(0L, boundary))
         return left to right
     }
+
+    /** Build a simple clip fade pair, shortening both fades evenly on short clips. */
+    fun fades(durationUs: Long, fadeInUs: Long, fadeOutUs: Long): List<AudioGainKeyframe> {
+        require(durationUs >= 1_000L)
+        require(fadeInUs >= 0L && fadeOutUs >= 0L &&
+            fadeInUs % 1_000L == 0L && fadeOutUs % 1_000L == 0L)
+        var fadeIn = fadeInUs.coerceAtMost(durationUs)
+        var fadeOut = fadeOutUs.coerceAtMost(durationUs)
+        if (fadeIn > durationUs - fadeOut) {
+            val total = fadeIn.toDouble() + fadeOut.toDouble()
+            fadeIn = (fadeIn.toDouble() * durationUs / total / 1_000.0).toLong() * 1_000L
+            fadeOut = ((fadeOut.toDouble() * durationUs / total / 1_000.0).toLong() * 1_000L)
+                .coerceAtMost(durationUs - fadeIn)
+        }
+        val points = sortedMapOf<Long, Float>()
+        points[0L] = if (fadeIn > 0L) 0f else 1f
+        if (fadeIn > 0L) points[fadeIn] = 1f
+        if (fadeOut > 0L) points[durationUs - fadeOut] = 1f
+        points[durationUs] = if (fadeOut > 0L) 0f else 1f
+        return points.map { (time, gain) -> AudioGainKeyframe(time, gain) }
+    }
 }
