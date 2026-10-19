@@ -52,6 +52,7 @@ private class MatteShader(
         val key = chroma?.keyArgb ?: 0xFF00FF00.toInt()
         program.setFloatUniform("uMaskMode", settings.mask.ordinal.toFloat())
         program.setFloatUniform("uMaskFeather", settings.feather)
+        program.setFloatUniform("uInvertMask", if (settings.invertMask) 1f else 0f)
         program.setFloatsUniform(
             "uMaskCenter", floatArrayOf(settings.maskCenterX, settings.maskCenterY)
         )
@@ -122,6 +123,7 @@ private class MatteShader(
             uniform vec2 uFrameSize;
             uniform float uMaskMode;
             uniform float uMaskFeather;
+            uniform float uInvertMask;
             uniform vec2 uMaskCenter;
             uniform vec2 uMaskScale;
             uniform float uUseChroma;
@@ -164,6 +166,9 @@ private class MatteShader(
                         : abs(normalized.x) + abs(normalized.y);
                     float inside = (1.0 - distance) * min(radii.x, radii.y);
                     matte = edge(-blur * 0.5, blur * 0.5, inside);
+                }
+                if (uInvertMask > 0.5 && uMaskMode > 0.5) {
+                    matte = 1.0 - matte;
                 }
                 if (uUseChroma > 0.5) {
                     // Normalize by sqrt(3) as in PhotoMatte.chromaAlpha().
