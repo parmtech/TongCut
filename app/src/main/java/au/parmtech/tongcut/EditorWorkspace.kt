@@ -119,6 +119,9 @@ fun VideoEditorScreen(
     var exportBitrate by remember(draft.exportVideoBitrateBps) {
         mutableIntStateOf(draft.exportVideoBitrateBps)
     }
+    var exportAudioBitrate by remember(draft.exportAudioBitrateBps) {
+        mutableIntStateOf(draft.exportAudioBitrateBps)
+    }
     val supportedExportCodecs by produceState(
         initialValue = emptyList<ExportVideoCodec>(), context
     ) {
@@ -1248,6 +1251,12 @@ fun VideoEditorScreen(
                                 exportBitrate = bitrate
                                 onChange(active.copy(exportVideoBitrateBps = bitrate))
                             }) { "${it / 1_000_000} Mbps" }
+                        Text("AAC audio bitrate (encoder may vary)")
+                        ToolChips(listOf(96_000, 128_000, 192_000, 256_000),
+                            exportAudioBitrate, { bitrate ->
+                                exportAudioBitrate = bitrate
+                                onChange(active.copy(exportAudioBitrateBps = bitrate))
+                            }) { "${it / 1_000} kbps" }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = muteOriginal,
                                 onCheckedChange = { muteOriginal = it })
@@ -1291,7 +1300,8 @@ fun VideoEditorScreen(
                                 shortSidePixels = exportResolution,
                                 mute = muteOriginal,
                                 videoCodec = exportCodec,
-                                videoBitrateBps = exportBitrate
+                                videoBitrateBps = exportBitrate,
+                                audioBitrateBps = exportAudioBitrate
                             ),
                             onProgress = { progress = it },
                             onSuccess = {

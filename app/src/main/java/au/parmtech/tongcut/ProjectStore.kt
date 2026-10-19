@@ -32,7 +32,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..5) { "Unsupported project schema" }
+        require(schema in 1..6) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -57,6 +57,8 @@ class ProjectStore(context: Context, projectId: String? = null) {
             } ?: ExportVideoCodec.H264,
             exportVideoBitrateBps = root.optInt("exportVideoBitrateBps", 8_000_000)
                 .takeIf { it in 1_000_000..50_000_000 } ?: 8_000_000,
+            exportAudioBitrateBps = root.optInt("exportAudioBitrateBps", 128_000)
+                .takeIf { it in 64_000..320_000 } ?: 128_000,
             canvas = CanvasRatio.entries.firstOrNull { it.name == root.optString("canvas") } ?: CanvasRatio.SOURCE,
             shortSidePixels = root.optInt("shortSide", 1080).takeIf {
                 it in listOf(720, 1080, 2160)
@@ -71,13 +73,14 @@ class ProjectStore(context: Context, projectId: String? = null) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 5)
+            put("schema", 6)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
             put("colorGrade", ColorGradeCodec.encode(project.colorGrade))
             put("exportVideoCodec", project.exportVideoCodec.name)
             put("exportVideoBitrateBps", project.exportVideoBitrateBps)
+            put("exportAudioBitrateBps", project.exportAudioBitrateBps)
             put("canvas", project.canvas.name)
             put("shortSide", project.shortSidePixels)
             put("mute", project.muteOriginalAudio)

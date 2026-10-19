@@ -48,12 +48,14 @@ data class EditorDraft(
     val shortSidePixels: Int = 1080,
     val muteOriginalAudio: Boolean = false,
     // Secondary audio/video/text/image lanes; legacy primary clips stay unchanged.
-    val layers: LayerTimeline = LayerTimeline()
+    val layers: LayerTimeline = LayerTimeline(),
+    val exportAudioBitrateBps: Int = 128_000
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
     init {
         require(exportVideoBitrateBps in 1_000_000..50_000_000)
+        require(exportAudioBitrateBps in 64_000..320_000)
     }
 
     fun normalized(): EditorDraft =
@@ -108,8 +110,14 @@ data class EditorDraft(
             }.isSuccess
 
     fun exportOptions() = ExportOptions(
-        look, canvas, shortSidePixels, muteOriginalAudio, colorGrade,
-        exportVideoCodec, exportVideoBitrateBps
+        look = look,
+        ratio = canvas,
+        shortSidePixels = shortSidePixels,
+        mute = muteOriginalAudio,
+        colorGrade = colorGrade,
+        videoCodec = exportVideoCodec,
+        videoBitrateBps = exportVideoBitrateBps,
+        audioBitrateBps = exportAudioBitrateBps
     )
 }
 

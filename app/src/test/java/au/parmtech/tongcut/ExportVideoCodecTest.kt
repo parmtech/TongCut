@@ -21,6 +21,19 @@ class ExportVideoCodecTest {
         val options = EditorDraft().exportOptions()
         assertEquals(ExportVideoCodec.H264, options.videoCodec)
         assertEquals(8_000_000, options.videoBitrateBps)
+        assertEquals(128_000, options.audioBitrateBps)
+    }
+
+    @Test fun audioBitratePreferenceFlowsIntoExportAndEnforcesBounds() {
+        assertEquals(192_000, EditorDraft(exportAudioBitrateBps = 192_000)
+            .exportOptions().audioBitrateBps)
+        ExportOptions(audioBitrateBps = 64_000)
+        ExportOptions(audioBitrateBps = 320_000)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsOutOfRangeAudioBitrate() {
+        ExportOptions(audioBitrateBps = 500_000)
     }
 
     @Test(expected = IllegalArgumentException::class)

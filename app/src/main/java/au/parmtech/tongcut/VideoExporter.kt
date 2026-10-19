@@ -20,6 +20,7 @@ import androidx.media3.effect.Presentation
 import androidx.media3.effect.RgbAdjustment
 import androidx.media3.effect.RgbFilter
 import androidx.media3.transformer.Composition
+import androidx.media3.transformer.AudioEncoderSettings
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -243,7 +244,11 @@ class VideoExporter(private val context: Context) {
             val composition = compositionBuilder.build()
             transformer = Transformer.Builder(context)
                 .setVideoMimeType(options.videoCodec.mimeType)
+                .setAudioMimeType(MimeTypes.AUDIO_AAC)
                 .setEncoderFactory(DefaultEncoderFactory.Builder(context)
+                    .setRequestedAudioEncoderSettings(AudioEncoderSettings.Builder()
+                        .setBitrate(options.audioBitrateBps)
+                        .build())
                     .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder()
                         .setBitrate(options.videoBitrateBps)
                         .build())

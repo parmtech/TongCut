@@ -37,9 +37,13 @@ data class ExportOptions(
     val mute: Boolean = false,
     val colorGrade: ColorGrade = ColorGrade(),
     val videoCodec: ExportVideoCodec = ExportVideoCodec.H264,
-    val videoBitrateBps: Int = 8_000_000
+    val videoBitrateBps: Int = 8_000_000,
+    val audioBitrateBps: Int = 128_000
 ) {
-    init { require(videoBitrateBps in 1_000_000..50_000_000) }
+    init {
+        require(videoBitrateBps in 1_000_000..50_000_000)
+        require(audioBitrateBps in 64_000..320_000)
+    }
 }
 
 fun Long.asTimestamp(): String {
