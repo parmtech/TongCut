@@ -78,16 +78,20 @@ class AudioSpeedExportDeviceTest {
                 assertTrue("Speed audio changed video duration: $duration",
                     duration in 2_800L..3_250L)
             }
-            val (audible,silent)=measureEnvelope(app,output)
+            val (audible,silent,frequencyHz)=measureEnvelope(app,output)
             assertTrue("Sped-up tone was muted: $audible",audible>0.003)
             assertTrue("Audio unexpectedly leaked after 1.5s: $silent vs $audible",
                 silent<0.0025 && silent<audible/3)
+            // 2x must shorten the audible clip, NOT raise a 440Hz voice/tone
+            // to 880Hz. Measure decoded PCM after the actual Media3 encode.
+            assertTrue("Audio pitch shifted instead of time-stretched: $frequencyHz Hz",
+                frequencyHz in 350.0..540.0)
         }finally{
             app.contentResolver.delete(output,null,null)
         }
     }
 
-    private fun measureEnvelope(context: Context, uri: Uri): Pair<Double,Double> {
+    private fun measureEnvelope(context: Context, uri: Uri): Triple<Double,Double,Double> {
         val extractor=MediaExtractor()
         var decoder:MediaCodec?=null
         try{
@@ -111,6 +115,10 @@ class AudioSpeedExportDeviceTest {
             var outputEnd=false
             var signal=0.0
             var signalN=0
+            var previousToneSample: Float? = null
+            var upwardZeroCrossings=0
+            var firstToneUs=Long.MAX_VALUE
+            var lastToneUs=0L
             var tail=0.0
             var tailN=0
             var loops=0
@@ -158,6 +166,13 @@ class AudioSpeedExportDeviceTest {
                             rate.coerceAtLeast(1)
                         if(time in 250_000L..1_250_000L){
                             signal+=abs(valAt.toDouble());signalN++
+                            if (previousToneSample != null &&
+                                previousToneSample!! <= 0f && valAt > 0f) {
+                                upwardZeroCrossings++
+                            }
+                            previousToneSample=valAt
+                            if (firstToneUs==Long.MAX_VALUE) firstToneUs=time
+                            lastToneUs=time
                         }else if(time in 2_000_000L..2_800_000L) {
                             tail+=abs(valAt.toDouble());tailN++
                         }
@@ -169,7 +184,10 @@ class AudioSpeedExportDeviceTest {
             }
             assertTrue("Not enough first-tone samples",signalN>4_000)
             assertTrue("Not enough silent-tail samples",tailN>4_000)
-            return signal/signalN to tail/tailN
+            val sampleWindowSec=(lastToneUs-firstToneUs).toDouble()/1_000_000.0
+            assertTrue("Tone frequency window too short",sampleWindowSec>0.8)
+            val frequencyHz=upwardZeroCrossings/sampleWindowSec
+            return Triple(signal/signalN,tail/tailN,frequencyHz)
         } finally {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
