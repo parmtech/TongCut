@@ -1,0 +1,59 @@
+name: TongCut P2 Internal Emulator Pixel Acceptance
+
+on:
+  push:
+    branches: [development/capcut-parity]
+    paths:
+      - '.github/workflows/internal-device-pixel-test.yml'
+      - 'app/src/androidTest/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-pip-pixels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install Android SDK compile platform
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Prepare 2-second synthetic source videos (never upload user media)
+        run: |
+          mkdir -p app/src/androidTest/assets
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/main_blue.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=red:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_red.mp4
+      - name: Grant Linux KVM access
+        run: |
+          sudo chmod 666 /dev/kvm || true
+      - name: Run Android emulator rendered-pixel test (NO APK artifact)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: gradle --no-daemon --stacktrace connectedDebugAndroidTest
+      - name: Upload device test results only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-internal-P2-device-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+          retention-days: 7
