@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,7 +26,9 @@ class PiPExportDeviceTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         fun fixture(name: String): File {
             val file = File(context.cacheDir, name)
-            context.assets.open(name).use { input ->
+            // AndroidTest fixtures belong to the INSTRUMENTATION APK, not the
+            // target application; use instrumentationContext rather than appContext.
+            InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { input ->
                 file.outputStream().use { input.copyTo(it) }
             }
             assertTrue(file.length() > 1000)
