@@ -197,6 +197,44 @@ object LayerEdits {
         }))
     }
 
+    /**
+     * Relink an overlay to replacement media WITHOUT resetting trims, speed
+     * ramps, motion, fade or photomatte. Reject shorter sources rather than
+     * silently shortening a clip and losing authored edits.
+     */
+    fun relinkLayer(
+        draft: EditorDraft, id: String, newUri: String, newDurationMs: Long? = null
+    ): EditorDraft {
+        require(newUri.isNotBlank())
+        val layer = draft.layers.layers.firstOrNull { it.id == id }
+            ?: throw IllegalArgumentException("Layer no longer exists")
+        require(layer.kind in setOf(LayerKind.VIDEO,LayerKind.AUDIO,LayerKind.IMAGE)) {
+            "This layer cannot be relinked"
+        }
+        require(!draft.layers.tracks.first { it.id == layer.trackId }.locked) {
+            "Unlock this layer before reconnecting media"
+        }
+        val replacementDurationUs = if (layer.kind == LayerKind.IMAGE) null else {
+            val ms = requireNotNull(newDurationMs) { "Replacement duration required" }
+            require(ms >= 100L && ms <= Long.MAX_VALUE / 1_000L)
+            Math.multiplyExact(ms,1_000L)
+        }
+        if (replacementDurationUs != null) {
+            val required = Math.addExact(
+                layer.sourceInUs,
+                if (layer.kind == LayerKind.VIDEO) layer.consumedSourceUs else layer.durationUs
+            )
+            require(replacementDurationUs >= required) {
+                "Replacement source is too short for this layer's saved trim"
+            }
+        }
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(
+                sourceUri=newUri,sourceDurationUs=replacementDurationUs
+            ) else it
+        }))
+    }
+
     fun changeText(draft: EditorDraft, id: String, text: String): EditorDraft {
         val clean = text.trim().take(300)
         require(clean.isNotEmpty()) { "Caption cannot be blank" }

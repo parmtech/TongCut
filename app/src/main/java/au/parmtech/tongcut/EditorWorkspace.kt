@@ -127,6 +127,44 @@ fun VideoEditorScreen(
         }
     }
 
+    val missingOverlayIds = remember { mutableStateListOf<String>() }
+    var relinkOverlayId by remember { mutableStateOf<String?>(null) }
+    val overlayRelinkPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val id = relinkOverlayId
+        relinkOverlayId = null
+        if (uri != null && id != null) {
+            scope.launch {
+                try {
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    val original = draft.layers.layers.firstOrNull { it.id == id }
+                        ?: throw IllegalArgumentException("Original overlay no longer exists")
+                    val duration = withContext(Dispatchers.IO) {
+                        if (original.kind == LayerKind.IMAGE) null else {
+                            MediaMetadataRetriever().use { retriever ->
+                                retriever.setDataSource(context, uri)
+                                retriever.extractMetadata(
+                                    MediaMetadataRetriever.METADATA_KEY_DURATION
+                                )?.toLongOrNull()
+                            } ?: throw IllegalArgumentException("Cannot read replacement duration")
+                        }
+                    }
+                    onChange(LayerEdits.relinkLayer(
+                        draft, id, uri.toString(), duration
+                    ))
+                    onInfo("Overlay media reconnected without deleting existing edits.")
+                } catch (failure: Exception) {
+                    onInfo("Cannot relink this layer: ${failure.message}")
+                }
+            }
+        }
+    }
+
     val audioPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -192,6 +230,23 @@ fun VideoEditorScreen(
     fun chooseOverlay(kind: LayerKind) {
         overlayKind = kind
         overlayPicker.launch(arrayOf(if (kind == LayerKind.IMAGE) "image/*" else "video/*"))
+    }
+
+    LaunchedEffect(draft.layers.layers) {
+        val missing = withContext(Dispatchers.IO) {
+            draft.layers.layers.filter { layer ->
+                layer.kind in setOf(LayerKind.VIDEO,LayerKind.AUDIO,LayerKind.IMAGE)
+            }.mapNotNull { layer ->
+                val accessible = runCatching {
+                    context.contentResolver.openFileDescriptor(
+                        Uri.parse(requireNotNull(layer.sourceUri)), "r"
+                    )?.use { true } ?: false
+                }.getOrDefault(false)
+                if (accessible) null else layer.id
+            }
+        }
+        missingOverlayIds.clear()
+        missingOverlayIds.addAll(missing)
     }
 
     LaunchedEffect(draft.clips) {
@@ -314,6 +369,32 @@ fun VideoEditorScreen(
                     } else missingMedia.first()
                     relinkPicker.launch(arrayOf("video/*"))
                 }) { Text("Relink", color = ProCyan) }
+            }
+        }
+
+        if (missingOverlayIds.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().height(45.dp).padding(horizontal=12.dp),
+                verticalAlignment=Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Warning, "Overlay media warning",
+                    tint=Color(0xFFFFCC60))
+                Spacer(Modifier.width(6.dp))
+                Text("${missingOverlayIds.size} overlay source(s) need relinking",
+                    color=Color(0xFFFFCC60),fontSize=12.sp,
+                    modifier=Modifier.weight(1f))
+                TextButton(onClick = {
+                    val id = missingOverlayIds.firstOrNull()
+                    val original = draft.layers.layers.firstOrNull { it.id == id }
+                    if (original != null) {
+                        relinkOverlayId = original.id
+                        overlayRelinkPicker.launch(arrayOf(when(original.kind) {
+                            LayerKind.IMAGE -> "image/*"
+                            LayerKind.AUDIO -> "audio/*"
+                            else -> "video/*"
+                        }))
+                    }
+                }) { Text("Relink",color=ProCyan) }
             }
         }
 

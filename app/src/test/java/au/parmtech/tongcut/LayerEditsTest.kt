@@ -259,4 +259,45 @@ class LayerEditsTest {
         LayerEdits.setLayerFade(initial,initial.layers.layers.single().id,LayerFade(1_000,0))
     }
 
+    @Test fun overlayRelinkKeepsTransformsFadesAndPhotoMatte() {
+        val added=LayerEdits.addVisual(base(),0,LayerKind.IMAGE,
+            "content://old-photo",4_000)
+        val id=added.layers.layers.single().id
+        val fx=PhotoEffects(mask=PhotoMask.CIRCLE,chroma=PhotoChroma())
+        val enhanced=LayerEdits.setLayerFade(
+            LayerEdits.setPhotoEffects(added,id,fx),id,
+            LayerFade(500_000,500_000)
+        )
+        val reconnected=LayerEdits.relinkLayer(enhanced,id,"content://new-photo")
+        assertEquals(enhanced.layers.layers.single().photoEffects,
+            reconnected.layers.layers.single().photoEffects)
+        assertEquals(enhanced.layers.layers.single().fade,
+            reconnected.layers.layers.single().fade)
+        assertEquals("content://old-photo",enhanced.layers.layers.single().sourceUri)
+        assertEquals("content://new-photo",reconnected.layers.layers.single().sourceUri)
+    }
+
+    @Test fun videoRelinkRequiresFullSavedTrimAndSpeedSourceWindow() {
+        val original=LayerEdits.addVisual(base(),0,LayerKind.VIDEO,
+            "content://old-video",4_000)
+        val changed=LayerEdits.setVisualSpeed(
+            original,original.layers.layers.single().id,2f)
+        val id=changed.layers.layers.single().id
+        val good=LayerEdits.relinkLayer(changed,id,"content://new-video",4_500)
+        assertEquals(2f,good.layers.layers.single().playbackSpeed)
+        assertEquals(2_000_000L,good.layers.layers.single().durationUs)
+        assertThrows(IllegalArgumentException::class.java) {
+            LayerEdits.relinkLayer(changed,id,"content://too-short",1_500)
+        }
+    }
+
+    @Test(expected=IllegalArgumentException::class)
+    fun cannotRelinkLockedLayer() {
+        val start=LayerEdits.addAudio(base(),0,"content://old-audio",2_000)
+        val id=start.layers.layers.single().id
+        val locked=LayerEdits.setTrackLocked(start,
+            start.layers.layers.single().trackId,true)
+        LayerEdits.relinkLayer(locked,id,"content://replacement",3_000)
+    }
+
 }
