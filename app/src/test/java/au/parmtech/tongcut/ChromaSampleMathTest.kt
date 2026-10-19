@@ -52,6 +52,35 @@ class ChromaSampleMathTest {
         }
     }
 
+    @Test fun projectPlayheadConversionNeverWrapsOrCrashesPicker() {
+        assertEquals(0L, ChromaSampleMath.safeProjectTimeUs(Long.MIN_VALUE))
+        assertEquals(0L, ChromaSampleMath.safeProjectTimeUs(-1L))
+        assertEquals(0L, ChromaSampleMath.safeProjectTimeUs(0L))
+        assertEquals(1_234_000L, ChromaSampleMath.safeProjectTimeUs(1_234L))
+        val maximumWholeMs = Long.MAX_VALUE / 1_000L
+        assertEquals(maximumWholeMs * 1_000L,
+            ChromaSampleMath.safeProjectTimeUs(maximumWholeMs))
+        assertEquals(Long.MAX_VALUE,
+            ChromaSampleMath.safeProjectTimeUs(maximumWholeMs + 1L))
+        assertEquals(Long.MAX_VALUE,
+            ChromaSampleMath.safeProjectTimeUs(Long.MAX_VALUE))
+    }
+
+    @Test fun corruptOrAbsentSourceDurationCannotOverflowSeek() {
+        assertEquals(0L, ChromaSampleMath.safeSeekUs(8_000L, 1L))
+        assertEquals(8_000L, ChromaSampleMath.safeSeekUs(8_000L, 0L))
+        assertEquals(8_000L, ChromaSampleMath.safeSeekUs(8_000L, -10L))
+        assertEquals(8_000L, ChromaSampleMath.safeSeekUs(8_000L, null))
+        val upperBoundMs = Long.MAX_VALUE / 1_000L
+        assertEquals((upperBoundMs - 1L) * 1_000L,
+            ChromaSampleMath.safeSeekUs(Long.MAX_VALUE, upperBoundMs))
+        assertEquals(Long.MAX_VALUE,
+            ChromaSampleMath.safeSeekUs(Long.MAX_VALUE, Long.MAX_VALUE))
+        assertThrows(IllegalArgumentException::class.java) {
+            ChromaSampleMath.safeSeekUs(Long.MIN_VALUE, Long.MAX_VALUE)
+        }
+    }
+
     @Test fun invalidTapCoordinatesAndDimensionsAreRejected() {
         assertThrows(IllegalArgumentException::class.java) {
             ChromaSampleMath.pixelAt(Float.NaN, 10f, 640, 360, 512, 288)
