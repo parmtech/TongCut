@@ -1,0 +1,68 @@
+name: TongCut One-Time Audit and Test APK
+
+on:
+  push:
+    branches: [development/capcut-parity]
+    paths:
+      - '.github/workflows/audit-test-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout reviewed development branch
+        uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Prepare Android SDK
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Clean, unit tests, Android Lint and test APK
+        run: gradle --no-daemon --stacktrace clean testDebugUnitTest lintDebug assembleDebug
+      - name: Verify output is valid APK ZIP with manifest file
+        run: |
+          python3 - <<'PY'
+          import zipfile, os, hashlib
+          path = "app/build/outputs/apk/debug/app-debug.apk"
+          assert os.path.getsize(path) > 1024 * 1024, "Unexpected tiny APK"
+          with zipfile.ZipFile(path) as archive:
+              bad = archive.testzip()
+              assert bad is None, f"Corrupt zip member: {bad}"
+              assert "AndroidManifest.xml" in archive.namelist(), "Missing Android manifest"
+              assert any(x.startswith("classes") and x.endswith(".dex") for x in archive.namelist()), "No compiled DEX"
+          print("APK integrity OK", os.path.getsize(path), hashlib.sha256(open(path, "rb").read()).hexdigest())
+          PY
+      - name: Upload internal debug APK for owner device testing
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-development-audited-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload lint and unit-test reports (including failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-audit-reports
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 7
