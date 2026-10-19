@@ -281,6 +281,51 @@ internal fun LayerTools(
                                 applyMatte(fx.copy(mask=next))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Mask failed") }
                         }
+                        if (fx.mask == PhotoMask.ELLIPSE ||
+                            fx.mask == PhotoMask.DIAMOND) {
+                            fun changeShape(next: PhotoEffects) {
+                                runCatching { applyMatte(next) }.onSuccess(onChange)
+                                    .onFailure {
+                                        onError(it.message ?: "Mask geometry change failed")
+                                    }
+                            }
+                            SmallLayerButton("Mask ←") {
+                                changeShape(fx.copy(maskCenterX =
+                                    (fx.maskCenterX - 0.1f).coerceAtLeast(-1f)))
+                            }
+                            SmallLayerButton("Mask →") {
+                                changeShape(fx.copy(maskCenterX =
+                                    (fx.maskCenterX + 0.1f).coerceAtMost(1f)))
+                            }
+                            SmallLayerButton("Mask ↑") {
+                                changeShape(fx.copy(maskCenterY =
+                                    (fx.maskCenterY + 0.1f).coerceAtMost(1f)))
+                            }
+                            SmallLayerButton("Mask ↓") {
+                                changeShape(fx.copy(maskCenterY =
+                                    (fx.maskCenterY - 0.1f).coerceAtLeast(-1f)))
+                            }
+                            SmallLayerButton("Width −") {
+                                changeShape(fx.copy(maskScaleX =
+                                    (fx.maskScaleX - 0.1f).coerceAtLeast(0.1f)))
+                            }
+                            SmallLayerButton("Width +") {
+                                changeShape(fx.copy(maskScaleX =
+                                    (fx.maskScaleX + 0.1f).coerceAtMost(1f)))
+                            }
+                            SmallLayerButton("Height −") {
+                                changeShape(fx.copy(maskScaleY =
+                                    (fx.maskScaleY - 0.1f).coerceAtLeast(0.1f)))
+                            }
+                            SmallLayerButton("Height +") {
+                                changeShape(fx.copy(maskScaleY =
+                                    (fx.maskScaleY + 0.1f).coerceAtMost(1f)))
+                            }
+                            SmallLayerButton("Reset mask shape") {
+                                changeShape(fx.copy(maskCenterX = 0f,
+                                    maskCenterY = 0f, maskScaleX = 1f, maskScaleY = 1f))
+                            }
+                        }
                         SmallLayerButton("Edge −") {
                             runCatching {
                                 applyMatte(fx.copy(
