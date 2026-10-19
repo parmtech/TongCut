@@ -90,6 +90,14 @@ fun VideoEditorScreen(
     var processing by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     var exportResolution by remember { mutableIntStateOf(draft.shortSidePixels) }
+    var exportCodec by remember(draft.exportVideoCodec) { mutableStateOf(draft.exportVideoCodec) }
+    var exportBitrate by remember(draft.exportVideoBitrateBps) {
+        mutableIntStateOf(draft.exportVideoBitrateBps)
+    }
+    val supportedExportCodecs = remember {
+        runCatching { ExportVideoCodecSupport.available() }.getOrDefault(emptyList())
+    }
+    var exportWarning by remember { mutableStateOf<String?>(null) }
     var muteOriginal by remember { mutableStateOf(draft.muteOriginalAudio) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
@@ -1137,7 +1145,7 @@ fun VideoEditorScreen(
                         modifier = Modifier.width(65.dp).fillMaxHeight()
                             .clickable {
                                 panel = if (panel == item.name) null else item.name
-                                if (item.name in listOf("Effects", "Adjust", "AI"))
+                                if (item.name in listOf("Effects", "AI"))
                                     onUnavailable(item.name)
                             },
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1157,7 +1165,11 @@ fun VideoEditorScreen(
             onDismissRequest = { if (!processing) exportDialog = false },
             title = { Text(if (processing) "Exporting" else "Export settings") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Column(
+                    modifier = Modifier.heightIn(max = 480.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
                     if (processing) {
                         LinearProgressIndicator(progress = { progress / 100f },
                             modifier = Modifier.fillMaxWidth())
@@ -1166,6 +1178,19 @@ fun VideoEditorScreen(
                         Text("Short-edge resolution (device dependent)")
                         ToolChips(listOf(720, 1080, 2160), exportResolution,
                             { exportResolution = it }) { "${it}p" }
+                        Text("Video codec")
+                        ToolChips(supportedExportCodecs, exportCodec, { codec ->
+                            exportCodec = codec
+                            onChange(active.copy(exportVideoCodec = codec))
+                        }) { it.title }
+                        Text("AV1 output is not supported by the current renderer.",
+                            color = Color.LightGray, fontSize = 11.sp)
+                        Text("Video bitrate")
+                        ToolChips(listOf(4_000_000, 8_000_000, 12_000_000, 20_000_000),
+                            exportBitrate, { bitrate ->
+                                exportBitrate = bitrate
+                                onChange(active.copy(exportVideoBitrateBps = bitrate))
+                            }) { "${it / 1_000_000} Mbps" }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = muteOriginal,
                                 onCheckedChange = { muteOriginal = it })
@@ -1186,7 +1211,8 @@ fun VideoEditorScreen(
             },
             confirmButton = {
                 if (!processing) Button(
-                    enabled = active.clips.isNotEmpty() && active.canExportWithLegacyRenderer,
+                    enabled = active.clips.isNotEmpty() && active.canExportWithLegacyRenderer &&
+                        exportCodec in supportedExportCodecs,
                     onClick = {
                         val inputs = runCatching {
                             active.clips.map {
@@ -1200,23 +1226,31 @@ fun VideoEditorScreen(
                         }
                         processing = true
                         progress = 0
+                        exportWarning = null
                         exporter.start(
                             inputs.getOrThrow(),
                             active.exportOptions().copy(
                                 shortSidePixels = exportResolution,
-                                mute = muteOriginal
+                                mute = muteOriginal,
+                                videoCodec = exportCodec,
+                                videoBitrateBps = exportBitrate
                             ),
                             onProgress = { progress = it },
                             onSuccess = {
                                 processing = false
                                 lastExport = it
                                 exportDialog = false
-                                onInfo("Exported to Movies/TongCut")
+                                onInfo(exportWarning?.let {
+                                    "Exported using a supported fallback. $it"
+                                } ?: "Exported to Movies/TongCut")
+                                exportWarning = null
                             },
                             onError = {
                                 processing = false
+                                exportWarning = null
                                 onInfo("Export failed: $it")
-                            }
+                            },
+                            onWarning = { exportWarning = it }
                         )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ProCyan)
@@ -1227,6 +1261,7 @@ fun VideoEditorScreen(
                     if (processing) {
                         if (exporter.cancel()) {
                             processing = false
+                            exportWarning = null
                             onInfo("Export cancelled")
                         }
                     } else exportDialog = false
