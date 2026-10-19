@@ -173,6 +173,7 @@
 
 - [x] **P7-01** H264/MP4 Media3 alpha export with gallery save/progress/cancel and limited tested synthetic overlays.
 - [ ] **P7-02** H264/H265/AV1 capability checks and safe fallbacks; expose supported resolutions, FPS, codec, bitrate and audio settings.
+- [ ] **P7-02a** Feature-first source: device-reported H.264/H.265 encoder choices, explicit H.265 MIME selection, bounded bitrate presets, persisted export preferences, and user-visible Media3 fallback notice. AV1 is not exposed because current Media3 Transformer supported output types omit AV1; per-resolution encoder support, FPS/audio controls and actual codec fallback/pixel verification remain open. JVM policy tests added; Gradle not yet run.
 - [ ] **P7-03** Device-tested 720p/1080p/4K presets (where supported); no ungrounded 8K claims.
 - [ ] **P7-04** Correct aspect, frame pacing, HDR/SDR metadata, audio duration, colour and orientation across codecs.
 - [ ] **P7-05** Background/persistent foreground job and resume/cleanup after interruption; no invalid partial gallery files.
