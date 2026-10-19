@@ -2,7 +2,9 @@ package au.parmtech.tongcut
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.Canvas
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.net.Uri
 import android.view.Gravity
 import android.view.TextureView
@@ -46,6 +48,7 @@ class VideoMattePreviewDeviceTest {
         val player = AtomicReference<ExoPlayer?>()
         val holder = AtomicReference<Pair<FrameLayout, TextureView>?>()
         val screenshot = AtomicReference<Bitmap?>()
+        val textureWindowPosition = AtomicReference<Pair<Int, Int>>()
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             scenario.onActivity { activity ->
@@ -91,22 +94,40 @@ class VideoMattePreviewDeviceTest {
             // Wait a few more rendered frames to avoid observing a surface
             // before its first transparent texture was latched by TextureView.
             Thread.sleep(350L)
-            scenario.onActivity {
-                val (frame, texture) = requireNotNull(holder.get())
+            val copied = CountDownLatch(1)
+            val pixelCopyResult = AtomicReference<Int>()
+            scenario.onActivity { activity ->
+                val (_, texture) = requireNotNull(holder.get())
                 assertTrue("TextureView was detached", texture.isAvailable)
+                val point = IntArray(2)
+                texture.getLocationInWindow(point)
+                textureWindowPosition.set(point[0] to point[1])
+                val root = activity.window.decorView
                 val snapshot = Bitmap.createBitmap(
-                    frame.width, frame.height, Bitmap.Config.ARGB_8888
+                    root.width, root.height, Bitmap.Config.ARGB_8888
                 )
-                frame.draw(Canvas(snapshot))
                 screenshot.set(snapshot)
+                // TextureView is a hardware-composited layer; software
+                // View.draw(Canvas(bitmap)) captures only the blue parent.
+                PixelCopy.request(
+                    activity.window, snapshot,
+                    { result ->
+                        pixelCopyResult.set(result)
+                        copied.countDown()
+                    },
+                    Handler(Looper.getMainLooper())
+                )
             }
+            assertTrue("PixelCopy from app window timed out",
+                copied.await(15L, TimeUnit.SECONDS))
+            assertEquals("PixelCopy could not read hardware video",
+                PixelCopy.SUCCESS, pixelCopyResult.get())
             val snap = requireNotNull(screenshot.get())
             try {
-                val (frame, texture) = requireNotNull(holder.get())
-                // Coordinates expressed relative to the actual TextureView
-                // rectangle inside the parent blue FrameLayout.
-                val tx = texture.left
-                val ty = texture.top
+                val (_, texture) = requireNotNull(holder.get())
+                // TextureView coordinates in the captured window, including
+                // insets and centred positioning.
+                val (tx, ty) = requireNotNull(textureWindowPosition.get())
                 val width = texture.width
                 val height = texture.height
                 assertTrue("Unexpected preview dimensions", width >= 320 && height >= 180)
