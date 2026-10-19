@@ -1,4 +1,4 @@
-name: TongCut Phase 2 - Device Acceptance TEST APK
+name: TongCut Phase 2 - Corrected SAFE Device TEST APK
 
 on:
   push:
@@ -61,7 +61,7 @@ jobs:
       - name: Owner-only Android test artifact (NOT A PRODUCTION RELEASE)
         uses: actions/upload-artifact@v4
         with:
-          name: TongCut-P2-TEST-APK
+          name: TongCut-P2-SAFE-TEST-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
           if-no-files-found: error
