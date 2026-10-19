@@ -1,12 +1,15 @@
 # TongCut editor UI/UX visual acceptance contract
 
 ## Product target (user requirement)
-Match the **CapCut Android 19.8.0 editor's interaction model, navigation hierarchy, screen composition, tool positioning, timeline behavior and ease of use** as closely as technically practical; independently implement it under TongCut branding. Do not ship a mismatched form-based page. Visual styling may use original TongCut assets, fonts and colours instead of duplicating copyrighted logos, illustrations, stickers, templates or proprietary UI artwork.
+Target a **familiar, capable professional Android editing workflow** using CapCut Android 19.8.0 as an interaction reference: home, picker, preview, true timeline, familiar tool grouping, contextual clip actions, and fast gestures. Implement the workflow independently. **Do not recreate another app's exact screen artwork, branded icon shapes, illustrations, animation sequences, type treatments or pixel-for-pixel visual identity.** TongCut must look intentionally designed as its own product, not a colour-swapped copy. See [TongCut original UI identity](TONGCUT_UI_IDENTITY.md).
 
 ### Reference collection
 - Reference version: user supplied CapCut 19.8.0 APK, package `com.lemon.lvoverseas`; it requires ABI/density splits not yet supplied. Static manifest and assets do not alone prove screen behavior.
 - Before marking any screen as complete, capture reference screens and gesture videos from a legitimate installed CapCut test instance. Store a UI interaction inventory *not* vendor assets. Test portrait + landscape and small + large Android displays.
 - Build golden tests/screen recordings for user flows. Mock screenshots cannot pass functional acceptance.
+
+## Source implementation update (feature-first; not accepted)
+On 2026-10-20, selected timeline clips route to a real context-sensitive editing rail with a Back path to main tools. Inspector focuses the selected layer. Unique TongCut palette tokens and independent caption styling are wired into the Compose UI and text-rendering model. Source tests exist; comprehensive build, emulator, physical-device, reference comparison and accessibility tests remain intentionally deferred until the feature inventory is complete.
 
 ## Screen-level visual/behavior checklist
 - [ ] Home: project grid, search/sorting, new project and recent drafts, relevant tools at top, clear account/privacy/settings routes.
