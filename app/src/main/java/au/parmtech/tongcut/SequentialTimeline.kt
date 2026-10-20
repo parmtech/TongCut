@@ -94,9 +94,11 @@ class SequentialTimeline(
         )
     }
 
+    /** Maps local position in the post-overlap playlist item to project time. */
     fun timeOf(index: Int, localMs: Long): Long {
         val clip = clips[index]
-        return offsets[index] + localMs.coerceIn(0L, clip.editedDurationMs)
+        val playlistDurationMs = clip.editedDurationMs - incomingOverlapMs(index)
+        return startOf(index) + localMs.coerceIn(0L, playlistDurationMs)
     }
 
     fun sourceTimeOf(index: Int, sourceMs: Long): Long {
