@@ -1,0 +1,36 @@
+name: Three-agent branch policy
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  approved-agents-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restrict legacy agent branch pull requests
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "Manual policy check: only agent/master, agent/worker-1, agent/worker-2 are active agent branches."
+            exit 0
+          fi
+          case "$SOURCE_BRANCH" in
+            agent/master|agent/worker-1|agent/worker-2)
+              echo "Approved three-agent branch: $SOURCE_BRANCH"
+              ;;
+            agent/*)
+              echo "::error::Legacy/mismatched agent branch $SOURCE_BRANCH is retired. Use agent/master, agent/worker-1 or agent/worker-2."
+              exit 1
+              ;;
+            *)
+              echo "Non-agent branch; standard PR policy applies."
+              ;;
+          esac
