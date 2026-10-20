@@ -165,6 +165,9 @@ internal fun LayerTools(
                                 alignments.size]
                             style(current.copy(alignment = next))
                         }
+                        SmallLayerButton(if (current.background) "Backdrop ✓" else "Backdrop") {
+                            style(current.copy(background = !current.background))
+                        }
                     }
                     SmallLayerButton(
                         if (layer.id in validGroup) "✓ Group" else "+ Group"

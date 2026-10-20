@@ -5,6 +5,7 @@ import android.text.Spannable
 import android.text.SpannableString
 import android.text.Layout
 import android.text.style.AlignmentSpan
+import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
@@ -59,6 +60,10 @@ object TimedTextEffects {
                     }
                     setSpan(AlignmentSpan.Standard(alignment), 0, length,
                         Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    if (layer.captionStyle.background && length > 0) {
+                        setSpan(BackgroundColorSpan(0xB820252C.toInt()), 0, length,
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
                 }
                 // Per-frame settings animate its pose and align the intrinsic text block
                 // against a virtual 88%-frame caption box.

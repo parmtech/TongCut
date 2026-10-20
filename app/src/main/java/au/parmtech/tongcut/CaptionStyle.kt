@@ -27,7 +27,9 @@ data class CaptionStyle(
     val size: Float = 1f,
     val bold: Boolean = true,
     val font: CaptionFont = CaptionFont.SANS,
-    val alignment: CaptionAlignment = CaptionAlignment.CENTER
+    val alignment: CaptionAlignment = CaptionAlignment.CENTER,
+    /** Original TongCut translucent charcoal caption backing. */
+    val background: Boolean = false
 ) {
     init {
         require(size.isFinite() && size in 0.5f..3f) {

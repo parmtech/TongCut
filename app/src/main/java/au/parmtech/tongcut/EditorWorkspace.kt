@@ -36,6 +36,8 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1096,6 +1098,12 @@ internal fun VideoEditorScreen(
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val viewportHeightPx = with(density) { maxHeight.toPx() }
                     visibleText.forEach { layer ->
+                        val captionText = buildAnnotatedString {
+                            append(layer.text.orEmpty())
+                            if (layer.captionStyle.background && length > 0) {
+                                addStyle(SpanStyle(background = Color(0xB820252C)), 0, length)
+                            }
+                        }
                         val motion = MotionCurve.at(
                             layer.motion,
                             (playMs * 1_000L - layer.startUs).coerceIn(0L, layer.durationUs)
@@ -1112,7 +1120,7 @@ internal fun VideoEditorScreen(
                             )
                         }
                         Text(
-                            text = layer.text.orEmpty(),
+                            text = captionText,
                             color = Color(layer.captionStyle.tone.argb),
                             fontWeight = if (layer.captionStyle.bold)
                                 FontWeight.Bold else FontWeight.Normal,
