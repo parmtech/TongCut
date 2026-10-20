@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 21)
+        put("schema", 22)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -25,6 +25,11 @@ object LayerTimelineCodec {
                     put("gain", track.gain.toDouble())
                     put("duckingSource", track.duckingSource)
                     put("duckingGain", track.duckingGain.toDouble())
+                    put("equalizer", JSONObject().apply {
+                        put("bassDb", track.equalizer.bassDb.toDouble())
+                        put("midDb", track.equalizer.midDb.toDouble())
+                        put("trebleDb", track.equalizer.trebleDb.toDouble())
+                    })
                 })
             }
         })
@@ -126,7 +131,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..21) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..22) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -148,7 +153,14 @@ object LayerTimelineCodec {
                 muted = track.optBoolean("muted", false),
                 gain = track.optDouble("gain", 1.0).toFloat(),
                 duckingSource = track.optBoolean("duckingSource", false),
-                duckingGain = track.optDouble("duckingGain", 0.25).toFloat()
+                duckingGain = track.optDouble("duckingGain", 0.25).toFloat(),
+                equalizer = track.optJSONObject("equalizer")?.let { eq ->
+                    AudioEqualizer(
+                        bassDb = eq.optDouble("bassDb", 0.0).toFloat(),
+                        midDb = eq.optDouble("midDb", 0.0).toFloat(),
+                        trebleDb = eq.optDouble("trebleDb", 0.0).toFloat()
+                    )
+                } ?: AudioEqualizer()
             )
         }
         val clips = (0 until itemsJson.length()).map { i ->

@@ -1057,6 +1057,45 @@ internal fun LayerTools(
                             onChange(LayerEdits.setAudioGain(draft, track.id,
                                 (track.gain + 0.1f).coerceAtMost(1f)))
                         }
+                        listOf(
+                            "Bass" to track.equalizer.bassDb,
+                            "Mid" to track.equalizer.midDb,
+                            "Treble" to track.equalizer.trebleDb
+                        ).forEachIndexed { band, (name, db) ->
+                            val value = db.toInt()
+                            val update: (Int) -> AudioEqualizer = { next ->
+                                when (band) {
+                                    0 -> track.equalizer.copy(bassDb = next.toFloat())
+                                    1 -> track.equalizer.copy(midDb = next.toFloat())
+                                    else -> track.equalizer.copy(trebleDb = next.toFloat())
+                                }
+                            }
+                            SmallLayerButton("$name −") {
+                                runCatching { LayerEdits.setAudioEqualizer(
+                                    draft, track.id, update((value - 1).coerceAtLeast(-12)))
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "$name EQ failed")
+                                }
+                            }
+                            Text("$name ${if (value > 0) "+" else ""}${value} dB",
+                                color = Color.LightGray, fontSize = 10.sp)
+                            SmallLayerButton("$name +") {
+                                runCatching { LayerEdits.setAudioEqualizer(
+                                    draft, track.id, update((value + 1).coerceAtMost(12)))
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "$name EQ failed")
+                                }
+                            }
+                        }
+                        if (!track.equalizer.isNeutral) {
+                            SmallLayerButton("Reset EQ") {
+                                runCatching { LayerEdits.setAudioEqualizer(
+                                    draft, track.id, AudioEqualizer())
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "Audio EQ reset failed")
+                                }
+                            }
+                        }
                         Text("Tap the curve to add a clip gain point",
                             color = Color.LightGray, fontSize = 10.sp)
                         AudioEnvelopeCurve(

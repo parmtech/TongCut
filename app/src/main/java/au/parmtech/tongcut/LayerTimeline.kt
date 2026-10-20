@@ -67,7 +67,9 @@ data class TimelineTrack(
     /** When enabled, clips on this AUDIO lane trigger ducking on other audio lanes. */
     val duckingSource: Boolean = false,
     /** Target gain for other lanes while this dialogue/priority track is active. */
-    val duckingGain: Float = 0.25f
+    val duckingGain: Float = 0.25f,
+    /** Optional three-band PCM equalizer for preview and rendered audio. */
+    val equalizer: AudioEqualizer = AudioEqualizer()
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)

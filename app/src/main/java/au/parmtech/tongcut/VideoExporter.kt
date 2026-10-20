@@ -285,8 +285,12 @@ class VideoExporter(private val context: Context) {
                                     /* shouldMaintainPitch = */ part.preservePitch
                                 ))
                             }
+                            val audioProcessors = mutableListOf<androidx.media3.common.audio.AudioProcessor>()
+                            if (!lane.equalizer.isNeutral) {
+                                audioProcessors += AudioEqualizerProcessor(lane.equalizer)
+                            }
                             if (lane.gain < 1f || part.envelope.isNotEmpty()) {
-                                val processor = GainProcessor(object : GainProcessor.GainProvider {
+                                audioProcessors += GainProcessor(object : GainProcessor.GainProvider {
                                     override fun getGainFactorAtSamplePosition(
                                         samplePosition: Long, sampleRate: Int
                                     ): Float {
@@ -310,7 +314,9 @@ class VideoExporter(private val context: Context) {
                                         } else unityEnd
                                     }
                                 })
-                                edited.setEffects(Effects(listOf(processor), emptyList()))
+                            }
+                            if (audioProcessors.isNotEmpty()) {
+                                edited.setEffects(Effects(audioProcessors, emptyList()))
                             }
                             audioOnly.addItem(edited.build())
                         }

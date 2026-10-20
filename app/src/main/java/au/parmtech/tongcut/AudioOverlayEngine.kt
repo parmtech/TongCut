@@ -20,7 +20,11 @@ import kotlin.math.abs
  * stays paused with an actionable message until it is relinked/changed.
  */
 class AudioOverlayEngine(private val context: Context) {
-    private data class Entry(val layer: TimelineLayer, val player: ExoPlayer)
+    private data class Entry(
+        val layer: TimelineLayer,
+        val equalizer: AudioEqualizer,
+        val player: ExoPlayer
+    )
     private val active = LinkedHashMap<String, Entry>()
     private val failures = AudioPreviewFailures()
     private var cachedGraph: LayerTimeline? = null
@@ -54,7 +58,10 @@ class AudioOverlayEngine(private val context: Context) {
         while (old.hasNext()) {
             val item = old.next()
             val source = audible.firstOrNull { it.id == item.key }
+            val currentEqualizer = source?.let { tracks[it.trackId]?.equalizer }
+                ?: AudioEqualizer()
             if (source == null || source != item.value.layer ||
+                currentEqualizer != item.value.equalizer ||
                 failures.messageFor(source) != null
             ) {
                 item.value.player.release()
@@ -73,7 +80,9 @@ class AudioOverlayEngine(private val context: Context) {
             val entry = cached ?: run {
                 var created: ExoPlayer? = null
                 try {
-                    val player = ExoPlayer.Builder(context).build()
+                    val equalizer = tracks[layer.trackId]?.equalizer ?: AudioEqualizer()
+                    val player = ExoPlayer.Builder(context,
+                        AudioEqualizerRenderersFactory(context, equalizer)).build()
                     created = player
                     val startMs = layer.sourceInUs / 1_000L
                     val endMs = (layer.sourceInUs + layer.consumedSourceUs) / 1_000L
@@ -94,7 +103,7 @@ class AudioOverlayEngine(private val context: Context) {
                     })
                     player.setMediaItem(media)
                     player.prepare()
-                    Entry(layer, player).also { active[layer.id] = it }
+                    Entry(layer, equalizer, player).also { active[layer.id] = it }
                 } catch (error: Exception) {
                     created?.release()
                     val message = failures.record(

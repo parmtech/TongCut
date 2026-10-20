@@ -43,6 +43,14 @@ class AudioMixPlanTest {
         assertEquals(videoUs,plan[1].totalUs)
     }
 
+    @Test fun audioEqualizerFlowsIntoTheLaneRenderPlan() {
+        val eq = AudioEqualizer(bassDb = 4f, midDb = -2f, trebleDb = 6f)
+        val audioTrack = lane.copy(equalizer = eq)
+        val graph = LayerTimeline(tracks = listOf(audioTrack),
+            layers = listOf(clip("eq", 0L, videoUs)))
+        assertEquals(eq, AudioMixPlan.from(graph, videoUs).single().equalizer)
+    }
+
     @Test(expected=IllegalArgumentException::class)
     fun overshootingLayersAreRejected() {
         AudioMixPlan.from(
