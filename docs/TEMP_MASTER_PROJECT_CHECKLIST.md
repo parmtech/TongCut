@@ -1,7 +1,7 @@
 # TongCut — TEMPORARY MASTER DEVELOPMENT AND ACCEPTANCE CHECKLIST
 
 **Status:** ACTIVE / INCOMPLETE — DO NOT DELETE YET
-**Branch:** development/capcut-parity
+**Branch:** development/capcut-parity-offline
 **Last reconciled:** 2026-10-20
 **Scope:** Offline release covers P0–P5 and P7–P9: independently implemented non-AI CapCut Android 19.8.0 workflows plus original TongCut offline tools. P6 provider/AI/network services are explicitly deferred to a future release and are not an offline-release gate.
 **Owner rule:** Work on the earliest unresolved dependency first. Do not call a phase completed merely because a source file, button, unit test, emulator test, or APK exists.
@@ -19,7 +19,7 @@
 7. Use synthetic media in public CI. Do not upload the owner's private recordings/photos/screenshots, tokens, signing keys or credentials.
 8. Maintain backwards-compatible project schemas and undo/redo through every edit change.
 9. Use GitHub issues #1 (product parity), #2 (P1), #3 (P2), #4 (P6), #5 (UI) and #6 (P3) as supplementary evidence. This file is the cross-phase index.
-10. The P2 owner TEST APK was built and passed earlier CI; physical phone acceptance remains open. **Updated owner direction (2026-10-20):** Finish all in-scope offline feature implementation across P3–P5 and P7–P9 before starting the comprehensive test/build/fix/release campaign. Do not run tests or build APKs during this feature-construction pass. Keep unverified work unchecked; source presence is not acceptance. AI-provider, cloud, and other network-dependent editing features are deferred to P6/later and are not part of this offline release.
+10. The P2 owner TEST APK passed earlier CI; physical phone acceptance remains open. **Current owner direction (2026-10-20):** Continue feature-first development for in-scope offline P3–P5 and P7–P9, while the owner has also explicitly requested tested debug APK checkpoints. A successful unit-test/Lint/debug-APK audit verifies only that checkpoint; it does not complete comprehensive P9 testing or owner device acceptance. Keep unverified work unchecked. AI-provider, cloud, and other network-dependent editing features remain deferred to P6/later.
 11. For P3, document implementation and verification separately: editor control + persistence + GPU export + mixed-media Android pixel test + owner hardware acceptance for each advanced effect.
 
 ## P3–P9 coordinated production execution map (2026-10-20)
@@ -296,4 +296,5 @@ This map groups implementation by shared dependencies so features are developed 
 - Audio preview follows global playhead using separate ExoPlayers; it is NOT sample-accurate. Export uses Media3 and millisecond-aligned clipping.
 - Long-audio waveforms estimate peaks by sampling distributed windows rather than decoding every frame.
 - A successful emulator render does not verify the owner's real Android device or production readiness.
-- Debug APKs, including any P2 TEST acceptance build, are diagnostic artifacts, not a release nor proof that P0–P9 are done.
+- Debug APKs, including any P2 TEST acceptance build, are diagnostic artifacts, not a release nor proof that P0–P9 are done.
+- Audited offline debug APK checkpoint at commit e3c473737d73b04c4d5542b02640801e700fb3b3: [workflow run 39403179039](https://github.com/manbir6-ux/TongCut/actions/runs/39403179039) PASS — clean `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK ZIP/Manifest/DEX integrity; APK 69,295,625 bytes, SHA-256 `669ee48e249ba7a34322077f30ebfe0fcba9f64c45ff885c1b8659cb9f1c22fe`. Artifact `TongCut-development-audited-debug-apk` expires 2026-10-27. This is debug/device-test evidence only; comprehensive P9-03 and physical-device P9-06 remain unchecked.
