@@ -14,7 +14,8 @@ import android.net.Uri
 internal object PhotoBitmapDecoder {
     const val MAX_SIDE = 1024
 
-    fun decode(context: Context, uri: Uri, effects: PhotoEffects): Bitmap {
+    fun decode(context: Context, uri: Uri, effects: PhotoEffects,
+               colorLutProfile: ColorLutProfile? = null): Bitmap {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         // BitmapFactory.decodeStream RETURNS NULL intentionally when
         // inJustDecodeBounds=true. Only a missing input stream is an error.
@@ -80,6 +81,10 @@ internal object PhotoBitmapDecoder {
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
         val blurSource = if (effects.blur > 0f || effects.sharpen > 0f) pixels.copyOf() else pixels
+        // Construct once per bitmap, not once per pixel; old callers remain neutral by default.
+        val effectiveColorLutProfile = colorLutProfile?.takeIf { effects.applyColorLut }?.copy(
+            strength = (it.strength * effects.colorLutStrength).coerceIn(0f, 1f)
+        )
         for (y in 0 until height) {
             val row = y * width
             for (x in 0 until width) {
@@ -98,7 +103,7 @@ internal object PhotoBitmapDecoder {
                     pixels[idx] = PhotoMatte.grainPixel(pixels[idx], x, y, effects.grain)
                 }
                 pixels[idx] = PhotoMatte.applyAlpha(
-                    pixels[idx], x, y, width, height, effects
+                    pixels[idx], x, y, width, height, effects, effectiveColorLutProfile
                 )
             }
         }
