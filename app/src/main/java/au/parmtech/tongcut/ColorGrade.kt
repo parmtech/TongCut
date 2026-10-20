@@ -1,3 +1,5 @@
+Warning: fs was declared with const; use let for reassignable variables.
+Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import org.json.JSONObject
@@ -14,8 +16,12 @@ data class ColorGrade(
     val temperature: Float = 0f,
     /** Magenta (+) to green (-) white-balance tint. */
     val tint: Float = 0f,
-    /** Global hue rotation in degrees. */
-    val hueDegrees: Float = 0f
+    /** Global HSL hue rotation in degrees. */
+    val hueDegrees: Float = 0f,
+    /** Additive HSL saturation adjustment. */
+    val hslSaturation: Float = 0f,
+    /** Additive HSL lightness shift; -1/1 move to black/white. */
+    val hslLightness: Float = 0f
 ) {
     init {
         require(exposure.isFinite() && exposure in -2f..2f)
@@ -24,6 +30,8 @@ data class ColorGrade(
         require(temperature.isFinite() && temperature in -1f..1f)
         require(tint.isFinite() && tint in -1f..1f)
         require(hueDegrees.isFinite() && hueDegrees in -180f..180f)
+        require(hslSaturation.isFinite() && hslSaturation in -1f..1f)
+        require(hslLightness.isFinite() && hslLightness in -1f..1f)
     }
 
     fun apply(argb: Int): Int {
@@ -42,34 +50,41 @@ data class ColorGrade(
         red += tint * 0.05f
         green -= tint * 0.10f
         blue += tint * 0.05f
-        if (hueDegrees != 0f) {
+        if (kotlin.math.abs(hueDegrees) > 0.000001f ||
+            kotlin.math.abs(hslSaturation) > 0.000001f ||
+            kotlin.math.abs(hslLightness) > 0.000001f) {
+            red = red.coerceIn(0f, 1f)
+            green = green.coerceIn(0f, 1f)
+            blue = blue.coerceIn(0f, 1f)
             val maximum = maxOf(red, green, blue)
             val minimum = minOf(red, green, blue)
             val delta = maximum - minimum
-            if (delta > 0f) {
-                val baseHue = when (maximum) {
-                    red -> ((green - blue) / delta).let { if (it < 0f) it + 6f else it }
-                    green -> (blue - red) / delta + 2f
-                    else -> (red - green) / delta + 4f
-                } / 6f
-                val hue = (((baseHue + hueDegrees / 360f) % 1f) + 1f) % 1f
-                val sector = (hue * 6f).toInt().coerceIn(0, 5)
-                val hueSector = hue * 6f
-                val secondary = delta *
-                    (1f - kotlin.math.abs((hueSector % 2f) - 1f))
-                val offset = maximum - delta
-                val (r, g, b) = when (sector) {
-                    0 -> Triple(maximum, secondary + offset, offset)
-                    1 -> Triple(secondary + offset, maximum, offset)
-                    2 -> Triple(offset, maximum, secondary + offset)
-                    3 -> Triple(offset, secondary + offset, maximum)
-                    4 -> Triple(secondary + offset, offset, maximum)
-                    else -> Triple(maximum, offset, secondary + offset)
-                }
-                red = r
-                green = g
-                blue = b
+            val lightness = (maximum + minimum) * 0.5f
+            val saturation = (if (delta <= 0.000001f) 0f else
+                (delta / (1f - kotlin.math.abs(2f * lightness - 1f)).coerceAtLeast(0.000001f) +
+                    hslSaturation).coerceIn(0f, 1f))
+            val baseHue = when {
+                delta <= 0.000001f -> 0f
+                maximum == red -> ((green - blue) / delta).let { if (it < 0f) it + 6f else it }
+                maximum == green -> (blue - red) / delta + 2f
+                else -> (red - green) / delta + 4f
             }
+            val hue = (((baseHue + hueDegrees / 60f) % 6f) + 6f) % 6f
+            val adjustedLightness = (lightness + hslLightness * 0.5f).coerceIn(0f, 1f)
+            val chroma = (1f - kotlin.math.abs(2f * adjustedLightness - 1f)) * saturation
+            val secondary = chroma * (1f - kotlin.math.abs((hue % 2f) - 1f))
+            val offset = adjustedLightness - chroma * 0.5f
+            val (r, g, b) = when {
+                hue < 1f -> Triple(chroma, secondary, 0f)
+                hue < 2f -> Triple(secondary, chroma, 0f)
+                hue < 3f -> Triple(0f, chroma, secondary)
+                hue < 4f -> Triple(0f, secondary, chroma)
+                hue < 5f -> Triple(secondary, 0f, chroma)
+                else -> Triple(chroma, 0f, secondary)
+            }
+            red = r + offset
+            green = g + offset
+            blue = b + offset
         }
         fun channel(value: Float) = (value.coerceIn(0f, 1f) * 255f).toInt()
         return (argb and -0x1000000) or (channel(red) shl 16) or
@@ -85,6 +100,8 @@ object ColorGradeCodec {
         put("temperature", grade.temperature.toDouble())
         put("tint", grade.tint.toDouble())
         put("hueDegrees", grade.hueDegrees.toDouble())
+        put("hslSaturation", grade.hslSaturation.toDouble())
+        put("hslLightness", grade.hslLightness.toDouble())
     }
 
     /** Missing/invalid adjustment data safely restores neutral colour. */
@@ -97,7 +114,9 @@ object ColorGradeCodec {
                 saturation = value.optDouble("saturation", 1.0).toFloat(),
                 temperature = value.optDouble("temperature", 0.0).toFloat(),
                 tint = value.optDouble("tint", 0.0).toFloat(),
-                hueDegrees = value.optDouble("hueDegrees", 0.0).toFloat()
+                hueDegrees = value.optDouble("hueDegrees", 0.0).toFloat(),
+                hslSaturation = value.optDouble("hslSaturation", 0.0).toFloat(),
+                hslLightness = value.optDouble("hslLightness", 0.0).toFloat()
             )
         }.getOrDefault(ColorGrade())
     }

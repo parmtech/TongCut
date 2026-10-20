@@ -1,3 +1,5 @@
+Warning: fs was declared with const; use let for reassignable variables.
+Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import android.content.Context
@@ -80,6 +82,8 @@ private class MatteShader(
         program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
         program.setFloatUniform("uTint", settings.colorGrade.tint)
         program.setFloatUniform("uHueDegrees", settings.colorGrade.hueDegrees)
+        program.setFloatUniform("uHslSaturation", settings.colorGrade.hslSaturation)
+        program.setFloatUniform("uHslLightness", settings.colorGrade.hslLightness)
         program.setFloatUniform("uBlurAmount", settings.blur)
         program.setFloatUniform("uSharpenAmount", settings.sharpen)
         program.setFloatUniform("uGrainAmount", settings.grain)
@@ -149,6 +153,8 @@ private class MatteShader(
             uniform float uTemperature;
             uniform float uTint;
             uniform float uHueDegrees;
+            uniform float uHslSaturation;
+            uniform float uHslLightness;
             uniform float uBlurAmount;
             uniform float uSharpenAmount;
             uniform float uGrainAmount;
@@ -157,24 +163,35 @@ private class MatteShader(
             float edge(float lo, float hi, float value) {
                 return smoothstep(lo, max(lo + 0.00001, hi), value);
             }
-            vec3 shiftHue(vec3 color, float degrees) {
-                float high = max(color.r, max(color.g, color.b));
-                float low = min(color.r, min(color.g, color.b));
-                float chroma = high - low;
-                if (chroma <= 0.000001 || degrees == 0.0) return color;
+            vec3 adjustHsl(vec3 color, float degrees, float saturationShift,
+                float lightnessShift) {
+                if (abs(degrees) <= 0.000001 && abs(saturationShift) <= 0.000001 &&
+                    abs(lightnessShift) <= 0.000001)
+                    return color;
+                color = clamp(color, 0.0, 1.0);
+                float maxComponent = max(color.r, max(color.g, color.b));
+                float minComponent = min(color.r, min(color.g, color.b));
+                float delta = maxComponent - minComponent;
+                float lightness = (maxComponent + minComponent) * 0.5;
+                float saturation = delta <= 0.000001 ? 0.0 : clamp(
+                    delta / max(1.0 - abs(2.0 * lightness - 1.0), 0.000001) + saturationShift,
+                    0.0, 1.0);
                 float hue;
-                if (high == color.r) hue = mod((color.g - color.b) / chroma, 6.0);
-                else if (high == color.g) hue = (color.b - color.r) / chroma + 2.0;
-                else hue = (color.r - color.g) / chroma + 4.0;
-                hue = mod(hue + degrees / 60.0, 6.0);
+                if (delta <= 0.000001) hue = 0.0;
+                else if (maxComponent == color.r) hue = mod((color.g - color.b) / delta, 6.0);
+                else if (maxComponent == color.g) hue = (color.b - color.r) / delta + 2.0;
+                else hue = (color.r - color.g) / delta + 4.0;
+                hue = mod(hue + degrees / 60.0 + 6.0, 6.0);
+                float newLightness = clamp(lightness + lightnessShift * 0.5, 0.0, 1.0);
+                float chroma = (1.0 - abs(2.0 * newLightness - 1.0)) * saturation;
                 float secondary = chroma * (1.0 - abs(mod(hue, 2.0) - 1.0));
-                float offset = high - chroma;
-                if (hue < 1.0) return vec3(high, secondary + offset, offset);
-                if (hue < 2.0) return vec3(secondary + offset, high, offset);
-                if (hue < 3.0) return vec3(offset, high, secondary + offset);
-                if (hue < 4.0) return vec3(offset, secondary + offset, high);
-                if (hue < 5.0) return vec3(secondary + offset, offset, high);
-                return vec3(high, offset, secondary + offset);
+                float offset = newLightness - chroma * 0.5;
+                if (hue < 1.0) return vec3(chroma, secondary, 0.0) + offset;
+                if (hue < 2.0) return vec3(secondary, chroma, 0.0) + offset;
+                if (hue < 3.0) return vec3(0.0, chroma, secondary) + offset;
+                if (hue < 4.0) return vec3(0.0, secondary, chroma) + offset;
+                if (hue < 5.0) return vec3(secondary, 0.0, chroma) + offset;
+                return vec3(chroma, 0.0, secondary) + offset;
             }
             void accumulateBlurSample(vec4 sampleColor, float weight,
                 inout vec3 premultiplied, inout float alphaWeight) {
@@ -322,7 +339,7 @@ private class MatteShader(
                 grade.r += uTint * 0.05;
                 grade.g -= uTint * 0.10;
                 grade.b += uTint * 0.05;
-                grade = shiftHue(grade, uHueDegrees);
+                grade = adjustHsl(grade, uHueDegrees, uHslSaturation, uHslLightness);
                 gl_FragColor = vec4(clamp(grade, 0.0, 1.0) * keyedAlpha, keyedAlpha);
             }
         """

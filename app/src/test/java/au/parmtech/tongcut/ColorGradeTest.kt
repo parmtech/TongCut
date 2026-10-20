@@ -1,3 +1,5 @@
+Warning: fs was declared with const; use let for reassignable variables.
+Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import org.json.JSONObject
@@ -57,6 +59,28 @@ class ColorGradeTest {
             ColorGrade(hueDegrees = -150f).apply(0xFF808080.toInt()))
     }
 
+    @Test fun hslLightnessMovesMidGrayToBlackOrWhiteAtItsBounds() {
+        assertEquals(0xFF000000.toInt(),
+            ColorGrade(hslLightness = -1f).apply(0xFF808080.toInt()))
+        assertEquals(0xFFFFFFFF.toInt(),
+            ColorGrade(hslLightness = 1f).apply(0xFF808080.toInt()))
+    }
+
+    @Test fun hslSaturationZeroNeutralizesColorWithoutChangingLightness() {
+        val source = ColorGrade(hslSaturation = -1f).apply(0xFFBF8080.toInt())
+        val red = (source ushr 16) and 255
+        val green = (source ushr 8) and 255
+        val blue = source and 255
+        assertTrue(kotlin.math.abs(red - green) <= 1)
+        assertTrue(kotlin.math.abs(green - blue) <= 1)
+        assertTrue(green in 140..180)
+    }
+
+    @Test fun increasingHslSaturationLeavesAchromaticPixelsNeutral() {
+        val gray = 0xFF808080.toInt()
+        assertEquals(gray, ColorGrade(hslSaturation = 1f).apply(gray))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedExposure() { ColorGrade(exposure = 2.01f) }
 
@@ -66,9 +90,16 @@ class ColorGradeTest {
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedHueRotation() { ColorGrade(hueDegrees = 180.01f) }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsUnboundedHslLightness() { ColorGrade(hslLightness = 1.01f) }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsUnboundedHslSaturation() { ColorGrade(hslSaturation = -1.01f) }
+
     @Test fun gradeCodecRoundTripsAndDefaultsLegacyProjects() {
         val grade = ColorGrade(exposure = 0.75f, contrast = 1.2f,
-            saturation = 0.8f, temperature = -0.3f, tint = 0.45f, hueDegrees = 72f)
+            saturation = 0.8f, temperature = -0.3f, tint = 0.45f,
+            hueDegrees = 72f, hslSaturation = 0.25f, hslLightness = -0.35f)
         assertEquals(grade, ColorGradeCodec.decode(ColorGradeCodec.encode(grade)))
         assertEquals(ColorGrade(), ColorGradeCodec.decode(null))
     }
@@ -80,6 +111,8 @@ class ColorGradeTest {
         assertEquals(-0.25f, decoded.temperature)
         assertEquals(0f, decoded.tint)
         assertEquals(0f, decoded.hueDegrees)
+        assertEquals(0f, decoded.hslLightness)
+        assertEquals(0f, decoded.hslSaturation)
     }
 
     @Test fun gradeCodecRejectsMalformedRangesToNeutralDefaults() {
