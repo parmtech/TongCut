@@ -1,12 +1,47 @@
 package au.parmtech.tongcut
 
 /** Exact reverse order over observed extractor presentation timestamps (including VFR). */
-class ReversePtsPlan private constructor(private val descendingPtsUs: LongArray) {
+class ReversePtsPlan private constructor(
+    private val descendingPtsUs: LongArray,
+    private val inUs: Long,
+    private val outUs: Long
+) {
     val frameCount: Int get() = descendingPtsUs.size
+    val durationUs: Long get() = outUs - inUs
 
     fun sourceTimeUs(outputOffset: Int): Long {
         require(outputOffset in descendingPtsUs.indices)
         return descendingPtsUs[outputOffset]
+    }
+
+    /**
+     * Output duration for one reversed frame. The source-last frame keeps its trailing trim
+     * duration; the source-first frame keeps the leading trim duration. Interior durations are
+     * the exact adjacent observed-PTS deltas.
+     */
+    fun frameDurationUs(outputOffset: Int): Long {
+        require(outputOffset in descendingPtsUs.indices)
+        val lowerBoundary = if (frameCount == 1 || outputOffset == frameCount - 1) {
+            inUs
+        } else {
+            descendingPtsUs[outputOffset]
+        }
+        val upperBoundary = if (outputOffset == 0) outUs else descendingPtsUs[outputOffset - 1]
+        return upperBoundary - lowerBoundary
+    }
+
+    /** Returns the reversed frame visible at this zero-based segment output time. */
+    fun frameIndexAtOutputTimeUs(outputTimeUs: Long): Int? {
+        require(outputTimeUs >= 0L)
+        if (outputTimeUs >= durationUs) return null
+        var low = 0
+        var high = frameCount - 1
+        while (low < high) {
+            val middle = low + (high - low) / 2
+            val frameEndUs = outUs - descendingPtsUs[middle]
+            if (outputTimeUs < frameEndUs) high = middle else low = middle + 1
+        }
+        return low
     }
 
     companion object {
@@ -44,10 +79,9 @@ class ReversePtsPlan private constructor(private val descendingPtsUs: LongArray)
             }
             if (selectedCount == 0) return null
             selected.reverse(0, selectedCount)
-            return ReversePtsPlan(selected.copyOf(selectedCount))
+            return ReversePtsPlan(selected.copyOf(selectedCount), inUs, outUs)
         }
 
         private const val MAX_INDEXED_FRAMES = 5_000_000
     }
 }
-
