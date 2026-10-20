@@ -12,6 +12,10 @@ enum class EffectKernel(val id: String) {
     companion object {
         fun fromId(id: String): EffectKernel? = entries.firstOrNull { it.id == id }
     }
+
+    private fun mix(original: Float, effect: Float, strength: Float): Int =
+        ((original + (effect - original) * strength).coerceIn(0f, 1f) * 255f)
+            .toInt().coerceIn(0, 255)
 }
 
 data class EffectParameterSpec(
@@ -182,28 +186,29 @@ object OfflineEffectRenderer {
             val r = (pixel ushr 16 and 0xff) / 255f
             val g = (pixel ushr 8 and 0xff) / 255f
             val b = (pixel and 0xff) / 255f
-            val adjusted = when (preset.kernel) {
-                EffectKernel.SEA_GLASS -> floatArrayOf(
-                    (r * 0.94f).coerceIn(0f, 1f),
-                    (g * 1.025f + 0.008f).coerceIn(0f, 1f),
-                    (b * 1.075f + 0.012f).coerceIn(0f, 1f)
-                )
-                EffectKernel.SUN_PRINT -> floatArrayOf(
-                    (r * 1.055f + 0.012f).coerceIn(0f, 1f),
-                    (g * 1.015f + 0.004f).coerceIn(0f, 1f),
-                    (b * 0.91f).coerceIn(0f, 1f)
-                )
+            var effectR = r
+            var effectG = g
+            var effectB = b
+            when (preset.kernel) {
+                EffectKernel.SEA_GLASS -> {
+                    effectR = (r * 0.94f).coerceIn(0f, 1f)
+                    effectG = (g * 1.025f + 0.008f).coerceIn(0f, 1f)
+                    effectB = (b * 1.075f + 0.012f).coerceIn(0f, 1f)
+                }
+                EffectKernel.SUN_PRINT -> {
+                    effectR = (r * 1.055f + 0.012f).coerceIn(0f, 1f)
+                    effectG = (g * 1.015f + 0.004f).coerceIn(0f, 1f)
+                    effectB = (b * 0.91f).coerceIn(0f, 1f)
+                }
                 EffectKernel.PAPER_MONO -> {
                     val luminance = (0.2126f * r + 0.7152f * g + 0.0722f * b).coerceIn(0f, 1f)
-                    floatArrayOf((luminance * 1.015f).coerceIn(0f, 1f), luminance, (luminance * 0.94f).coerceIn(0f, 1f))
+                    effectR = (luminance * 1.015f).coerceIn(0f, 1f)
+                    effectG = luminance
+                    effectB = (luminance * 0.94f).coerceIn(0f, 1f)
                 }
             }
-            fun mix(original: Float, effect: Float): Int =
-                ((original + (effect - original) * strength).coerceIn(0f, 1f) * 255f)
-                    .toInt().coerceIn(0, 255)
-
-            (alpha shl 24) or (mix(r, adjusted[0]) shl 16) or
-                (mix(g, adjusted[1]) shl 8) or mix(b, adjusted[2])
+            (alpha shl 24) or (mix(r, effectR, strength) shl 16) or
+                (mix(g, effectG, strength) shl 8) or mix(b, effectB, strength)
         }
     }
 }
