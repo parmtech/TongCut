@@ -1,6 +1,7 @@
 package au.parmtech.tongcut
 
 import android.net.Uri
+import java.util.UUID
 
 /** All times are source-media milliseconds; end is exclusive. */
 data class Clip(
@@ -10,9 +11,11 @@ data class Clip(
     val startMs: Long = 0,
     val endMs: Long = durationMs,
     val removeAudio: Boolean = false,
-    val reverseVideo: Boolean = false
+    val reverseVideo: Boolean = false,
+    val id: String = UUID.randomUUID().toString()
 ) {
     init {
+        require(id.isNotBlank() && id.length <= 100)
         require(durationMs > 0) { "Video duration must be positive" }
         require(TrimWindow(startMs, endMs, durationMs).isValid()) { "Invalid clip trim" }
     }
