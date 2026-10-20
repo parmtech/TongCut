@@ -5,6 +5,7 @@ on:
     branches: [development/capcut-parity, development/capcut-parity-offline]
     paths:
       - '.github/workflows/audit-test-apk.yml'
+      - 'app/src/main/java/au/parmtech/tongcut/SequentialTimeline.kt'
   workflow_dispatch:
 
 permissions:
