@@ -38,7 +38,7 @@ class LayerTimelineCodecTest {
         )
         val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
         val encoded = LayerTimelineCodec.encode(project)
-        assertEquals(24, encoded.getInt("schema"))
+        assertEquals(25, encoded.getInt("schema"))
         assertEquals(project, LayerTimelineCodec.decode(encoded))
         val legacy = LayerTimelineCodec.encode(timeline)
         legacy.put("schema", 7)
@@ -186,7 +186,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(24,json.getInt("schema"))
+        assertEquals(25,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
 
         val beforeVignette = JSONObject(json.toString()).put("schema", 20)
@@ -234,7 +234,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(24,serialized.getInt("schema"))
+        assertEquals(25,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
@@ -262,7 +262,7 @@ class LayerTimelineCodecTest {
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(24, encoded.getInt("schema"))
+        assertEquals(25, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 10)
@@ -270,27 +270,30 @@ class LayerTimelineCodecTest {
         assertFalse(LayerTimelineCodec.decode(legacy).tracks.single().duckingSource)
     }
 
-    @Test fun audioEqualizerPersistsAndSchemaTwentyOneDefaultsNeutral() {
+    @Test fun audioEqualizerAndRumbleSettingPersistWithLegacyDefaults() {
         val eq = AudioEqualizer(bassDb = 5f, midDb = -3f, trebleDb = 8f)
         val track = TimelineTrack("voice", "Voiceover", LayerKind.AUDIO, 0,
-            equalizer = eq, stereoBalance = -0.4f, monoFoldDown = true)
+            equalizer = eq, stereoBalance = -0.4f, monoFoldDown = true,
+            rumbleReduction = true)
         val graph = LayerTimeline(tracks = listOf(track), layers = listOf(
             TimelineLayer("speech", "voice", LayerKind.AUDIO, 0, 2_000_000,
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(24, encoded.getInt("schema"))
+        assertEquals(25, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
-        val legacy = JSONObject(encoded.toString()).put("schema", 23)
+        val legacy = JSONObject(encoded.toString()).put("schema", 24)
         legacy.getJSONArray("tracks").getJSONObject(0).apply {
             remove("equalizer")
             remove("stereoBalance")
             remove("monoFoldDown")
+            remove("rumbleReduction")
         }
-        assertEquals(AudioEqualizer(), LayerTimelineCodec.decode(legacy).tracks.single().equalizer)
-        assertEquals(0f, LayerTimelineCodec.decode(legacy).tracks.single().stereoBalance)
-        assertEquals(false, LayerTimelineCodec.decode(legacy).tracks.single().monoFoldDown)
+        val restored = LayerTimelineCodec.decode(legacy).tracks.single()
+        assertEquals(AudioEqualizer(), restored.equalizer)
+        assertEquals(0f, restored.stereoBalance)
+        assertEquals(false, restored.monoFoldDown)
+        assertEquals(false, restored.rumbleReduction)
     }
-
 }

@@ -90,7 +90,7 @@ class AudioEqualizerTest {
         assertEquals(12_345.toShort(), processor.output.order(ByteOrder.nativeOrder()).getShort())
     }
 
-    @Test fun rumbleReductionRejectsDcButKeepsVoiceBand() {
+    @Test fun rumbleReductionRejectsSteadyDc() {
         val processor = AudioEqualizerProcessor(AudioEqualizer(), rumbleReduction = true)
         processor.configure(AudioProcessor.AudioFormat(48_000, 1, C.ENCODING_PCM_16BIT))
         processor.flush()
