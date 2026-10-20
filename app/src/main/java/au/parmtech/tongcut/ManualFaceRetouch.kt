@@ -51,6 +51,32 @@ internal data class ManualFaceRetouch(
     }
 }
 
+/** Original deterministic local starting points; users can refine every value afterward. */
+internal enum class ManualFaceRetouchPreset(
+    val label: String,
+    private val faceWidth: Float,
+    private val jawWidth: Float,
+    private val noseWidth: Float,
+    private val eyeScale: Float,
+    private val skinSoftening: Float
+) {
+    NEUTRAL("Neutral", 0f, 0f, 0f, 0f, 0f),
+    NATURAL("Natural", 0.05f, 0.035f, 0f, 0.04f, 0.12f),
+    SCULPT("Sculpt", 0.13f, 0.10f, 0.025f, 0.08f, 0.10f),
+    SOFT_FOCUS("Soft focus", 0f, 0f, 0f, 0f, 0.48f),
+    OPEN_EYES("Open eyes", 0f, 0f, 0f, 0.16f, 0.08f),
+    FULLER("Fuller", -0.12f, -0.05f, 0f, 0.03f, 0.08f);
+
+    /** Preset changes are deliberately limited to the five authored local controls. */
+    fun applyTo(current: ManualFaceRetouch): ManualFaceRetouch = current.copy(
+        faceWidth = faceWidth,
+        jawWidth = jawWidth,
+        noseWidth = noseWidth,
+        eyeScale = eyeScale,
+        skinSoftening = skinSoftening
+    )
+}
+
 /** Tolerant per-field project persistence; unknown or malformed values revert to neutral. */
 internal object ManualFaceRetouchCodec {
     fun encode(settings: ManualFaceRetouch): JSONObject = JSONObject().apply {

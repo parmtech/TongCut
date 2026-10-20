@@ -1611,6 +1611,24 @@ internal fun VideoEditorScreen(
                             color = Color.LightGray,
                             fontSize = 11.sp
                         )
+                        Text(
+                            "Quick starting points; refine each control below.",
+                            color = Color.LightGray,
+                            fontSize = 10.sp
+                        )
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            ManualFaceRetouchPreset.entries.forEach { preset ->
+                                ToolPill(preset.label) {
+                                    previewDraft = active.copy(
+                                        faceRetouch = preset.applyTo(face)
+                                    )
+                                    commitGradePreview()
+                                }
+                            }
+                        }
                         val maxRegionWidth = minOf(0.48f, face.centerX, 1f - face.centerX)
                         val maxRegionHeight = minOf(0.48f, face.centerY, 1f - face.centerY)
                         GradeSlider(

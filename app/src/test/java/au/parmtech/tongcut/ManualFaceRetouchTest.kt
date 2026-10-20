@@ -43,6 +43,34 @@ class ManualFaceRetouchTest {
         assertTrue(runCatching { ManualFaceRetouch(noseWidth = 0.081f) }.isFailure)
     }
 
+    @Test fun presetsPreserveTheAuthoredRegionAndUseBoundedLocalValues() {
+        val region = ManualFaceRetouch(
+            centerX = 0.39f, centerY = 0.56f, radiusX = 0.19f, radiusY = 0.27f,
+            faceWidth = 0.20f, jawWidth = 0.10f, noseWidth = 0.03f,
+            eyeScale = 0.15f, skinSoftening = 0.40f
+        )
+        val neutral = ManualFaceRetouchPreset.NEUTRAL.applyTo(region)
+        assertEquals(region.centerX, neutral.centerX, 0f)
+        assertEquals(region.centerY, neutral.centerY, 0f)
+        assertEquals(region.radiusX, neutral.radiusX, 0f)
+        assertEquals(region.radiusY, neutral.radiusY, 0f)
+        assertEquals(ManualFaceRetouch(), neutral.copy(centerX = 0.5f, centerY = 0.42f,
+            radiusX = 0.23f, radiusY = 0.30f))
+
+        ManualFaceRetouchPreset.entries.forEach { preset ->
+            val adjusted = preset.applyTo(region)
+            assertEquals(region.centerX, adjusted.centerX, 0f)
+            assertEquals(region.centerY, adjusted.centerY, 0f)
+            assertEquals(region.radiusX, adjusted.radiusX, 0f)
+            assertEquals(region.radiusY, adjusted.radiusY, 0f)
+            assertTrue(adjusted.faceWidth in -0.25f..0.25f)
+            assertTrue(adjusted.jawWidth in -0.25f..0.25f)
+            assertTrue(adjusted.noseWidth in -0.08f..0.08f)
+            assertTrue(adjusted.eyeScale in 0f..0.35f)
+            assertTrue(adjusted.skinSoftening in 0f..1f)
+        }
+    }
+
     @Test fun outOfRangeAndNonFiniteControlsAreRejected() {
         assertTrue(runCatching { ManualFaceRetouch(centerX = Float.NaN) }.isFailure)
         assertTrue(runCatching { ManualFaceRetouch(radiusY = 0f) }.isFailure)
