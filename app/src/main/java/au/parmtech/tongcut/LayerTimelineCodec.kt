@@ -2,10 +2,7 @@ package au.parmtech.tongcut
 
 import org.json.JSONArray
 import org.json.JSONObject
-import au.parmtech.tongcut.beauty.FacePoint
-import au.parmtech.tongcut.beauty.ManualBeautySettings
-import au.parmtech.tongcut.beauty.ManualFaceBeauty
-import au.parmtech.tongcut.beauty.ManualFaceLandmarks
+import au.parmtech.tongcut.beauty.ManualFaceBeautyJson
 
 /**
  * Schema v1 for layered state nested inside ProjectStore schema v2.
@@ -96,6 +93,7 @@ object LayerTimelineCodec {
                         put("applyColorLut", item.photoEffects.applyColorLut)
                         put("colorLutStrength", item.photoEffects.colorLutStrength.toDouble())
                         put("colorGrade", ColorGradeCodec.encode(item.photoEffects.colorGrade))
+                        put("manualFaceBeauty", ManualFaceBeautyJson.encode(item.photoEffects.manualFaceBeauty))
                         put("chroma", item.photoEffects.chroma?.let { key ->
                             JSONObject().apply {
                                 put("color", key.keyArgb)
@@ -244,6 +242,12 @@ object LayerTimelineCodec {
                         applyColorLut = fx.optBoolean("applyColorLut", false),
                         colorLutStrength = fx.optDouble("colorLutStrength", 1.0).toFloat()
                             .takeIf { it.isFinite() && it in 0f..1f } ?: 1f,
+                        manualFaceBeauty = ManualFaceBeautyJson.decode(fx.optJSONObject("manualFaceBeauty"))
+                            .also { beauty ->
+                                require(item.optString("kind") != "VIDEO" || beauty.isNeutral) {
+                                    "Manual face beauty is IMAGE-only; remove it from this VIDEO layer"
+                                }
+                            },
                         chroma = fx.optJSONObject("chroma")?.let { c ->
                             PhotoChroma(
                                 keyArgb = c.optInt("color",0xFF00FF00.toInt()),
