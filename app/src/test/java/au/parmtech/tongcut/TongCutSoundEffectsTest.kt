@@ -12,10 +12,10 @@ class TongCutSoundEffectsTest {
             val wav = TongCutSoundEffectGenerator.wavBytes(effect)
             val sampleFrames = TongCutSoundEffectGenerator.SAMPLE_RATE * effect.durationMs / 1_000L
             assertEquals(44L + sampleFrames * 2L, wav.size.toLong())
-            assertEquals("RIFF", wav.copyOfRange(0, 4).toString(Charsets.US_ASCII))
-            assertEquals("WAVE", wav.copyOfRange(8, 12).toString(Charsets.US_ASCII))
-            assertEquals("fmt ", wav.copyOfRange(12, 16).toString(Charsets.US_ASCII))
-            assertEquals("data", wav.copyOfRange(36, 40).toString(Charsets.US_ASCII))
+            assertEquals("RIFF", String(wav.copyOfRange(0, 4), Charsets.US_ASCII))
+            assertEquals("WAVE", String(wav.copyOfRange(8, 12), Charsets.US_ASCII))
+            assertEquals("fmt ", String(wav.copyOfRange(12, 16), Charsets.US_ASCII))
+            assertEquals("data", String(wav.copyOfRange(36, 40), Charsets.US_ASCII))
             assertEquals(1, unsignedShort(wav, 20)) // PCM format
             assertEquals(1, unsignedShort(wav, 22)) // mono
             assertEquals(16, unsignedShort(wav, 34))
