@@ -1,0 +1,63 @@
+name: TongCut Android APK (alpha)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and test debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install Android SDK Platform 36
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER" || { echo "Android sdkmanager not installed"; exit 1; }
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Compile, test and assemble debug APK
+        run: gradle --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: Stage APK
+        run: |
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TongCut-v0.1.0-alpha-debug.apk
+          sha256sum TongCut-v0.1.0-alpha-debug.apk | tee TongCut-sha256.txt
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-debug-apk
+          path: |
+            TongCut-v0.1.0-alpha-debug.apk
+            TongCut-sha256.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish private repository alpha prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v0.1.0-alpha-20261020"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" TongCut-v0.1.0-alpha-debug.apk TongCut-sha256.txt --clobber
+          else
+            gh release create "$TAG" TongCut-v0.1.0-alpha-debug.apk TongCut-sha256.txt \
+              --title "TongCut 0.1.0 alpha — Android debug APK" \
+              --notes "Development-only debug build of TongCut. Not a CapCut-complete or device-tested production release. Requires Android 10+. Build verified by automated unit tests and Gradle." \
+              --prerelease --target "${{ github.sha }}"
+          fi
