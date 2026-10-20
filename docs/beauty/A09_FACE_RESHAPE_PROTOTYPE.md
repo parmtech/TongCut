@@ -52,6 +52,33 @@ These coordinates are illustration-only normalized image points, **not** detecto
 5. Current model has bounded manual adjustments; physically implausible settings and complex neighboring features may look distorted. Needs skin/teeth/hair edge-quality tests across ages/tones/angles. No claims of beauty quality until tested.
 6. No dependency/license changes, no Gradle/Manifest changes, no third-party proprietary libraries and no permissions added.
 
+## GPU video implementation (NEW, pending editor integration)
+
+- `FaceReshapeGpuGeometry.kt`: pure source-frame inverse-warp geometry and CPU shader-coordinate oracle. Seven displacement pins + two eye radii, corresponding to the still-image CPU algorithm.
+- `FaceReshapeVideoEffect.kt`: standalone SDR-only Media3 `GlEffect` + `BaseGlShaderProgram`, intended to be reused by ExoPlayer preview **and** Transformer export. It handles missing/low-confidence landmarks by copying the incoming frame. HDR is currently rejected, not silently reinterpreted.
+- `FaceReshapeEffectFactory.kt`: constructs per-clip Media3 effect lists from the same saved settings. Independent preview and exporter pipelines must create their own instances. **Nothing in the current editor or exporter calls it yet.**
+- `FaceReshapeEditCodec.kt`: strict version-1 local JSON edit payload, with bounded face-anchor observation count, settings validation and no photo bytes. A03 owns actual project persistence/migrations; this codec is not wired into `ProjectStore`.
+- `FaceReshapeLinearClock.kt`: deterministic trim/speed/reverse source clock for a single **constant-speed** clip. For project joins and speed ramps, use existing `layer.sourceAt()` in a validated adapter; never guess Transformer presentation-time semantics.
+- Added source-only JVM tests: `FaceReshapeGpuGeometryTest.kt`, `FaceReshapeEditCodecTest.kt`, `FaceReshapeLinearClockTest.kt`.
+
+### Required preview/export hook (DO NOT APPLY without A20/A04/A12 approval)
+
+Use the **same** `FaceReshapeEffectFactory.videoEffects(edit, timeMapper)` with:
+- ExoPlayer: `player.setVideoEffects(existingVideoEffects + faceVideoEffects)`.
+- Media3 Transformer item: `EditedMediaItem.Builder(item).setEffects(Effects(audioEffects, existingVideoEffects + faceVideoEffects))`.
+
+These are integration instructions, **not existing production wiring**. The `timeMapper` maps the frame's Media3 presentation time to source microseconds, accounting for trim/speed/reverse. Feed samples in original, unmirrored top-left photo coordinates, with per-track confidence.
+
+GLES2 compatibility: radii for symmetric pin pairs are shared to keep active fragment uniform usage below the minimum 16 uniform-vector budget. All uniforms are initialized even when the first frame has no face. This is **not** proof of functioning GPU rendering; Android shader compilation and decoded MP4 pixel tests remain OPEN.
+
+### Test and acceptance status
+
+- Kotlin code has been committed to the isolated A09 branch. **No successful Gradle compilation, running GLES shader, instrumented video, device thermal check or saved-project compatibility proof has been established.**
+- Alpha interpolation differs between a CPU alpha-safe bilinear sampler and standard GPU hardware filtering; transparent edges and RGBA composition need actual pixel acceptance.
+- The fragment shader assumes the same Media3 orientation convention as the existing TongCut `VideoMatteEffect`; verify portrait/mirrored/rotated clips with synthetic markers.
+- No automatic face detection or video landmark tracker is included; tracking observations must come from manually approved or consented on-device tooling.
+- No `main` branch changes, no APK release and no fake editor controls.
+
 ## Next implementation steps for A09 + coordinator A20
 
 - Obtain legal offline landmark solution (or build touch-based manual landmark-placement editor) with orientation and front-camera mirror normalization.
