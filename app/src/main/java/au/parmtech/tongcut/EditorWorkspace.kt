@@ -1019,14 +1019,28 @@ internal fun VideoEditorScreen(
                 playMs < editTimeline.startOf(active.selectedIndex) + clip.editedDurationMs) {
                 val bitmap = reversePreviewFrame
                 if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Reverse video preview",
-                        contentScale = if (active.canvas == CanvasRatio.SOURCE) {
-                            ContentScale.Fit
-                        } else ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    val quarterTurned = active.primaryQuarterTurns % 2 != 0
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(
+                                if (quarterTurned) stageHeight else stageWidth,
+                                if (quarterTurned) stageWidth else stageHeight
+                            )
+                            .graphicsLayer {
+                                rotationZ = -active.primaryQuarterTurns * 90f
+                                scaleX = if (active.primaryFlipHorizontal) -1f else 1f
+                            }
+                    ) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Reverse video preview",
+                            contentScale = if (active.canvas == CanvasRatio.SOURCE) {
+                                ContentScale.Fit
+                            } else ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 } else {
                     Text(
                         reverseAudioIssue ?: reversePreviewIssue ?: "Preparing reverse preview…",
