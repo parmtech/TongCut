@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,6 +92,7 @@ private val tools = listOf(
 internal fun VideoEditorScreen(
     draft: EditorDraft,
     exportJobs: ExportJobs,
+    statusMessage: String,
     onBack: () -> Unit,
     onMedia: () -> Unit,
     onChange: (EditorDraft) -> Unit,
@@ -748,6 +752,19 @@ internal fun VideoEditorScreen(
             }
         }
 
+        if (statusMessage.isNotBlank()) {
+            Text(
+                statusMessage,
+                color = Color(0xFFB5C2CA),
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+                    .semantics { liveRegion = LiveRegionMode.Polite }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            )
+        }
+
         audioWarning?.let { warning ->
             Surface(color = Color(0xFF50370B), modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -918,8 +935,13 @@ internal fun VideoEditorScreen(
                 },
                 onMoveGroup = { ids, deltaUs ->
                     runCatching { AdvancedClipEdits.moveGroupByFrames(active, ids, deltaUs) }
-                        .onSuccess(onChange)
-                        .onFailure { onInfo("Cannot move group: ${it.message}") }
+                        .fold(
+                            onSuccess = { updated -> onChange(updated); true },
+                            onFailure = { error ->
+                                onInfo("Cannot move group: ${error.message}")
+                                false
+                            }
+                        )
                 },
                 onMoveLayer = { id, startUs ->
                     runCatching { LayerEdits.placeLayerAtFrame(active, id, startUs) }

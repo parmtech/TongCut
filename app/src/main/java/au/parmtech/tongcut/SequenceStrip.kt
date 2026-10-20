@@ -18,6 +18,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,7 +57,7 @@ internal fun SequenceStrip(
     selectedGroupIds: Set<String> = emptySet(),
     onLayerSelect: (LayerKind, String) -> Unit,
     onMoveLayer: (String, Long) -> Unit,
-    onMoveGroup: (Set<String>, Long) -> Unit = { _, _ -> },
+    onMoveGroup: (Set<String>, Long) -> Boolean = { _, _ -> false },
     onTrimLayerStart: (String, Long) -> Unit,
     onTrimLayerEnd: (String, Long) -> Unit,
     onUnavailable: (String) -> Unit
@@ -336,7 +344,38 @@ internal fun SequenceStrip(
                                                                 }
                                                             )
                                                         }
-                                                        .clickable { onLayerSelect(kind, layer.id) }
+                                                        .clickable(role = Role.Button) {
+                                                            onLayerSelect(kind, layer.id)
+                                                        }
+                                                        .semantics {
+                                                            val spokenName = if (kind == LayerKind.TEXT) {
+                                                                "Text clip: ${layer.text.orEmpty().take(60)}"
+                                                            } else "${kind.name.lowercase()} clip"
+                                                            contentDescription = "$spokenName, starts at " +
+                                                                "${layer.startUs / 1_000L} milliseconds, " +
+                                                                "duration ${layer.durationUs / 1_000L} milliseconds"
+                                                            val inGroup = layer.id in validGroupIds &&
+                                                                validGroupIds.size > 1
+                                                            selected = inGroup || selectedLayerId == layer.id
+                                                            stateDescription = when {
+                                                                inGroup -> "Selected with " +
+                                                                    "${validGroupIds.size - 1} other layers"
+                                                                selectedLayerId == layer.id -> "Focused for editing"
+                                                                else -> "Not selected"
+                                                            }
+                                                            customActions = if (inGroup) listOf(
+                                                                CustomAccessibilityAction(
+                                                                    "Move selected group earlier by half a second"
+                                                                ) {
+                                                                    onMoveGroup(validGroupIds, -500_000L)
+                                                                },
+                                                                CustomAccessibilityAction(
+                                                                    "Move selected group later by half a second"
+                                                                ) {
+                                                                    onMoveGroup(validGroupIds, 500_000L)
+                                                                }
+                                                            ) else emptyList()
+                                                        }
                                                 ) {
                                                     Box(contentAlignment = Alignment.CenterStart) {
                                                         // Visible left/right trim handles. Narrow
