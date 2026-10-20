@@ -133,6 +133,7 @@ internal fun VideoEditorScreen(
     var recordingVoiceover by remember { mutableStateOf(false) }
     var voiceoverPaused by remember { mutableStateOf(false) }
     var voiceoverElapsedMs by remember { mutableLongStateOf(0L) }
+    var voiceoverVoiceProcessing by remember { mutableStateOf(false) }
     DisposableEffect(voiceoverCapture) {
         onDispose { voiceoverCapture.cancel() }
     }
@@ -338,13 +339,17 @@ internal fun VideoEditorScreen(
             require(!voiceoverCapture.isRecording) { "Microphone is already recording" }
             player.pause()
             playing = false
-            voiceoverCapture.start()
+            voiceoverCapture.start(voiceProcessing = voiceoverVoiceProcessing)
             voiceoverStartMs = playMs
             voiceoverElapsedMs = 0L
             voiceoverPaused = false
             recordingVoiceover = true
             panel = "Audio"
-            onInfo("Recording locally. Press Stop & add to create an editable audio layer.")
+            onInfo(
+                if (voiceoverVoiceProcessing) {
+                    "Recording locally with Android voice processing where available."
+                } else "Recording locally. Press Stop & add to create an editable audio layer."
+            )
         } catch (error: Exception) {
             recordingVoiceover = false
             onInfo("Voiceover start failed: ${error.message}")
@@ -1336,6 +1341,21 @@ internal fun VideoEditorScreen(
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,
                         { onChange(active.copy(canvas = it)) }) { it.label }
                     "Audio" -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = voiceoverVoiceProcessing,
+                                enabled = !recordingVoiceover,
+                                onCheckedChange = { voiceoverVoiceProcessing = it }
+                            )
+                            Column {
+                                Text("Voice processing", color = Color.White)
+                                Text(
+                                    "Uses Android communication tuning when supported",
+                                    color = Color.LightGray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)

@@ -27,7 +27,8 @@ internal class VoiceoverCapture(private val context: Context) {
     @Suppress("DEPRECATION")
     private fun legacyRecorder(): MediaRecorder = MediaRecorder()
 
-    fun start() {
+    /** Enables Android's voice-communication capture path when requested. */
+    fun start(voiceProcessing: Boolean = false) {
         check(!isRecording) { "A voiceover recording is already active" }
         val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
             ?: context.filesDir
@@ -39,7 +40,10 @@ internal class VoiceoverCapture(private val context: Context) {
                 else legacyRecorder()
             initialized = active
             active.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setAudioSource(
+                    if (voiceProcessing) MediaRecorder.AudioSource.VOICE_COMMUNICATION
+                    else MediaRecorder.AudioSource.MIC
+                )
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setAudioSamplingRate(44_100)
