@@ -17,7 +17,8 @@ object PrimaryTransitionComposition {
     fun sequence(
         clips: List<Clip>,
         plan: PrimaryTransitionPlan,
-        frameRate: Int
+        frameRate: Int,
+        videoEffects: List<androidx.media3.common.Effect>
     ): EditedMediaItemSequence {
         val byId = clips.associateBy { it.id }
         val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
@@ -42,7 +43,7 @@ object PrimaryTransitionComposition {
                 EditedMediaItem.Builder(source)
                     .setFrameRate(frameRate)
                     .setRemoveAudio(true)
-                    .setEffects(Effects(emptyList(), emptyList()))
+                    .setEffects(Effects(emptyList(), videoEffects))
                     .build()
             )
             cursorUs = window.endUs
