@@ -12,7 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -34,7 +38,12 @@ internal object AudioWaveformDecoder {
         cache.put(key(uri, start, length), result)
     }
 
-    fun extract(context: Context, layer: TimelineLayer): List<Float> {
+    fun extract(
+        context: Context,
+        layer: TimelineLayer,
+        checkpoint: () -> Unit = {}
+    ): List<Float> {
+        checkpoint()
         val uri = requireNotNull(layer.sourceUri)
         lookup(uri, layer.sourceInUs, layer.durationUs)?.let { return it }
         val startUs = layer.sourceInUs
@@ -60,6 +69,7 @@ internal object AudioWaveformDecoder {
             var pcmFloat = false
 
             windows.forEachIndexed { windowIndex, window ->
+                checkpoint()
                 // Seeking and flushing one decoder lets a 20-minute music track
                 // show peaks from the ENTIRE duration while decoding <=60 seconds.
                 // Window timings are absolute source times; bins cover whole clip.
@@ -73,6 +83,7 @@ internal object AudioWaveformDecoder {
                 while (!outputDone && loops++ < packetCap &&
                     !Thread.currentThread().isInterrupted
                 ) {
+                    checkpoint()
                     if (!inputDone) {
                         val index = decoder.dequeueInputBuffer(5_000)
                         if (index >= 0) {
@@ -91,6 +102,7 @@ internal object AudioWaveformDecoder {
                             }
                         }
                     }
+                    checkpoint()
                     val out = decoder.dequeueOutputBuffer(info, 5_000)
                     when {
                         out == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
@@ -109,14 +121,17 @@ internal object AudioWaveformDecoder {
                                 sample.position(info.offset)
                                 sample.limit(info.offset + info.size)
                                 var peak = 0f
+                                var sampleCount = 0
                                 if (pcmFloat) {
                                     while (sample.remaining() >= 4) {
+                                        if (sampleCount++ % 1024 == 0) checkpoint()
                                         val amplitude = sample.float
                                         if (amplitude.isFinite()) peak =
                                             max(peak, abs(amplitude))
                                     }
                                 } else {
                                     while (sample.remaining() >= 2) {
+                                        if (sampleCount++ % 1024 == 0) checkpoint()
                                         peak = max(peak, abs(sample.short.toFloat() / 32768f))
                                     }
                                 }
@@ -157,8 +172,15 @@ internal fun AudioWaveform(
         ) ?: emptyList())
     }
     LaunchedEffect(layer.sourceUri,layer.sourceInUs,layer.durationUs) {
+        val scanJob = currentCoroutineContext()[Job]
         bins = withContext(Dispatchers.IO) {
-            runCatching { AudioWaveformDecoder.extract(context, layer) }.getOrDefault(emptyList())
+            try {
+                AudioWaveformDecoder.extract(context, layer) { scanJob?.ensureActive() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
     }
     Canvas(modifier) {

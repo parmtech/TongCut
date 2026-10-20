@@ -107,6 +107,7 @@ This map groups implementation by shared dependencies so features are developed 
 - [ ] **P2-19** SDR/HDR (HLG/PQ where supported) colour/alpha/image EXIF/crop test; avoid washed-out or corrupted output and explain codec-specific failures.
 - [ ] **P2-20** Multiple hardware decoder contention, unsupported formats and low-end phones degrade safely with clear errors; no system freeze or silent clip omission.
 - [ ] **P2-21** Long recordings (>90s), very long video/audio and sparse audio transients: representative waveform accuracy and smooth scrolling, memory/cancel protection.
+- [ ] **P2-21a (source; not yet tested)** Waveform MediaCodec scans now check the owning Compose job between scan windows, decoder input/output polls and sample batches. Cancelling a stale/recomposed clip scan propagates cancellation through `finally` so codec/extractor resources are released, and interrupted partial peaks are not cached. Long-recording smoothness, platform decoder interruption latency and cancellation stress remain unverified; no tests/build were run.
 - [ ] **P2-22** Force-stop, background, app rotation, permission revoke/relink and restart retain edit changes, independent layer source URIs and project history.
 - [ ] **P2-23** Session/stress: 5–20min timeline, maximum tracks, rapid seek/undo, thermal/memory, slow filesystem and cancellation leaves no orphan/empty MediaStore output.
 - [ ] **P2-24** UX: touchscreen trim gestures on independent lanes, hit areas >=48dp, accessibility font sizes, insets/RTL/tablet, no overlaps and reference workflow parity.
