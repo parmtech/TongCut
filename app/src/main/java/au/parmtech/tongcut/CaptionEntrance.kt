@@ -24,6 +24,25 @@ object CaptionEntranceMotion {
             CaptionEntrance.FADE -> CaptionEntrancePose(alpha = eased)
             CaptionEntrance.POP -> CaptionEntrancePose(alpha = eased, scale = 0.78f + 0.22f * eased)
             CaptionEntrance.RISE -> CaptionEntrancePose(alpha = eased, y = -0.16f * (1f - eased))
+            CaptionEntrance.ZOOM -> CaptionEntrancePose(
+                alpha = eased,
+                scale = 0.55f + 0.45f * eased
+            )
+            CaptionEntrance.DROP -> CaptionEntrancePose(
+                alpha = eased,
+                scale = 0.94f + 0.06f * eased,
+                y = 0.18f * (1f - eased)
+            )
+            CaptionEntrance.BOUNCE -> {
+                val dampedBounce = 1f - exp(-5.5f * progress) *
+                    cos(progress * 3.5f * PI.toFloat())
+                val settled = dampedBounce.coerceIn(0f, 1.14f)
+                CaptionEntrancePose(
+                    alpha = eased,
+                    scale = 0.78f + 0.22f * settled,
+                    y = -0.12f * (1f - settled)
+                )
+            }
         }
     }
 }
