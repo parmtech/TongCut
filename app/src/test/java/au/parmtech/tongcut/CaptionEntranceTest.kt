@@ -23,6 +23,18 @@ class CaptionEntranceTest {
         assertEquals(-0.16f, CaptionEntranceMotion.at(
             CaptionEntrance.RISE, 0L, 1_000_000L
         ).y, 0f)
+        assertEquals(0f, CaptionEntranceMotion.at(
+            CaptionEntrance.DROP, 0L, 1_000_000L
+        ).alpha, 0f)
+        assertEquals(0.16f, CaptionEntranceMotion.at(
+            CaptionEntrance.DROP, 0L, 1_000_000L
+        ).y, 0f)
+        assertEquals(0f, CaptionEntranceMotion.at(
+            CaptionEntrance.ZOOM, 0L, 1_000_000L
+        ).alpha, 0f)
+        assertEquals(1.22f, CaptionEntranceMotion.at(
+            CaptionEntrance.ZOOM, 0L, 1_000_000L
+        ).scale, 0f)
         for (preset in CaptionEntrance.entries.filter { it != CaptionEntrance.NONE }) {
             assertEquals(CaptionEntrancePose(), CaptionEntranceMotion.at(
                 preset, 300_000L, 1_000_000L
@@ -32,7 +44,7 @@ class CaptionEntranceTest {
 
     @Test fun shortCaptionsStillFinishEntranceAtTheirEnd() {
         assertEquals(CaptionEntrancePose(), CaptionEntranceMotion.at(
-            CaptionEntrance.POP, 120_000L, 120_000L
+            CaptionEntrance.ZOOM, 120_000L, 120_000L
         ))
     }
 }
