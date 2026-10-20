@@ -2,7 +2,40 @@ package au.parmtech.tongcut
 
 /** Original TongCut one-tap looks, expressed in the shared CPU/GPU grade model. */
 data class ColorGradePreset(val name: String, val grade: ColorGrade) {
-    init { require(name.isNotBlank() && name.length <= 32) }
+    init {
+        require(name.isNotBlank() && name.length <= 32)
+        require(grade.curves == ColorCurves()) {
+            "Preset strength interpolation supports parametric looks, not custom curves"
+        }
+    }
+
+    fun gradeAtStrength(strength: Float): ColorGrade {
+        require(strength.isFinite() && strength in 0f..1f)
+        if (strength == 0f) return ColorGrade()
+        if (strength == 1f) return grade
+
+        fun blend(neutral: Float, target: Float) = neutral + (target - neutral) * strength
+        val bands = DEFAULT_HSL_BANDS.indices.map { index ->
+            val neutral = DEFAULT_HSL_BANDS[index]
+            val target = grade.hslBands[index]
+            HslBandAdjustment(
+                hueDegrees = blend(neutral.hueDegrees, target.hueDegrees),
+                saturation = blend(neutral.saturation, target.saturation),
+                lightness = blend(neutral.lightness, target.lightness)
+            )
+        }
+        return ColorGrade(
+            exposure = blend(0f, grade.exposure),
+            contrast = blend(1f, grade.contrast),
+            saturation = blend(1f, grade.saturation),
+            temperature = blend(0f, grade.temperature),
+            tint = blend(0f, grade.tint),
+            hueDegrees = blend(0f, grade.hueDegrees),
+            hslSaturation = blend(0f, grade.hslSaturation),
+            hslLightness = blend(0f, grade.hslLightness),
+            hslBands = bands
+        )
+    }
 }
 
 object ColorGradePresets {

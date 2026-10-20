@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToLong
+import kotlin.math.roundToInt
 
 /** Real model operations. Buttons either change persistent layer state or are clearly disabled. */
 @Composable
@@ -398,19 +399,46 @@ internal fun LayerTools(
                                 color = Color(0xFFFFC987), fontSize = 10.sp)
                         }
                         val fx = layer.photoEffects
+                        var selectedColorLook by remember(layer.id) {
+                            mutableStateOf<ColorGradePreset?>(null)
+                        }
+                        var colorLookStrength by remember(layer.id) { mutableFloatStateOf(1f) }
                         var selectedPolygonVertex by remember(layer.id) { mutableIntStateOf(0) }
                         var selectedHslBand by remember(layer.id) { mutableIntStateOf(0) }
                         var selectedCurveChannel by remember(layer.id) { mutableIntStateOf(0) }
                         var selectedCurvePoint by remember(layer.id) { mutableIntStateOf(1) }
-                        fun grade(next: ColorGrade) {
+                        fun grade(next: ColorGrade, keepLookSelection: Boolean = false) {
+                            if (!keepLookSelection) selectedColorLook = null
                             runCatching { applyMatte(fx.copy(colorGrade = next)) }
                                 .onSuccess(onChange)
                                 .onFailure { onError(it.message ?: "Color adjustment failed") }
                         }
                         ColorGradePresets.all.forEach { preset ->
-                            SmallLayerButton("Look ${preset.name}") { grade(preset.grade) }
+                            SmallLayerButton("Look ${preset.name}") {
+                                selectedColorLook = preset
+                                colorLookStrength = 1f
+                                grade(preset.gradeAtStrength(1f), keepLookSelection = true)
+                            }
                         }
-                        Text("Looks replace this layer's grade; sliders and curves refine it.",
+                        selectedColorLook?.let { preset ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Look strength", color = Color.LightGray, fontSize = 10.sp)
+                                Spacer(Modifier.weight(1f))
+                                Text("${(colorLookStrength * 100f).roundToInt()}%",
+                                    color = Color.LightGray, fontSize = 10.sp)
+                                SmallLayerButton("−10%") {
+                                    colorLookStrength = (colorLookStrength - 0.1f).coerceAtLeast(0f)
+                                    grade(preset.gradeAtStrength(colorLookStrength),
+                                        keepLookSelection = true)
+                                }
+                                SmallLayerButton("+10%") {
+                                    colorLookStrength = (colorLookStrength + 0.1f).coerceAtMost(1f)
+                                    grade(preset.gradeAtStrength(colorLookStrength),
+                                        keepLookSelection = true)
+                                }
+                            }
+                        }
+                        Text("Looks replace this layer's grade; adjust strength, then refine it.",
                             color = Color.LightGray, fontSize = 10.sp)
                         SmallLayerButton("Exp −") {
                             grade(fx.colorGrade.copy(exposure =

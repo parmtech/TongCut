@@ -20,6 +20,59 @@ class ColorGradeTest {
         )))
     }
 
+    @Test fun presetStrengthBlendsTowardNeutralAndKeepsExactEndpoints() {
+        val bands = DEFAULT_HSL_BANDS.toMutableList().apply {
+            this[0] = HslBandAdjustment(hueDegrees = 40f, saturation = 0.6f, lightness = -0.4f)
+        }
+        val preset = ColorGradePreset("Halfway", ColorGrade(
+            exposure = 0.8f, contrast = 1.6f, saturation = 0.4f,
+            temperature = -0.6f, tint = 0.5f, hueDegrees = 80f,
+            hslSaturation = -0.4f, hslLightness = 0.6f, hslBands = bands
+        ))
+        assertEquals(ColorGrade(), preset.gradeAtStrength(0f))
+        assertEquals(preset.grade, preset.gradeAtStrength(1f))
+
+        val halfway = preset.gradeAtStrength(0.5f)
+        assertEquals(0.4f, halfway.exposure, 0.00001f)
+        assertEquals(1.3f, halfway.contrast, 0.00001f)
+        assertEquals(0.7f, halfway.saturation, 0.00001f)
+        assertEquals(-0.3f, halfway.temperature, 0.00001f)
+        assertEquals(0.25f, halfway.tint, 0.00001f)
+        assertEquals(40f, halfway.hueDegrees, 0.00001f)
+        assertEquals(-0.2f, halfway.hslSaturation, 0.00001f)
+        assertEquals(0.3f, halfway.hslLightness, 0.00001f)
+        assertEquals(20f, halfway.hslBands[0].hueDegrees, 0.00001f)
+        assertEquals(0.3f, halfway.hslBands[0].saturation, 0.00001f)
+        assertEquals(-0.2f, halfway.hslBands[0].lightness, 0.00001f)
+        assertEquals(ColorCurves(), halfway.curves)
+    }
+
+    @Test fun allOriginalLooksHaveBoundedHalfStrengthGrades() {
+        ColorGradePresets.all.forEach { preset ->
+            val grade = preset.gradeAtStrength(0.5f)
+            assertTrue(grade.exposure in -2f..2f)
+            assertTrue(grade.contrast in 0f..2f)
+            assertTrue(grade.saturation in 0f..2f)
+            assertTrue(grade.temperature in -1f..1f)
+            assertTrue(grade.tint in -1f..1f)
+            assertTrue(grade.hueDegrees in -180f..180f)
+            assertTrue(grade.hslSaturation in -1f..1f)
+            assertTrue(grade.hslLightness in -1f..1f)
+            grade.hslBands.forEach { band ->
+                assertTrue(band.hueDegrees in -180f..180f)
+                assertTrue(band.saturation in -1f..1f)
+                assertTrue(band.lightness in -1f..1f)
+            }
+        }
+    }
+
+    @Test fun presetStrengthRejectsNonFiniteAndOutOfRangeValues() {
+        val preset = ColorGradePresets.all.first()
+        assertTrue(runCatching { preset.gradeAtStrength(Float.NaN) }.isFailure)
+        assertTrue(runCatching { preset.gradeAtStrength(-0.01f) }.isFailure)
+        assertTrue(runCatching { preset.gradeAtStrength(1.01f) }.isFailure)
+    }
+
     @Test fun defaultGradePreservesAllArgbBits() {
         val pixel = 0x7F36A8E1
         assertEquals(pixel, ColorGrade().apply(pixel))

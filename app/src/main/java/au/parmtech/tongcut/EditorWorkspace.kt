@@ -68,6 +68,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ExecutorService
+import kotlin.math.roundToInt
 import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -195,6 +196,9 @@ internal fun VideoEditorScreen(
     var muteOriginal by remember { mutableStateOf(draft.muteOriginalAudio) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
+    var selectedGradeLook by remember { mutableStateOf<ColorGradePreset?>(null) }
+    var gradeLookStrength by remember { mutableFloatStateOf(1f) }
+    var preserveGradeLookSelection by remember { mutableStateOf(false) }
     var selectedHslBand by remember { mutableIntStateOf(0) }
     var selectedCurveChannel by remember { mutableIntStateOf(0) }
     var selectedCurvePoint by remember { mutableIntStateOf(1) }
@@ -653,6 +657,8 @@ internal fun VideoEditorScreen(
     val reversePreviewDecodeBusy = remember { AtomicBoolean(false) }
     val latestReversePreviewFrame by rememberUpdatedState(reversePreviewFrame)
     fun commitGradePreview() {
+        if (!preserveGradeLookSelection) selectedGradeLook = null
+        preserveGradeLookSelection = false
         previewDraft?.let(onChange)
         previewDraft = null
     }
@@ -1447,13 +1453,32 @@ internal fun VideoEditorScreen(
                             rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ColorGradePresets.all.forEach { preset ->
                                 ToolPill("Look ${preset.name}") {
-                                    previewDraft = active.copy(colorGrade = preset.grade)
+                                    selectedGradeLook = preset
+                                    gradeLookStrength = 1f
+                                    preserveGradeLookSelection = true
+                                    previewDraft = active.copy(colorGrade = preset.gradeAtStrength(1f))
                                     commitGradePreview()
                                 }
                             }
                         }
-                        Text("A look replaces the current grade; refine it with the controls below.",
+                        Text("A look replaces the current grade; adjust its strength, then refine it below.",
                             color = Color.LightGray, fontSize = 10.sp)
+                        selectedGradeLook?.let { preset ->
+                            GradeSlider(
+                                "Look strength (%)",
+                                gradeLookStrength * 100f,
+                                0f..100f,
+                                { value ->
+                                    gradeLookStrength = value / 100f
+                                    preserveGradeLookSelection = true
+                                    previewDraft = active.copy(
+                                        colorGrade = preset.gradeAtStrength(gradeLookStrength)
+                                    )
+                                },
+                                ::commitGradePreview,
+                                valueLabel = { "${it.roundToInt()}%" }
+                            )
+                        }
                         GradeSlider("Exposure", grade.exposure, -2f..2f, { value ->
                             previewDraft = active.copy(colorGrade = grade.copy(exposure = value))
                         }, ::commitGradePreview)
@@ -2102,13 +2127,14 @@ private fun GradeSlider(
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
+    onValueChangeFinished: () -> Unit,
+    valueLabel: (Float) -> String = { "%.2f".format(it) }
 ) {
     Column {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = Color.White, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
-            Text("%.2f".format(value), color = Color.LightGray, fontSize = 11.sp)
+            Text(valueLabel(value), color = Color.LightGray, fontSize = 11.sp)
         }
         Slider(
             value = value,
