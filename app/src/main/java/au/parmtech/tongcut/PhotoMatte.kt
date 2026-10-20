@@ -1,5 +1,7 @@
 package au.parmtech.tongcut
 
+import au.parmtech.tongcut.beauty.ManualFaceBeauty
+
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -67,7 +69,9 @@ data class PhotoEffects(
     /** Offline IMAGE LUT switch; persistence is owned by A03 and defaults off. */
     val applyColorLut: Boolean = false,
     /** Per-layer multiplier applied to the selected project LUT's own strength. */
-    val colorLutStrength: Float = 1f
+    val colorLutStrength: Float = 1f,
+    /** Offline manual landmark retouch; applied only to IMAGE layers. */
+    val manualFaceBeauty: ManualFaceBeauty = ManualFaceBeauty.Neutral
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
