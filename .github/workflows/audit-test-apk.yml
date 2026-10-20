@@ -10,6 +10,11 @@ on:
       - 'app/src/main/java/au/parmtech/tongcut/ManualFaceRetouch.kt'
       - 'app/src/main/java/au/parmtech/tongcut/PhotoMatte.kt'
       - 'app/src/main/java/au/parmtech/tongcut/ExactReverseFrameDecoder.kt'
+      - 'app/src/main/java/au/parmtech/tongcut/CaptionEntrance.kt'
+      - 'app/src/main/java/au/parmtech/tongcut/LayerTimelineCodec.kt'
+      - 'app/src/test/java/au/parmtech/tongcut/ColorGradePresetsTest.kt'
+      - 'app/src/test/java/au/parmtech/tongcut/PhotoMatteTest.kt'
+      - 'app/src/test/java/au/parmtech/tongcut/VisualOverlaySlotsTest.kt'
   workflow_dispatch:
 
 permissions:

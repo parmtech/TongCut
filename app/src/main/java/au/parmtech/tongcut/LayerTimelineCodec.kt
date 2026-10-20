@@ -8,8 +8,10 @@ import org.json.JSONObject
  * This codec is pure JVM and validates all parsed tracks/clips via constructors.
  */
 object LayerTimelineCodec {
+    const val CURRENT_SCHEMA = 26
+
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 26)
+        put("schema", CURRENT_SCHEMA)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -137,7 +139,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..26) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..CURRENT_SCHEMA) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")

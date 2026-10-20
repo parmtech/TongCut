@@ -17,6 +17,7 @@ object CaptionEntranceMotion {
         val duration = minOf(DURATION_US, layerDurationUs)
         val progress = (relativeUs.coerceAtMost(layerDurationUs).toFloat() / duration)
             .coerceIn(0f, 1f)
+        if (progress >= 1f) return CaptionEntrancePose()
         val eased = progress * progress * (3f - 2f * progress)
         return when (preset) {
             CaptionEntrance.NONE -> CaptionEntrancePose()

@@ -7,8 +7,13 @@ import org.junit.Test
 
 class ColorGradePresetsTest {
     @Test fun presetsAreNamedBoundedAndIncludeNeutralDefault() {
-        assertEquals(listOf("Neutral", "Amber", "Tidal", "Soft Fade"),
-            ColorGradePresets.all.map { it.name })
+        assertEquals(
+            listOf(
+                "Neutral", "Amber", "Tidal", "Soft Fade", "Cobalt Film",
+                "Rose Quartz", "Graphite", "Apricot Glow", "Moss Light", "Midnight Teal"
+            ),
+            ColorGradePresets.all.map { it.name }
+        )
         assertEquals(ColorGrade(), ColorGradePresets.all.first().grade)
         assertEquals(ColorGradePresets.all.size,
             ColorGradePresets.all.map { it.name }.toSet().size)
