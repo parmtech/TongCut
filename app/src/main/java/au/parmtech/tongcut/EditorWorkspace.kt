@@ -1453,6 +1453,20 @@ internal fun VideoEditorScreen(
                         ToolChips(CURVE_CHANNEL_NAMES, selectedCurveChannel,
                             { selectedCurveChannel = it }) { it }
                         val curve = grade.curves.curve(selectedCurveChannel)
+                        ToneCurveGraph(
+                            curve = curve,
+                            channel = selectedCurveChannel,
+                            onSelectPoint = { selectedCurvePoint = it },
+                            onMovePoint = { index, x, y ->
+                                val points = grade.curves.curve(selectedCurveChannel)
+                                if (index in 1 until points.points.lastIndex) {
+                                    val point = points.points[index]
+                                    val next = points.withPoint(index, point.copy(x = x, y = y))
+                                    previewDraft = active.copy(colorGrade = grade.copy(curves =
+                                        grade.curves.withCurve(selectedCurveChannel, next)))
+                                }
+                            }
+                        )
                         if (curve.points.size > 2) {
                             val pointIndex = selectedCurvePoint.coerceIn(1,
                                 curve.points.lastIndex - 1)

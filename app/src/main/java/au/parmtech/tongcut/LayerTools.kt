@@ -482,6 +482,20 @@ internal fun LayerTools(
                             }
                         }
                         val activeCurve = fx.colorGrade.curves.curve(selectedCurveChannel)
+                        ToneCurveGraph(
+                            curve = activeCurve,
+                            channel = selectedCurveChannel,
+                            onSelectPoint = { selectedCurvePoint = it },
+                            onMovePoint = { index, x, y ->
+                                val latest = fx.colorGrade.curves.curve(selectedCurveChannel)
+                                if (index in 1 until latest.points.lastIndex) {
+                                    val point = latest.points[index]
+                                    val next = latest.withPoint(index, point.copy(x = x, y = y))
+                                    grade(fx.colorGrade.copy(curves =
+                                        fx.colorGrade.curves.withCurve(selectedCurveChannel, next)))
+                                }
+                            }
+                        )
                         if (activeCurve.points.size > 2) {
                             val pointIndex = selectedCurvePoint.coerceIn(1,
                                 activeCurve.points.lastIndex - 1)
