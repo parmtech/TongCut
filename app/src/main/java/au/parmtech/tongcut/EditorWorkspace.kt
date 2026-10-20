@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.media.MediaExtractor
@@ -24,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,10 +45,24 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collect
+import androidx.compose.runtime.snapshotFlow
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 private data class ProTool(val name: String, val icon: ImageVector)
 
@@ -570,6 +587,16 @@ internal fun VideoEditorScreen(
 
     val active = previewDraft ?: draft
     val clip = active.selectedClip
+    var reversePreviewSession by remember { mutableStateOf<ReversePreviewSession?>(null) }
+    var reversePreviewIssue by remember { mutableStateOf<String?>(null) }
+    var reversePreviewFrame by remember { mutableStateOf<Bitmap?>(null) }
+    val reversePreviewWorker = remember {
+        Executors.newSingleThreadExecutor { task ->
+            Thread(task, "TongCut-reverse-preview").apply { isDaemon = true }
+        }
+    }
+    val reversePreviewDecodeBusy = remember { AtomicBoolean(false) }
+    val latestReversePreviewFrame by rememberUpdatedState(reversePreviewFrame)
     fun commitGradePreview() {
         previewDraft?.let(onChange)
         previewDraft = null
@@ -582,6 +609,43 @@ internal fun VideoEditorScreen(
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
     val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
+
+    LaunchedEffect(clip?.sourceUri, clip?.inMs, clip?.outMs, clip?.reverseVideo) {
+        val previous = reversePreviewSession
+        reversePreviewSession = null
+        withContext(NonCancellable + Dispatchers.IO) { previous?.close() }
+        reversePreviewIssue = null
+        val priorFrame = reversePreviewFrame
+        reversePreviewFrame = null
+        priorFrame?.recycle()
+        if (clip?.reverseVideo != true) return@LaunchedEffect
+
+        val selectedClip = clip ?: return@LaunchedEffect
+        var opened: ReversePreviewSession? = null
+        try {
+            opened = ReversePreviewSession.openCancellable(context, selectedClip)
+            if (!currentCoroutineContext().isActive) {
+                withContext(NonCancellable + Dispatchers.IO) { opened?.close() }
+                return@LaunchedEffect
+            }
+            reversePreviewSession = opened
+            awaitCancellation()
+        } catch (cancelledError: CancellationException) {
+            throw cancelledError
+        } catch (error: Exception) {
+            reversePreviewIssue = error.message ?: "Reverse preview could not be prepared"
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) { opened?.close() }
+            if (reversePreviewSession === opened) reversePreviewSession = null
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose { latestReversePreviewFrame?.recycle() }
+    }
+    DisposableEffect(reversePreviewWorker) {
+        onDispose { reversePreviewWorker.shutdownNow() }
+    }
 
     // Read once per primary source, on an IO dispatcher; never block Compose
     // recomposition on slow gallery/content-provider metadata.
@@ -664,6 +728,47 @@ internal fun VideoEditorScreen(
             }.getOrElse { "Audio preview unavailable: ${it.message ?: "decoder failed"}" }
             audioWarning = warning
             delay(90)
+        }
+    }
+
+    LaunchedEffect(
+        reversePreviewSession, clip?.sourceUri, clip?.inMs, clip?.outMs,
+        clip?.reverseVideo, active.selectedIndex
+    ) {
+        val session = reversePreviewSession
+        snapshotFlow { playMs }.collect {
+            // A previous session may still be finishing a non-interruptible bitmap decode.
+            // Wait for the one in-flight worker, then honor the latest playhead value.
+            while (reversePreviewDecodeBusy.get()) delay(16)
+            val currentPlayMs = playMs
+            val selectedStartMs = active.clips.getOrNull(active.selectedIndex)?.let {
+                editTimeline.startOf(active.selectedIndex)
+            } ?: 0L
+            val selectedEndMs = selectedStartMs + (clip?.editedDurationMs ?: 0L)
+            val showingReverse = clip?.reverseVideo == true &&
+                currentPlayMs >= selectedStartMs && currentPlayMs < selectedEndMs
+            if (!showingReverse || session == null) {
+                if (!showingReverse) {
+                    withContext(Dispatchers.IO) { session?.invalidateLastFrame() }
+                    val previous = reversePreviewFrame
+                    reversePreviewFrame = null
+                    previous?.recycle()
+                }
+                return@collect
+            }
+            val localTimeUs = Math.multiplyExact(
+                (currentPlayMs - selectedStartMs).coerceAtLeast(0L), 1_000L
+            )
+            val next = decodeReverseFrameCancellable(
+                session, localTimeUs, reversePreviewWorker, reversePreviewDecodeBusy
+            )
+            if (next != null) {
+                if (currentCoroutineContext().isActive) {
+                    val previous = reversePreviewFrame
+                    reversePreviewFrame = next
+                    if (previous !== next) previous?.recycle()
+                } else next.recycle()
+            }
         }
     }
 
@@ -793,6 +898,23 @@ internal fun VideoEditorScreen(
             ) {
             if (clip == null) {
                 Text("Add a video to begin editing", color = Color.LightGray)
+            } else if (clip.reverseVideo &&
+                playMs >= editTimeline.startOf(active.selectedIndex) &&
+                playMs < editTimeline.startOf(active.selectedIndex) + clip.editedDurationMs) {
+                val bitmap = reversePreviewFrame
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Reverse video preview",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Text(
+                        reversePreviewIssue ?: "Preparing reverse preview…",
+                        color = Color.LightGray
+                    )
+                }
             } else {
                 AndroidView(
                     factory = { viewContext ->
@@ -999,6 +1121,17 @@ internal fun VideoEditorScreen(
                             }
                             ToolPill("Delete") {
                                 if (active.selectedClip != null) onChange(active.withRemovedClip(active.selectedIndex))
+                            }
+                            if (clip != null) ToolPill(
+                                if (clip.reverseVideo) "Reverse on" else "Reverse"
+                            ) {
+                                onChange(active.withReplacedClip(
+                                    active.selectedIndex,
+                                    clip.copy(reverseVideo = !clip.reverseVideo)
+                                ))
+                                if (!clip.reverseVideo) {
+                                    onInfo("Reverse video is enabled; clip audio remains forward for now.")
+                                }
                             }
                             ToolPill("Relink") {
                                 relinkIndex = active.selectedIndex
@@ -1485,4 +1618,50 @@ private fun <T> ToolChips(
             )
         }
     }
+}
+
+/** Cancellable bitmap handoff: a bitmap completed after effect cancellation is recycled on IO. */
+private suspend fun decodeReverseFrameCancellable(
+    session: ReversePreviewSession,
+    outputTimeUs: Long,
+    worker: ExecutorService,
+    decodeBusy: AtomicBoolean
+): Bitmap? {
+    if (!decodeBusy.compareAndSet(false, true)) return null
+    val pending = AtomicReference<Bitmap?>(null)
+    val bitmap = try {
+        suspendCancellableCoroutine<Bitmap?> { continuation ->
+            val cancelled = AtomicBoolean(false)
+            continuation.invokeOnCancellation {
+                cancelled.set(true)
+                pending.getAndSet(null)?.recycle()
+            }
+            try {
+                worker.execute {
+                    try {
+                        if (cancelled.get()) return@execute
+                        val decoded = session.decodeFrameAt(outputTimeUs)
+                        pending.set(decoded)
+                        if (cancelled.get() || !continuation.isActive) {
+                            pending.getAndSet(null)?.recycle()
+                        } else {
+                            continuation.resume(decoded)
+                        }
+                    } catch (failure: Throwable) {
+                        if (continuation.isActive) continuation.resumeWithException(failure)
+                    } finally {
+                        decodeBusy.set(false)
+                    }
+                }
+            } catch (failure: Throwable) {
+                decodeBusy.set(false)
+                if (continuation.isActive) continuation.resumeWithException(failure)
+            }
+        }
+    } catch (failure: Throwable) {
+        decodeBusy.set(false)
+        throw failure
+    }
+    pending.compareAndSet(bitmap, null)
+    return bitmap
 }

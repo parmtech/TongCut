@@ -21,6 +21,13 @@ class ReverseFramePlayback private constructor(
         require(files.size == segment.frameCount)
     }
 
+    /** Returns the frame visible at segment output time, or null at/after the end. */
+    @Synchronized
+    fun frameIndexAtOutputTimeUs(outputTimeUs: Long): Int? {
+        check(!closed) { "Reverse frame reader is closed" }
+        return segment.frameIndexAtOutputTimeUs(outputTimeUs)
+    }
+
     /** Decodes the frame visible at segment output time, or null at/after the end. */
     @Synchronized
     fun decodeFrameAt(outputTimeUs: Long): Bitmap? {
