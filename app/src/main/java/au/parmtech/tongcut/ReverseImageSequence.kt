@@ -4,6 +4,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.Effects
 import java.io.Closeable
 
 /**
@@ -30,16 +31,18 @@ class ReverseImageSequence private constructor(
         fun open(
             segment: CachedReverseVideoSegment,
             cache: ReverseFrameCache,
-            frameRate: Int = ExportFrameRate.DEFAULT
+            frameRate: Int = ExportFrameRate.DEFAULT,
+            videoEffects: List<androidx.media3.common.Effect> = emptyList()
         ): ReverseImageSequence? {
-            return openSegments(listOf(segment), cache, frameRate)
+            return openSegments(listOf(segment), cache, frameRate, videoEffects)
         }
 
         /** Combines consecutive reverse chunks while rounding frame boundaries only once. */
         fun openSegments(
             segments: List<CachedReverseVideoSegment>,
             cache: ReverseFrameCache,
-            frameRate: Int = ExportFrameRate.DEFAULT
+            frameRate: Int = ExportFrameRate.DEFAULT,
+            videoEffects: List<androidx.media3.common.Effect> = emptyList()
         ): ReverseImageSequence? {
             require(frameRate in ExportFrameRate.choices)
             require(segments.isNotEmpty()) { "Reverse image sequence needs at least one segment" }
@@ -81,10 +84,13 @@ class ReverseImageSequence private constructor(
                             .setUri(reader.frameUriAt(index))
                             .setImageDurationMs(durationMs)
                             .build()
-                        items += EditedMediaItem.Builder(image)
+                        val edited = EditedMediaItem.Builder(image)
                             .setFrameRate(frameRate)
                             .setRemoveAudio(true)
-                            .build()
+                        if (videoEffects.isNotEmpty()) {
+                            edited.setEffects(Effects(emptyList(), videoEffects))
+                        }
+                        items += edited.build()
                         previousBoundaryMs = boundaryMs
                     }
                 }

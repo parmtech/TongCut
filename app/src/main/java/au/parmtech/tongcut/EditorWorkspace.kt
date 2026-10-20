@@ -906,7 +906,9 @@ internal fun VideoEditorScreen(
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Reverse video preview",
-                        contentScale = ContentScale.Fit,
+                        contentScale = if (active.canvas == CanvasRatio.SOURCE) {
+                            ContentScale.Fit
+                        } else ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {

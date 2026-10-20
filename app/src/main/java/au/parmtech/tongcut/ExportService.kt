@@ -19,6 +19,10 @@ import java.io.File
 import java.util.concurrent.CancellationException
 
 /** Owns Media3 while the editor Activity is stopped or destroyed. */
+@androidx.annotation.OptIn(
+    androidx.media3.common.util.UnstableApi::class,
+    androidx.media3.common.util.ExperimentalApi::class
+)
 class ExportService : Service() {
     private var exporter: VideoExporter? = null
     private var activeJobId: String? = null
@@ -121,7 +125,10 @@ class ExportService : Service() {
                         from = to
                     }
                     sequences[index] = ReverseImageSequence.openSegments(
-                        segments, cache, snapshot.exportMaxFrameRate
+                        segments,
+                        cache,
+                        snapshot.exportMaxFrameRate,
+                        primaryClipVideoEffects(snapshot.exportOptions())
                     ) ?: throw IllegalStateException("Reverse frame cache is incomplete for ${draftClip.label}.")
                 }
                 Handler(Looper.getMainLooper()).post {

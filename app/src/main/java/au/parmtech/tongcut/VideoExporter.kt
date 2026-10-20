@@ -83,20 +83,7 @@ class VideoExporter(private val context: Context) {
         scratch = file
         active = true
         try {
-            val clipEffects = mutableListOf<androidx.media3.common.Effect>()
-            when (options.look) {
-                Look.ORIGINAL -> Unit
-                Look.MONO -> clipEffects += RgbFilter.createGrayscaleFilter()
-                Look.INVERT -> clipEffects += RgbFilter.createInvertedFilter()
-                Look.WARM -> clipEffects += RgbAdjustment.Builder()
-                    .setRedScale(1.10f).setBlueScale(0.90f).build()
-                Look.COOL -> clipEffects += RgbAdjustment.Builder()
-                    .setRedScale(0.90f).setBlueScale(1.10f).build()
-            }
-            if (options.colorGrade != ColorGrade()) {
-                clipEffects += ColorGradeEffect(options.colorGrade)
-            }
-            options.colorLutProfile?.let { clipEffects += it.toMedia3Effect() }
+            val clipEffects = primaryClipVideoEffects(options)
             // Apply common framing after concatenation, not to each clip independently.
             val compositionEffects = mutableListOf<androidx.media3.common.Effect>()
             options.ratio.ratio?.let { ratio ->
@@ -463,3 +450,20 @@ class VideoExporter(private val context: Context) {
         }
     }
 }
+
+/** Same primary-footage look pipeline for regular clips and cached reverse-frame items. */
+@androidx.annotation.OptIn(UnstableApi::class, ExperimentalApi::class)
+internal fun primaryClipVideoEffects(options: ExportOptions): List<androidx.media3.common.Effect> =
+    buildList {
+        when (options.look) {
+            Look.ORIGINAL -> Unit
+            Look.MONO -> add(RgbFilter.createGrayscaleFilter())
+            Look.INVERT -> add(RgbFilter.createInvertedFilter())
+            Look.WARM -> add(RgbAdjustment.Builder()
+                .setRedScale(1.10f).setBlueScale(0.90f).build())
+            Look.COOL -> add(RgbAdjustment.Builder()
+                .setRedScale(0.90f).setBlueScale(1.10f).build())
+        }
+        if (options.colorGrade != ColorGrade()) add(ColorGradeEffect(options.colorGrade))
+        options.colorLutProfile?.let { add(it.toMedia3Effect()) }
+    }
