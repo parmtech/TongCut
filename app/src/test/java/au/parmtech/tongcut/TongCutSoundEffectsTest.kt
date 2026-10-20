@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import java.nio.file.Files
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -30,6 +31,20 @@ class TongCutSoundEffectsTest {
             TongCutSoundEffectGenerator.wavBytes(TongCutSoundEffect.SWIPE).toList())
         assertNotEquals(tick.toList(),
             TongCutSoundEffectGenerator.wavBytes(TongCutSoundEffect.RISE).toList())
+    }
+
+    @Test fun corruptedCachedPayloadIsRebuiltCompletely() {
+        val filesDir = Files.createTempDirectory("tongcut-sfx-cache-test").toFile()
+        try {
+            val first = TongCutSoundEffectGenerator.writeTo(filesDir, TongCutSoundEffect.TICK)
+            val expected = TongCutSoundEffectGenerator.wavBytes(TongCutSoundEffect.TICK)
+            first.file.writeBytes(ByteArray(expected.size) { 0 })
+            val rebuilt = TongCutSoundEffectGenerator.writeTo(filesDir, TongCutSoundEffect.TICK)
+            assertEquals(first.file, rebuilt.file)
+            assertArrayEquals(expected, rebuilt.file.readBytes())
+        } finally {
+            filesDir.deleteRecursively()
+        }
     }
 
     private fun unsignedShort(bytes: ByteArray, offset: Int): Int =
