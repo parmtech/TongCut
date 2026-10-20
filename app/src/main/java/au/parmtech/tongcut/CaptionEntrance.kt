@@ -23,6 +23,10 @@ object CaptionEntranceMotion {
             CaptionEntrance.FADE -> CaptionEntrancePose(alpha = eased)
             CaptionEntrance.POP -> CaptionEntrancePose(alpha = eased, scale = 0.78f + 0.22f * eased)
             CaptionEntrance.RISE -> CaptionEntrancePose(alpha = eased, y = -0.16f * (1f - eased))
+            // Positive normalized Y moves upward in both preview and Media3 overlay coordinates.
+            CaptionEntrance.DROP -> CaptionEntrancePose(alpha = eased, y = 0.16f * (1f - eased))
+            // Starts slightly oversized, then settles with the same deterministic easing.
+            CaptionEntrance.ZOOM -> CaptionEntrancePose(alpha = eased, scale = 1.22f - 0.22f * eased)
         }
     }
 }
