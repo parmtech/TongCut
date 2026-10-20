@@ -364,6 +364,18 @@ internal fun LayerTools(
                                 .onSuccess(onChange)
                                 .onFailure { onError(it.message ?: "Blur change failed") }
                         }
+                        SmallLayerButton("Sharp −") {
+                            runCatching { applyMatte(fx.copy(sharpen =
+                                (fx.sharpen - 0.1f).coerceAtLeast(0f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Sharpen change failed") }
+                        }
+                        SmallLayerButton("Sharp +") {
+                            runCatching { applyMatte(fx.copy(sharpen =
+                                (fx.sharpen + 0.1f).coerceAtMost(1f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Sharpen change failed") }
+                        }
                         if (fx.colorGrade != ColorGrade()) {
                             SmallLayerButton("Reset colour") { grade(ColorGrade()) }
                         }
@@ -372,6 +384,13 @@ internal fun LayerTools(
                                 runCatching { applyMatte(fx.copy(blur = 0f)) }
                                     .onSuccess(onChange)
                                     .onFailure { onError(it.message ?: "Blur reset failed") }
+                            }
+                        }
+                        if (fx.sharpen > 0f) {
+                            SmallLayerButton("Reset sharp") {
+                                runCatching { applyMatte(fx.copy(sharpen = 0f)) }
+                                    .onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Sharpen reset failed") }
                             }
                         }
                         SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {

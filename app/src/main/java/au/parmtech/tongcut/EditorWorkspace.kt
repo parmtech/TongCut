@@ -756,6 +756,7 @@ internal fun VideoEditorScreen(
     // A single ExoPlayer playlist plays trimmed media clips consecutively.
     // source URI and clipping window are the same values sent to Transformer.
     LaunchedEffect(active.colorGrade, active.colorLutProfile, active.primaryBlur,
+        active.primarySharpen,
         active.primaryQuarterTurns, active.primaryFlipHorizontal) {
         val effects = mutableListOf<androidx.media3.common.Effect>()
         if (active.primaryQuarterTurns != 0 || active.primaryFlipHorizontal) {
@@ -766,8 +767,10 @@ internal fun VideoEditorScreen(
         }
         if (active.colorGrade != ColorGrade()) effects += ColorGradeEffect(active.colorGrade)
         active.colorLutProfile?.let { effects += it.toMedia3Effect() }
-        if (active.primaryBlur > 0f) {
-            effects += VideoMatteEffect(PhotoEffects(blur = active.primaryBlur))
+        if (active.primaryBlur > 0f || active.primarySharpen > 0f) {
+            effects += VideoMatteEffect(PhotoEffects(
+                blur = active.primaryBlur, sharpen = active.primarySharpen
+            ))
         }
         player.setVideoEffects(effects)
     }
@@ -1386,6 +1389,9 @@ internal fun VideoEditorScreen(
                         GradeSlider("Footage blur", active.primaryBlur, 0f..0.08f, { value ->
                             previewDraft = active.copy(primaryBlur = value)
                         }, ::commitGradePreview)
+                        GradeSlider("Footage sharpen", active.primarySharpen, 0f..1f, { value ->
+                            previewDraft = active.copy(primarySharpen = value)
+                        }, ::commitGradePreview)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ToolPill("Rotate left") {
                                 onChange(active.copy(primaryQuarterTurns =
@@ -1408,7 +1414,8 @@ internal fun VideoEditorScreen(
                         }
                         ToolPill("Reset adjustments") {
                             previewDraft = null
-                            onChange(active.copy(colorGrade = ColorGrade(), primaryBlur = 0f))
+                            onChange(active.copy(colorGrade = ColorGrade(), primaryBlur = 0f,
+                                primarySharpen = 0f))
                         }
                     }
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,

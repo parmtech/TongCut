@@ -79,7 +79,7 @@ internal object PhotoBitmapDecoder {
         }
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-        val blurSource = if (effects.blur > 0f) pixels.copyOf() else pixels
+        val blurSource = if (effects.blur > 0f || effects.sharpen > 0f) pixels.copyOf() else pixels
         for (y in 0 until height) {
             val row = y * width
             for (x in 0 until width) {
@@ -87,6 +87,11 @@ internal object PhotoBitmapDecoder {
                 if (effects.blur > 0f) {
                     pixels[idx] = PhotoMatte.blurPixel(
                         blurSource, x, y, width, height, effects.blur
+                    )
+                }
+                if (effects.sharpen > 0f) {
+                    pixels[idx] = PhotoMatte.sharpenPixel(
+                        blurSource, pixels[idx], x, y, width, height, effects.sharpen
                     )
                 }
                 pixels[idx] = PhotoMatte.applyAlpha(

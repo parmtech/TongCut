@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 13)
+        put("schema", 14)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -65,6 +65,7 @@ object LayerTimelineCodec {
                         put("invert", item.photoEffects.invertMask)
                         put("rotation", item.photoEffects.maskRotationDegrees.toDouble())
                         put("blur", item.photoEffects.blur.toDouble())
+                        put("sharpen", item.photoEffects.sharpen.toDouble())
                         put("colorGrade", ColorGradeCodec.encode(item.photoEffects.colorGrade))
                         put("chroma", item.photoEffects.chroma?.let { key ->
                             JSONObject().apply {
@@ -110,7 +111,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..13) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..14) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -181,6 +182,7 @@ object LayerTimelineCodec {
                         maskRotationDegrees = fx.optDouble("rotation",0.0).toFloat(),
                         colorGrade = ColorGradeCodec.decode(fx.optJSONObject("colorGrade")),
                         blur = fx.optDouble("blur",0.0).toFloat(),
+                        sharpen = fx.optDouble("sharpen",0.0).toFloat(),
                         chroma = fx.optJSONObject("chroma")?.let { c ->
                             PhotoChroma(
                                 keyArgb = c.optInt("color",0xFF00FF00.toInt()),

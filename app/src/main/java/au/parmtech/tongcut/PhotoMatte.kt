@@ -46,7 +46,9 @@ data class PhotoEffects(
     val maskRotationDegrees: Float = 0f,
     val colorGrade: ColorGrade = ColorGrade(),
     /** Gaussian-like 3x3 blur radius as a fraction of the image's short side. */
-    val blur: Float = 0f
+    val blur: Float = 0f,
+    /** Bounded unsharp detail recovery applied after blur and before matte/grade. */
+    val sharpen: Float = 0f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -56,6 +58,7 @@ data class PhotoEffects(
         require(maskScaleY.isFinite() && maskScaleY in 0.1f..1f)
         require(maskRotationDegrees.isFinite() && maskRotationDegrees in -180f..180f)
         require(blur.isFinite() && blur in 0f..0.08f)
+        require(sharpen.isFinite() && sharpen in 0f..1f)
     }
 }
 
@@ -228,5 +231,38 @@ object PhotoMatte {
         val green = (premultipliedGreen + alphaWeight / 2) / alphaWeight
         val blue = (premultipliedBlue + alphaWeight / 2) / alphaWeight
         return (alpha shl 24) or (red shl 16) or (green shl 8) or blue
+    }
+
+    /** Four-neighbour unsharp detail, preserving source alpha and transparent RGB. */
+    fun sharpenPixel(
+        source: IntArray, baseArgb: Int, x: Int, y: Int, width: Int, height: Int,
+        amount: Float
+    ): Int {
+        require(width > 0 && height > 0 && source.size == width * height)
+        require(x in 0 until width && y in 0 until height)
+        require(amount.isFinite() && amount in 0f..1f)
+        if (amount == 0f) return baseArgb
+        val centerIndex = y * width + x
+        val center = source[centerIndex]
+        val alpha = center ushr 24
+        if (alpha == 0) return baseArgb and 0xFF000000.toInt()
+        val left = source[y * width + (x - 1).coerceAtLeast(0)]
+        val right = source[y * width + (x + 1).coerceAtMost(width - 1)]
+        val top = source[(y - 1).coerceAtLeast(0) * width + x]
+        val bottom = source[(y + 1).coerceAtMost(height - 1) * width + x]
+        val alphaSum = (left ushr 24) + (right ushr 24) +
+            (top ushr 24) + (bottom ushr 24)
+        fun channel(shift: Int): Int {
+            val c = (center ushr shift) and 255
+            val weightedSum = (((left ushr shift) and 255) * (left ushr 24)) +
+                (((right ushr shift) and 255) * (right ushr 24)) +
+                (((top ushr shift) and 255) * (top ushr 24)) +
+                (((bottom ushr shift) and 255) * (bottom ushr 24))
+            val average = if (alphaSum == 0) c.toFloat() else weightedSum / alphaSum.toFloat()
+            val base = (baseArgb ushr shift) and 255
+            return (base + (c - average) * amount).roundToInt().coerceIn(0, 255)
+        }
+        return (baseArgb and 0xFF000000.toInt()) or
+            (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 }

@@ -84,6 +84,15 @@ class EditorDraftTest {
         EditorDraft(primaryBlur = 0.081f)
     }
 
+    @Test fun primarySharpenIsBoundedAndFlowsIntoExportOptions() {
+        assertEquals(0.6f, EditorDraft(primarySharpen = 0.6f).exportOptions().primarySharpen)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectUnboundedPrimarySharpen() {
+        EditorDraft(primarySharpen = 1.01f)
+    }
+
     @Test fun primaryTransformFlowsIntoExportOptions() {
         val draft = EditorDraft(primaryQuarterTurns = 3, primaryFlipHorizontal = true)
         assertEquals(3, draft.exportOptions().primaryQuarterTurns)

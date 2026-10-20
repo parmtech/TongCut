@@ -79,6 +79,7 @@ private class MatteShader(
         program.setFloatUniform("uSaturation", settings.colorGrade.saturation)
         program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
         program.setFloatUniform("uBlurAmount", settings.blur)
+        program.setFloatUniform("uSharpenAmount", settings.sharpen)
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -144,6 +145,7 @@ private class MatteShader(
             uniform float uSaturation;
             uniform float uTemperature;
             uniform float uBlurAmount;
+            uniform float uSharpenAmount;
             varying vec2 vTexSamplingCoord;
 
             float edge(float lo, float hi, float value) {
@@ -193,6 +195,30 @@ private class MatteShader(
             }
             void main() {
                 vec4 pixel = blurredPixel(vTexSamplingCoord);
+                if (uSharpenAmount > 0.00001) {
+                    vec4 centre = texture2D(uTexSampler, vTexSamplingCoord);
+                    vec2 onePixel = vec2(1.0) / uFrameSize;
+                    vec4 leftSample = texture2D(uTexSampler,
+                        vTexSamplingCoord - vec2(onePixel.x, 0.0));
+                    vec4 rightSample = texture2D(uTexSampler,
+                        vTexSamplingCoord + vec2(onePixel.x, 0.0));
+                    vec4 topSample = texture2D(uTexSampler,
+                        vTexSamplingCoord - vec2(0.0, onePixel.y));
+                    vec4 bottomSample = texture2D(uTexSampler,
+                        vTexSamplingCoord + vec2(0.0, onePixel.y));
+                    float neighborAlpha = leftSample.a + rightSample.a +
+                        topSample.a + bottomSample.a;
+                    vec3 neighbors = centre.rgb;
+                    if (neighborAlpha > 0.00001) {
+                        neighbors = (leftSample.rgb * leftSample.a +
+                            rightSample.rgb * rightSample.a +
+                            topSample.rgb * topSample.a +
+                            bottomSample.rgb * bottomSample.a) / neighborAlpha;
+                    }
+                    pixel.rgb = clamp(pixel.rgb + (centre.rgb - neighbors) *
+                        uSharpenAmount, 0.0, 1.0);
+                    if (centre.a <= 0.00001) pixel.rgb = vec3(0.0);
+                }
                 vec2 point = (vTexSamplingCoord - vec2(0.5)) * uFrameSize;
                 float shortSide = min(uFrameSize.x, uFrameSize.y);
                 float blur = shortSide * uMaskFeather;

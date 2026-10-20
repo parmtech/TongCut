@@ -81,6 +81,19 @@ class PhotoMatteTest {
         )
     }
 
+    @Test fun boundedSharpenEnhancesLocalDetailAndPreservesAlpha() {
+        val pixels = IntArray(9) { 0xFF646464.toInt() }
+        pixels[4] = 0x80646464.toInt()
+        val sharpened = PhotoMatte.sharpenPixel(pixels, pixels[4], 1, 1, 3, 3, 0.5f)
+        assertEquals(0x80, sharpened ushr 24)
+        assertEquals(100, (sharpened ushr 16) and 255)
+
+        pixels[4] = 0xFFC8C8C8.toInt()
+        val detail = PhotoMatte.sharpenPixel(pixels, pixels[4], 1, 1, 3, 3, 0.5f)
+        assertEquals(250, (detail ushr 16) and 255)
+        assertEquals(pixels[4], PhotoMatte.sharpenPixel(pixels, pixels[4], 1, 1, 3, 3, 0f))
+    }
+
     @Test(expected=IllegalArgumentException::class)
     fun invalidFeatherRejected() { PhotoEffects(feather=Float.NaN) }
 
