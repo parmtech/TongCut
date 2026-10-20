@@ -1,6 +1,11 @@
 package au.parmtech.tongcut
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
 import android.graphics.Typeface
+import android.text.StaticLayout
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.TextPaint
@@ -17,6 +22,7 @@ import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.StaticOverlaySettings
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
+import kotlin.math.ceil
 
 /**
  * Time-gated text overlay for the Media3 global composition timebase.
@@ -71,58 +77,7 @@ object TimedTextEffects {
                             Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
                 }
-                // Per-frame settings animate its pose and align the intrinsic text block
-                // against a virtual 88%-frame caption box.
-                object : TextOverlay() {
-                    override fun getText(presentationTimeUs: Long): SpannableString = styled
-
-                    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
-                        val relativeUs = (presentationTimeUs - layer.startUs)
-                            .coerceIn(0L, layer.durationUs)
-                        val pose = MotionCurve.at(
-                            layer.motion,
-                            relativeUs
-                        )
-                        val entrance = CaptionEntranceMotion.at(
-                            layer.captionStyle.entrance, relativeUs, layer.durationUs
-                        )
-                        val alignmentOffset = when (layer.captionStyle.alignment) {
-                            CaptionAlignment.LEFT ->
-                                -CAPTION_ALIGNMENT_BOX_HALF_WIDTH * pose.scale
-                            CaptionAlignment.CENTER -> 0f
-                            CaptionAlignment.RIGHT ->
-                                CAPTION_ALIGNMENT_BOX_HALF_WIDTH * pose.scale
-                        }
-                        val overlayAnchorX = when (layer.captionStyle.alignment) {
-                            CaptionAlignment.LEFT -> -1f
-                            CaptionAlignment.CENTER -> 0f
-                            CaptionAlignment.RIGHT -> 1f
-                        }
-                        val placementOffsetY = when (layer.captionStyle.placement) {
-                            CaptionPlacement.TOP -> 0.65f
-                            CaptionPlacement.CENTER -> 0f
-                            CaptionPlacement.BOTTOM -> -0.65f
-                        }
-                        return StaticOverlaySettings.Builder()
-                            .setBackgroundFrameAnchor(
-                                (pose.x + alignmentOffset).coerceIn(-1f, 1f),
-                                (pose.y + placementOffsetY + entrance.y).coerceIn(-1f, 1f)
-                            )
-                            .setOverlayFrameAnchor(overlayAnchorX, 0f)
-                            .setScale(
-                                pose.scale * layer.captionStyle.size * entrance.scale,
-                                pose.scale * layer.captionStyle.size * entrance.scale
-                            )
-                            .setRotationDegrees(pose.rotation)
-                            .setAlphaScale(
-                                if (visible && presentationTimeUs >= layer.startUs &&
-                                    presentationTimeUs < layer.endUs) {
-                                    pose.opacity * entrance.alpha * layer.fade.alphaAt(
-                                        relativeUs,layer.durationUs)
-                                } else 0f
-                            ).build()
-                    }
-                }
+                CaptionTextOverlay(layer, visible, styled)
             }
         return overlays
     }
@@ -130,6 +85,108 @@ object TimedTextEffects {
     fun create(timeline: LayerTimeline): OverlayEffect? =
         overlays(timeline).takeIf { it.isNotEmpty() }?.let { OverlayEffect(it) }
 
+}
+
+/** Media3's stock text bitmap hugs the StaticLayout bounds, clipping TextPaint shadows. */
+@androidx.annotation.OptIn(UnstableApi::class)
+private class CaptionTextOverlay(
+    private val layer: TimelineLayer,
+    private val visible: Boolean,
+    private val text: SpannableString
+) : TextOverlay() {
+    private val paddingPx = if (layer.captionStyle.shadow) {
+        ceil(TextOverlay.TEXT_SIZE_PIXELS * 0.18).toInt().coerceIn(1, 32)
+    } else 0
+    private val textPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = TextOverlay.TEXT_SIZE_PIXELS.toFloat()
+    }
+    private val layoutWidth = measureLayoutWidth(text, textPaint)
+    private val textLayout = createLayout(text, textPaint, layoutWidth)
+    private val bitmapWidth = Math.addExact(layoutWidth, paddingPx * 2).coerceAtLeast(1)
+    private val bitmapHeight = Math.addExact(textLayout.height, paddingPx * 2).coerceAtLeast(1)
+    private var paddedBitmap: Bitmap? = null
+
+    override fun getText(presentationTimeUs: Long): SpannableString = text
+
+    override fun getBitmap(presentationTimeUs: Long): Bitmap = paddedBitmap ?: Bitmap.createBitmap(
+        bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888
+    ).also { bitmap ->
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+        canvas.save()
+        canvas.translate(paddingPx.toFloat(), paddingPx.toFloat())
+        textLayout.draw(canvas)
+        canvas.restore()
+        paddedBitmap = bitmap
+    }
+
+    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+        val relativeUs = (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
+        val pose = MotionCurve.at(layer.motion, relativeUs)
+        val entrance = CaptionEntranceMotion.at(
+            layer.captionStyle.entrance, relativeUs, layer.durationUs
+        )
+        val alignmentOffset = when (layer.captionStyle.alignment) {
+            CaptionAlignment.LEFT -> -CAPTION_ALIGNMENT_BOX_HALF_WIDTH * pose.scale
+            CaptionAlignment.CENTER -> 0f
+            CaptionAlignment.RIGHT -> CAPTION_ALIGNMENT_BOX_HALF_WIDTH * pose.scale
+        }
+        val anchorPadding = if (bitmapWidth > 0) 2f * paddingPx / bitmapWidth else 0f
+        val overlayAnchorX = when (layer.captionStyle.alignment) {
+            CaptionAlignment.LEFT -> -1f + anchorPadding
+            CaptionAlignment.CENTER -> 0f
+            CaptionAlignment.RIGHT -> 1f - anchorPadding
+        }
+        val placementOffsetY = when (layer.captionStyle.placement) {
+            CaptionPlacement.TOP -> 0.65f
+            CaptionPlacement.CENTER -> 0f
+            CaptionPlacement.BOTTOM -> -0.65f
+        }
+        val baseScale = pose.scale * layer.captionStyle.size * entrance.scale
+        return StaticOverlaySettings.Builder()
+            .setBackgroundFrameAnchor(
+                (pose.x + alignmentOffset).coerceIn(-1f, 1f),
+                (pose.y + placementOffsetY + entrance.y).coerceIn(-1f, 1f)
+            )
+            .setOverlayFrameAnchor(overlayAnchorX, 0f)
+            .setScale(
+                baseScale * (layoutWidth.toFloat() / bitmapWidth),
+                baseScale * (textLayout.height.toFloat() / bitmapHeight)
+            )
+            .setRotationDegrees(pose.rotation)
+            .setAlphaScale(
+                if (visible && presentationTimeUs >= layer.startUs &&
+                    presentationTimeUs < layer.endUs) {
+                    pose.opacity * entrance.alpha * layer.fade.alphaAt(relativeUs, layer.durationUs)
+                } else 0f
+            ).build()
+    }
+
+    override fun release() {
+        try {
+            super.release()
+        } finally {
+            paddedBitmap?.recycle()
+            paddedBitmap = null
+        }
+    }
+
+    private companion object {
+        fun measureLayoutWidth(text: SpannableString, paint: android.text.TextPaint): Int {
+            val measuredWidth = paint.measureText(text, 0, text.length).toInt().coerceAtLeast(1)
+            val measuredLayout = createLayout(text, paint, measuredWidth)
+            val lineWidthSum = (0 until measuredLayout.lineCount).sumOf { line ->
+                measuredLayout.getLineWidth(line).toDouble()
+            }
+            return ceil(lineWidthSum).toInt().coerceAtLeast(1)
+        }
+
+        fun createLayout(
+            text: SpannableString, paint: android.text.TextPaint, width: Int
+        ): StaticLayout = StaticLayout.Builder.obtain(
+            text, 0, text.length, paint, width.coerceAtLeast(1)
+        ).build()
+    }
 }
 
 private class CaptionShadowSpan : CharacterStyle() {
