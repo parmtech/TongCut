@@ -30,6 +30,7 @@ internal fun LayerTools(
     onChange: (EditorDraft) -> Unit,
     onAddAudio: () -> Unit,
     onAddSoundEffect: (TongCutSoundEffect) -> Unit = {},
+    onAddTextTemplate: (TongCutCaptionTemplate) -> Unit = {},
     onAddVisual: (LayerKind) -> Unit = {},
     onFreezeVideo: (String, Long) -> Unit = { _, _ -> },
     onError: (String) -> Unit,
@@ -43,6 +44,7 @@ internal fun LayerTools(
     var pickerId by remember { mutableStateOf<String?>(null) }
     var pickerAtMs by remember { mutableLongStateOf(0L) }
     var soundEffectMenuExpanded by remember { mutableStateOf(false) }
+    var textTemplateMenuExpanded by remember { mutableStateOf(false) }
     val layers = draft.layers.layers
         .filter { it.kind == kind }
         // Selected clip first: avoid scrolling through an unrelated full-page form.
@@ -96,6 +98,34 @@ internal fun LayerTools(
                             onAddSoundEffect(effect)
                         }
                     }
+                }
+            }
+        }
+        if (kind == LayerKind.TEXT) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    SmallLayerButton(
+                        if (textTemplateMenuExpanded) "Hide text templates" else "TongCut templates"
+                    ) {
+                        textTemplateMenuExpanded = !textTemplateMenuExpanded
+                    }
+                    if (textTemplateMenuExpanded) {
+                        TongCutCaptionTemplates.all.forEach { template ->
+                            SmallLayerButton(template.title) {
+                                textTemplateMenuExpanded = false
+                                onAddTextTemplate(template)
+                            }
+                        }
+                    }
+                }
+                if (textTemplateMenuExpanded) {
+                    Text(
+                        "Offline originals add editable title/subtitle clips to the timeline.",
+                        color = Color.LightGray, fontSize = 11.sp
+                    )
                 }
             }
         }
