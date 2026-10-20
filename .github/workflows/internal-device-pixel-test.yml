@@ -57,7 +57,9 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          # CI runners have a constrained free disk. The Pixel 6 AVD's default
+          # userdata image exceeds the available space, so size it explicitly.
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -partition-size 4096
           disable-animations: true
           # Emulator runner sends every newline as a separate command.
           # Keep failure capture in a single shell command to retain its exit code.
@@ -73,3 +75,4 @@ jobs:
             app/build/android-pixel-failure-logcat.txt
           if-no-files-found: ignore
           retention-days: 7
+
