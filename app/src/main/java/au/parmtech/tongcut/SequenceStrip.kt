@@ -25,9 +25,10 @@ import androidx.core.net.toUri
 import kotlinx.coroutines.delay
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 private const val PIXELS_PER_SECOND_DP = 56f
-private enum class LayerGesture { MOVE, TRIM_START, TRIM_END }
+private enum class LayerGesture { MOVE, TRIM_START, TRIM_END, GROUP_MOVE, IGNORE }
 
 /** A unified scrolling ruler and consecutive clip strip, driven by real edited milliseconds.
  *
@@ -45,8 +46,10 @@ internal fun SequenceStrip(
     onAddAudio: () -> Unit,
     onAddVisual: (LayerKind) -> Unit,
     selectedLayerId: String? = null,
+    selectedGroupIds: Set<String> = emptySet(),
     onLayerSelect: (LayerKind, String) -> Unit,
     onMoveLayer: (String, Long) -> Unit,
+    onMoveGroup: (Set<String>, Long) -> Unit = { _, _ -> },
     onTrimLayerStart: (String, Long) -> Unit,
     onTrimLayerEnd: (String, Long) -> Unit,
     onUnavailable: (String) -> Unit
@@ -57,6 +60,9 @@ internal fun SequenceStrip(
     var pxPerSecond by remember { mutableFloatStateOf(PIXELS_PER_SECOND_DP) }
     var programmaticSeek by remember { mutableStateOf(false) }
     var dragged by remember { mutableStateOf(false) }
+    val validGroupIds = selectedGroupIds.intersect(draft.layers.layers.map { it.id }.toSet())
+    var activeGroupDragLayerId by remember { mutableStateOf<String?>(null) }
+    var groupDragPx by remember { mutableFloatStateOf(0f) }
     val textPaint = remember {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.LTGRAY
@@ -214,8 +220,10 @@ internal fun SequenceStrip(
                                                 var gesture by remember(layer.id) {
                                                     mutableStateOf(LayerGesture.MOVE)
                                                 }
-                                                val shiftedPx = when (gesture) {
-                                                    LayerGesture.TRIM_END -> 0f
+                                                val shiftedPx = when {
+                                                    activeGroupDragLayerId != null &&
+                                                        layer.id in validGroupIds -> groupDragPx
+                                                    gesture == LayerGesture.TRIM_END -> 0f
                                                     else -> dragPx
                                                 }
                                                 val resizingPx = when (gesture) {
@@ -229,8 +237,13 @@ internal fun SequenceStrip(
                                                     color = if (kind == LayerKind.TEXT)
                                                         Color(0xFF6D469E) else Color(0xFF315A67),
                                                     shape = RoundedCornerShape(3.dp),
-                                                    border = if (selectedLayerId == layer.id)
-                                                        BorderStroke(2.dp, TongCutPalette.AquaSoft) else null,
+                                                    border = when {
+                                                        selectedLayerId == layer.id ->
+                                                            BorderStroke(2.dp, TongCutPalette.AquaSoft)
+                                                        layer.id in validGroupIds ->
+                                                            BorderStroke(1.dp, TongCutPalette.AquaSoft.copy(alpha = 0.72f))
+                                                        else -> null
+                                                    },
                                                     modifier = Modifier
                                                         .offset {
                                                             IntOffset(
@@ -243,31 +256,59 @@ internal fun SequenceStrip(
                                                         .height(38.dp)
                                                         .pointerInput(
                                                             layer.id, layer.startUs, layer.durationUs,
-                                                            pxPerSecond
+                                                            pxPerSecond, validGroupIds
                                                         ) {
                                                             detectDragGestures(
                                                                 onDragStart = { finger ->
                                                                     dragPx = 0f
-                                                                    val edge = with(density) { 14.dp.toPx() }
-                                                                    gesture = if (size.width < edge * 3f) {
-                                                                        LayerGesture.MOVE
-                                                                    } else when {
-                                                                        finger.x <= edge -> LayerGesture.TRIM_START
-                                                                        finger.x >= size.width - edge ->
-                                                                            LayerGesture.TRIM_END
-                                                                        else -> LayerGesture.MOVE
+                                                                    if (activeGroupDragLayerId != null &&
+                                                                        activeGroupDragLayerId != layer.id) {
+                                                                        gesture = LayerGesture.IGNORE
+                                                                    } else if (layer.id in validGroupIds &&
+                                                                        validGroupIds.size > 1) {
+                                                                        gesture = LayerGesture.GROUP_MOVE
+                                                                        activeGroupDragLayerId = layer.id
+                                                                        groupDragPx = 0f
+                                                                    } else {
+                                                                        val edge = with(density) { 14.dp.toPx() }
+                                                                        gesture = if (size.width < edge * 3f) {
+                                                                            LayerGesture.MOVE
+                                                                        } else when {
+                                                                            finger.x <= edge -> LayerGesture.TRIM_START
+                                                                            finger.x >= size.width - edge ->
+                                                                                LayerGesture.TRIM_END
+                                                                            else -> LayerGesture.MOVE
+                                                                        }
                                                                     }
                                                                 },
                                                                 onDragCancel = {
                                                                     dragPx = 0f
+                                                                    if (activeGroupDragLayerId == layer.id) {
+                                                                        groupDragPx = 0f
+                                                                        activeGroupDragLayerId = null
+                                                                    }
                                                                     gesture = LayerGesture.MOVE
                                                                 },
                                                                 onDragEnd = {
-                                                                    val offsetUs = (
-                                                                        (dragPx / density.density) /
-                                                                            pxPerSecond * 1_000_000f
-                                                                    ).toLong()
+                                                                    val offsetUs =
+                                                                        (dragPx.toDouble() / density.density /
+                                                                            pxPerSecond * 1_000_000.0).roundToLong()
                                                                     when (gesture) {
+                                                                        LayerGesture.GROUP_MOVE -> {
+                                                                            if (activeGroupDragLayerId == layer.id) {
+                                                                                val groupOffsetUs =
+                                                                                    (groupDragPx.toDouble() /
+                                                                                        density.density /
+                                                                                        pxPerSecond * 1_000_000.0)
+                                                                                        .roundToLong()
+                                                                                if (groupOffsetUs != 0L) {
+                                                                                    onMoveGroup(validGroupIds, groupOffsetUs)
+                                                                                }
+                                                                                groupDragPx = 0f
+                                                                                activeGroupDragLayerId = null
+                                                                            }
+                                                                        }
+                                                                        LayerGesture.IGNORE -> Unit
                                                                         LayerGesture.MOVE -> onMoveLayer(
                                                                             layer.id, layer.startUs + offsetUs
                                                                         )
@@ -283,7 +324,15 @@ internal fun SequenceStrip(
                                                                 },
                                                                 onDrag = { change, amount ->
                                                                     change.consume()
-                                                                    dragPx += amount.x
+                                                                    when (gesture) {
+                                                                        LayerGesture.GROUP_MOVE -> {
+                                                                            if (activeGroupDragLayerId == layer.id) {
+                                                                                groupDragPx += amount.x
+                                                                            }
+                                                                        }
+                                                                        LayerGesture.IGNORE -> Unit
+                                                                        else -> dragPx += amount.x
+                                                                    }
                                                                 }
                                                             )
                                                         }
@@ -349,6 +398,11 @@ internal fun SequenceStrip(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("${draft.clips.size} clip(s)", color = Color.LightGray, fontSize = 12.sp)
+            if (validGroupIds.size > 1) {
+                Text("${validGroupIds.size} selected · drag one to move together",
+                    color = TongCutPalette.AquaSoft, fontSize = 10.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis)
+            }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onAddMedia) {
                 Icon(Icons.Default.Add, contentDescription = null, tint = ProCyan)

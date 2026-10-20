@@ -907,6 +907,7 @@ internal fun VideoEditorScreen(
                 onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
                 onAddVisual = ::chooseOverlay,
                 selectedLayerId = selectedLayerId,
+                selectedGroupIds = groupIds,
                 onLayerSelect = { kind, id ->
                     selectedLayerId = id
                     panel = when (kind) {
@@ -914,6 +915,11 @@ internal fun VideoEditorScreen(
                         LayerKind.AUDIO -> "Audio"
                         else -> "Overlay"
                     }
+                },
+                onMoveGroup = { ids, deltaUs ->
+                    runCatching { AdvancedClipEdits.moveGroupByFrames(active, ids, deltaUs) }
+                        .onSuccess(onChange)
+                        .onFailure { onInfo("Cannot move group: ${it.message}") }
                 },
                 onMoveLayer = { id, startUs ->
                     runCatching { LayerEdits.placeLayerAtFrame(active, id, startUs) }

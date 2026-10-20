@@ -146,18 +146,33 @@ object AdvancedClipEdits {
 
     /**
      * Move an explicit group of layers together across tracks without
-     * resampling their source footage. Selection UI is a separate P3 task;
-     * this validated primitive allows a future gesture to commit one edit.
+     * resampling their source footage. The timeline's transient group
+     * selection commits the shared displacement as one undoable edit.
      */
     fun moveGroupBy(
         draft: EditorDraft, layerIds: Set<String>, deltaMs: Long
+    ): EditorDraft = moveGroupByUs(
+        draft, layerIds, Math.multiplyExact(deltaMs, 1_000L)
+    )
+
+    /** Frame-snapped counterpart used by direct timeline drag gestures. */
+    fun moveGroupByFrames(
+        draft: EditorDraft, layerIds: Set<String>, requestedDeltaUs: Long
+    ): EditorDraft {
+        val deltaUs = if (requestedDeltaUs < 0L) {
+            -draft.layers.rate.nearestFrameUs(Math.negateExact(requestedDeltaUs))
+        } else draft.layers.rate.nearestFrameUs(requestedDeltaUs)
+        return moveGroupByUs(draft, layerIds, deltaUs)
+    }
+
+    private fun moveGroupByUs(
+        draft: EditorDraft, layerIds: Set<String>, delta: Long
     ): EditorDraft {
         require(layerIds.isNotEmpty()) { "Select at least one clip" }
         require(layerIds.size == draft.layers.layers.count { it.id in layerIds }) {
             "The selected group contains a missing layer"
         }
         layerIds.forEach { editable(draft, it) }
-        val delta = Math.multiplyExact(deltaMs, 1_000L)
         if (delta == 0L) return draft
         val end = projectEndUs(draft)
         val shifted = draft.layers.layers.map { item ->
