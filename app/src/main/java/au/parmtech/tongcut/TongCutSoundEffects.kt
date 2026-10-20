@@ -30,6 +30,7 @@ object TongCutSoundEffectGenerator {
     private const val BYTES_PER_SAMPLE = 2
     private const val MAX_WAV_BYTES = 512 * 1024
 
+    @Synchronized
     fun writeTo(filesDir: File, effect: TongCutSoundEffect): GeneratedSoundEffect {
         val directory = File(filesDir, "tongcut-sfx")
         if (!directory.isDirectory && !directory.mkdirs()) {
@@ -62,10 +63,9 @@ object TongCutSoundEffectGenerator {
 
     /** Internal deterministic representation used by JVM regression tests. */
     internal fun wavBytes(effect: TongCutSoundEffect): ByteArray {
-        val frameCount = Math.toIntExact(SAMPLE_RATE.toLong() * effect.durationMs / 1_000L)
-        val dataBytes = Math.multiplyExact(frameCount, BYTES_PER_SAMPLE)
-        val totalBytes = Math.addExact(44, dataBytes)
-        require(totalBytes <= MAX_WAV_BYTES) { "Generated sound effect exceeds the size limit" }
+        val frameCount = frameCount(effect)
+        val dataBytes = frameCount * BYTES_PER_SAMPLE
+        val totalBytes = 44 + dataBytes
         val output = ByteArray(totalBytes)
         writeAscii(output, 0, "RIFF")
         writeIntLe(output, 4, totalBytes - 8)
@@ -113,15 +113,27 @@ object TongCutSoundEffectGenerator {
         return output
     }
 
-    private fun wavSize(effect: TongCutSoundEffect): Int {
-        val frames = Math.toIntExact(SAMPLE_RATE.toLong() * effect.durationMs / 1_000L)
-        return Math.addExact(44, Math.multiplyExact(frames, BYTES_PER_SAMPLE))
+    private fun wavSize(effect: TongCutSoundEffect): Int =
+        44 + frameCount(effect) * BYTES_PER_SAMPLE
+
+    private fun frameCount(effect: TongCutSoundEffect): Int {
+        val frames = SAMPLE_RATE.toLong() * effect.durationMs / 1_000L
+        require(frames in 1L..((MAX_WAV_BYTES - 44) / BYTES_PER_SAMPLE).toLong()) {
+            "Generated sound effect exceeds the size limit"
+        }
+        return frames.toInt()
     }
 
     private fun hasWaveHeader(file: File): Boolean = runCatching {
         file.inputStream().use { input ->
             val header = ByteArray(12)
-            input.read(header) == header.size &&
+            var offset = 0
+            while (offset < header.size) {
+                val count = input.read(header, offset, header.size - offset)
+                if (count <= 0) break
+                offset += count
+            }
+            offset == header.size &&
                 String(header, 0, 4, Charsets.US_ASCII) == "RIFF" &&
                 String(header, 8, 4, Charsets.US_ASCII) == "WAVE"
         }
