@@ -23,7 +23,7 @@ data class ReverseDecodeLimits(
     val jpegQuality: Int = 90
 ) {
     init {
-        require(maxFrameCount in 1..ReversePtsPlan.MAX_REVERSED_FRAMES)
+        require(maxFrameCount in 1..ReverseFrameCache.MAX_SEGMENT_LEASE_FRAMES)
         require(maxDurationUs > 0L)
         require(maxDimension > 0 && maxPixels > 0L)
         require(maxSegmentBytes > 0L && maxFrameBytes > 0)
@@ -50,6 +50,10 @@ class CachedReversePreviewSegment internal constructor(
         require(outputOffset in 0 until frameCount)
         return cache.openFrame(cacheKey, outputOffset.toLong())
     }
+
+    /** Pins all currently cached frames together; close promptly after the preview/export read. */
+    fun openFrames(cache: ReverseFrameCache): ReverseFrameCache.SegmentLease? =
+        cache.openSegment(cacheKey, frameCount)
 }
 
 /**
@@ -145,16 +149,13 @@ object ApproximateReverseFrameMaterializer {
                 }
             }
             // A smaller caller-configured cache may evict frames written earlier in this
-            // generation. Validate point-in-time completeness before publishing the handle;
-            // callers must still handle a later cache miss because the cache may be cleared.
-            for (outputIndex in 0 until plan.frameCount) {
-                checkCancelled(isCancelled)
-                val lease = cache.openFrame(key, outputIndex.toLong())
-                    ?: throw IllegalStateException(
-                        "Reverse preview cache could not retain a complete segment"
-                    )
-                lease.close()
-            }
+            // generation. Atomically validate point-in-time completeness before publishing;
+            // callers must still handle a later miss after this temporary lease is closed.
+            val complete = cache.openSegment(key, plan.frameCount)
+                ?: throw IllegalStateException(
+                    "Reverse preview cache could not retain a complete segment"
+                )
+            complete.close()
             checkCancelled(isCancelled)
             return CachedReversePreviewSegment(
                 cacheKey = key,

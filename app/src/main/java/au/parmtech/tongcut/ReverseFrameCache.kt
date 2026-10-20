@@ -27,12 +27,33 @@ class ReverseFrameCache(
     /** A pinned cache entry. Close it after decoding so eviction can reclaim it. */
     inner class FrameLease internal constructor(val file: File) : Closeable {
         private val closed = AtomicBoolean(false)
+        private val ownsPin = AtomicBoolean(false)
+
+        internal fun markPinned() {
+            ownsPin.set(true)
+        }
+
         override fun close() {
-            if (closed.compareAndSet(false, true)) synchronized(lock) {
-                val key = file.canonicalPath
-                val remaining = pinnedFiles[key]?.minus(1) ?: return@synchronized
-                if (remaining == 0) pinnedFiles.remove(key) else pinnedFiles[key] = remaining
+            if (closed.compareAndSet(false, true) && ownsPin.compareAndSet(true, false)) {
+                synchronized(lock) {
+                    val key = file.canonicalPath
+                    val remaining = pinnedFiles[key]?.minus(1) ?: return@synchronized
+                    if (remaining == 0) pinnedFiles.remove(key)
+                    else pinnedFiles[key] = remaining
+                }
             }
+        }
+    }
+
+    /** Pins every frame in a segment together so eviction cannot split an active read. */
+    inner class SegmentLease internal constructor(
+        private val frames: List<FrameLease>
+    ) : Closeable {
+        private val closed = AtomicBoolean(false)
+        val frameFiles: List<File> get() = frames.map { it.file }
+
+        override fun close() {
+            if (closed.compareAndSet(false, true)) frames.forEach(FrameLease::close)
         }
     }
 
@@ -41,10 +62,37 @@ class ReverseFrameCache(
         require(frameIndex >= 0L)
         val file = frameFile(segmentKey, frameIndex)
         if (!file.isFile) null else {
+            val lease = FrameLease(file)
             file.setLastModified(System.currentTimeMillis())
             val key = file.canonicalPath
             pinnedFiles[key] = (pinnedFiles[key] ?: 0) + 1
-            FrameLease(file)
+            lease.markPinned()
+            lease
+        }
+    }
+
+    /** Atomically pins a complete segment, or returns null without leaving partial pins. */
+    fun openSegment(segmentKey: String, frameCount: Int): SegmentLease? = synchronized(lock) {
+        require(frameCount in 1..MAX_SEGMENT_LEASE_FRAMES)
+        val frames = ArrayList<FrameLease>(frameCount)
+        try {
+            for (index in 0 until frameCount) {
+                val file = frameFile(segmentKey, index.toLong())
+                if (!file.isFile) {
+                    frames.forEach(FrameLease::close)
+                    return@synchronized null
+                }
+                file.setLastModified(System.currentTimeMillis())
+                val path = file.canonicalPath
+                val lease = FrameLease(file)
+                frames += lease
+                pinnedFiles[path] = (pinnedFiles[path] ?: 0) + 1
+                lease.markPinned()
+            }
+            SegmentLease(frames)
+        } catch (failure: Throwable) {
+            frames.forEach(FrameLease::close)
+            throw failure
         }
     }
 
@@ -151,8 +199,8 @@ class ReverseFrameCache(
         private const val DIRECTORY_NAME = "tongcut-reverse-frames-v1"
         private const val IO_CHUNK_BYTES = 64 * 1024
         private const val MAX_FRAME_BYTES = 64 * 1024 * 1024
+        const val MAX_SEGMENT_LEASE_FRAMES = 600
         private val lock = Any()
         private val pinnedFiles = mutableMapOf<String, Int>()
     }
 }
-
