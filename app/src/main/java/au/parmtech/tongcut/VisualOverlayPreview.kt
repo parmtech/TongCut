@@ -35,7 +35,8 @@ internal fun VisualOverlayPreview(
     layer: TimelineLayer,
     timelineMs: Long,
     playing: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    colorLutProfile: ColorLutProfile? = null
 ) {
     val context = LocalContext.current
     val pose = MotionCurve.at(
@@ -61,12 +62,13 @@ internal fun VisualOverlayPreview(
         if (layer.kind == LayerKind.IMAGE) {
             // Bitmap preview and exported Media3 BitmapOverlay consume identical matte pixels.
             val bitmap by produceState<android.graphics.Bitmap?>(
-                initialValue = null, layer.sourceUri, layer.photoEffects
+                initialValue = null, layer.sourceUri, layer.photoEffects, colorLutProfile
             ) {
                 value = withContext(Dispatchers.IO) {
                     runCatching {
                         PhotoBitmapDecoder.decode(
-                            context, Uri.parse(requireNotNull(layer.sourceUri)), layer.photoEffects
+                            context, Uri.parse(requireNotNull(layer.sourceUri)),
+                            layer.photoEffects, colorLutProfile
                         )
                     }.getOrNull()
                 }
