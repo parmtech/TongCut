@@ -401,6 +401,16 @@ internal fun LayerTools(
                         }
                         val fx = layer.photoEffects
                         if (kind == LayerKind.IMAGE) {
+                            ManualFaceBeautyPanel(
+                                sourceUri = layer.sourceUri,
+                                colorLutProfile = draft.colorLutProfile,
+                                value = fx.manualFaceBeauty
+                            ) { beauty ->
+                                runCatching {
+                                    applyMatte(fx.copy(manualFaceBeauty = beauty))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Manual beauty edit failed") }
+                            }
                             Text(
                                 draft.colorLutProfile?.let { "Project LUT: ${it.name}" }
                                     ?: "No project LUT selected",
