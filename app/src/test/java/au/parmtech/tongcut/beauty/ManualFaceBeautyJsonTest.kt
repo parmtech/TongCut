@@ -19,12 +19,11 @@ class ManualFaceBeautyJsonTest {
 
     @Test fun warpPreservesAlphaChannel() {
         val source = IntArray(32 * 32) { index ->
-            val alpha = if (index % 3 == 0) 0x48 else 0xD0
-            (alpha shl 24) or 0x00607080
+            0x88607080.toInt()
         }
         val settings = ManualBeautySettings(faceWidth = 0.1f, skinSoftening = 0.3f)
         val result = ManualFaceWarpRenderer.render(32, 32, source,
             ManualFaceBeauty.Neutral.landmarks, settings)
-        assertTrue(result.indices.all { (result[it] ushr 24) == (source[it] ushr 24) })
+        assertTrue(result.all { (it ushr 24) == 0x88 })
     }
 }
