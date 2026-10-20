@@ -9,7 +9,8 @@ data class Clip(
     val durationMs: Long,
     val startMs: Long = 0,
     val endMs: Long = durationMs,
-    val removeAudio: Boolean = false
+    val removeAudio: Boolean = false,
+    val reverseVideo: Boolean = false
 ) {
     init {
         require(durationMs > 0) { "Video duration must be positive" }

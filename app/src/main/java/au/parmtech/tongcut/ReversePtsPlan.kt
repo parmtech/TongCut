@@ -8,6 +8,8 @@ class ReversePtsPlan private constructor(
 ) {
     val frameCount: Int get() = descendingPtsUs.size
     val durationUs: Long get() = outUs - inUs
+    val sourceInUs: Long get() = inUs
+    val sourceOutUs: Long get() = outUs
 
     fun sourceTimeUs(outputOffset: Int): Long {
         require(outputOffset in descendingPtsUs.indices)
@@ -42,6 +44,21 @@ class ReversePtsPlan private constructor(
             if (outputTimeUs < frameEndUs) high = middle else low = middle + 1
         }
         return low
+    }
+
+    /** A consecutive output-order chunk with exact source-time boundaries. */
+    fun sliceOutputRange(fromIndex: Int, toIndexExclusive: Int): ReversePtsPlan {
+        require(fromIndex in 0 until frameCount)
+        require(toIndexExclusive in (fromIndex + 1)..frameCount)
+        val chunkInUs = if (toIndexExclusive == frameCount) inUs
+            else descendingPtsUs[toIndexExclusive - 1]
+        val chunkOutUs = if (fromIndex == 0) outUs else descendingPtsUs[fromIndex - 1]
+        require(chunkOutUs > chunkInUs)
+        return ReversePtsPlan(
+            descendingPtsUs.copyOfRange(fromIndex, toIndexExclusive),
+            chunkInUs,
+            chunkOutUs
+        )
     }
 
     companion object {

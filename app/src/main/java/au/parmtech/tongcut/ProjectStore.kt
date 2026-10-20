@@ -47,7 +47,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..8) { "Unsupported project schema" }
+        require(schema in 1..9) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -58,7 +58,8 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                 durationMs = clip.getLong("durationMs"),
                 inMs = clip.getLong("inMs"),
                 outMs = clip.getLong("outMs"),
-                sourceAudioMuted = clip.optBoolean("sourceAudioMuted", false)
+                sourceAudioMuted = clip.optBoolean("sourceAudioMuted", false),
+                reverseVideo = schema >= 9 && clip.optBoolean("reverseVideo", false)
             )
         }
         return EditorDraft(
@@ -92,7 +93,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 8)
+            put("schema", 9)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -115,6 +116,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                         put("inMs", clip.inMs)
                         put("outMs", clip.outMs)
                         put("sourceAudioMuted", clip.sourceAudioMuted)
+                        put("reverseVideo", clip.reverseVideo)
                     })
                 }
             })

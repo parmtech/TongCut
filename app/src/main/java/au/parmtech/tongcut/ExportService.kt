@@ -10,15 +10,21 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import java.io.File
+import java.util.concurrent.CancellationException
 
 /** Owns Media3 while the editor Activity is stopped or destroyed. */
 class ExportService : Service() {
     private var exporter: VideoExporter? = null
     private var activeJobId: String? = null
     private var cancellingJobId: String? = null
+    private var reversePreparation: Thread? = null
+    private var preparedReverseSequences: Map<Int, ReverseImageSequence> = emptyMap()
 
     override fun onCreate() {
         super.onCreate()
@@ -73,6 +79,91 @@ class ExportService : Service() {
         activeJobId = id
         jobs.markRunning(id)
         updateNotification(jobs.state.value)
+        val reverseClips = snapshot.clips.withIndex().filter { it.value.reverseVideo }
+        if (reverseClips.isEmpty()) {
+            renderSnapshot(id, snapshot, jobs, emptyMap())
+            return
+        }
+
+        val preparation = Thread({
+            val cache = ReverseFrameCache(File(cacheDir, "tongcut-reverse"))
+            val sequences = LinkedHashMap<Int, ReverseImageSequence>()
+            try {
+                reverseClips.forEach { (index, draftClip) ->
+                    check(!Thread.currentThread().isInterrupted) { "Reverse preparation cancelled" }
+                    val source = Uri.parse(draftClip.sourceUri)
+                    val inUs = Math.multiplyExact(draftClip.inMs, 1_000L)
+                    val outUs = Math.multiplyExact(draftClip.outMs, 1_000L)
+                    val plan = ReversePtsIndexer.index(applicationContext, source, inUs, outUs)
+                        ?: throw IllegalArgumentException("No reverse frames were found in ${draftClip.label}.")
+                    val segments = ArrayList<CachedReverseVideoSegment>()
+                    var from = 0
+                    while (from < plan.frameCount) {
+                        check(!Thread.currentThread().isInterrupted) { "Reverse preparation cancelled" }
+                        var to = minOf(from + ReverseFrameCache.MAX_SEGMENT_LEASE_FRAMES, plan.frameCount)
+                        var chunk = plan.sliceOutputRange(from, to)
+                        while (chunk.durationUs > 20_000_000L && to > from + 1) {
+                            to--
+                            chunk = plan.sliceOutputRange(from, to)
+                        }
+                        require(chunk.durationUs <= 20_000_000L) {
+                            "A reverse frame interval exceeds the decoder segment limit"
+                        }
+                        segments += ExactReverseFrameDecoder.materialize(
+                            context = applicationContext,
+                            source = source,
+                            inUs = chunk.sourceInUs,
+                            outUs = chunk.sourceOutUs,
+                            plan = chunk,
+                            cache = cache,
+                            isCancelled = { Thread.currentThread().isInterrupted }
+                        )
+                        from = to
+                    }
+                    sequences[index] = ReverseImageSequence.openSegments(
+                        segments, cache, snapshot.exportMaxFrameRate
+                    ) ?: throw IllegalStateException("Reverse frame cache is incomplete for ${draftClip.label}.")
+                }
+                Handler(Looper.getMainLooper()).post {
+                    reversePreparation = null
+                    if (activeJobId != id || cancellingJobId == id) {
+                        sequences.values.forEach { it.close() }
+                        if (cancellingJobId == id) jobs.cancelled(id)
+                        updateNotification(jobs.state.value)
+                        stopJob()
+                    } else {
+                        preparedReverseSequences = sequences
+                        renderSnapshot(id, snapshot, jobs, sequences)
+                    }
+                }
+            } catch (error: Throwable) {
+                sequences.values.forEach { it.close() }
+                Handler(Looper.getMainLooper()).post {
+                    reversePreparation = null
+                    if (cancellingJobId == id || error is CancellationException || error is InterruptedException) {
+                        jobs.cancelled(id)
+                    } else {
+                        jobs.fail(id, "Unable to prepare reverse video: ${error.message ?: error.javaClass.simpleName}")
+                    }
+                    updateNotification(jobs.state.value)
+                    stopJob()
+                }
+            }
+        }, "TongCut-reverse-$id").apply { isDaemon = true }
+        reversePreparation = preparation
+        preparation.start()
+    }
+
+    private fun renderSnapshot(
+        id: String,
+        snapshot: EditorDraft,
+        jobs: ExportJobs,
+        reverseSequences: Map<Int, ReverseImageSequence>
+    ) {
+        if (activeJobId != id || cancellingJobId == id) {
+            reverseSequences.values.forEach { it.close() }
+            return
+        }
         VideoExporter(applicationContext).also { renderer ->
             exporter = renderer
             try {
@@ -83,7 +174,8 @@ class ExportService : Service() {
                         durationMs = clip.durationMs,
                         startMs = clip.inMs,
                         endMs = clip.outMs,
-                        removeAudio = clip.sourceAudioMuted
+                        removeAudio = clip.sourceAudioMuted,
+                        reverseVideo = clip.reverseVideo
                     )
                 }
                 renderer.start(
@@ -95,11 +187,13 @@ class ExportService : Service() {
                         updateNotification(jobs.state.value)
                     },
                     onSuccess = { uri ->
+                        preparedReverseSequences = emptyMap()
                         jobs.complete(id, uri)
                         updateNotification(jobs.state.value)
                         stopJob()
                     },
                     onError = { message ->
+                        preparedReverseSequences = emptyMap()
                         if (cancellingJobId != id && jobs.state.value.phase == ExportPhase.RUNNING) {
                             jobs.fail(id, message)
                         }
@@ -110,9 +204,12 @@ class ExportService : Service() {
                         jobs.updateWarning(id, warning)
                         updateNotification(jobs.state.value)
                     },
-                    exportJobId = id
+                    exportJobId = id,
+                    reverseSequences = reverseSequences
                 )
             } catch (error: Exception) {
+                reverseSequences.values.forEach { runCatching { it.close() } }
+                preparedReverseSequences = emptyMap()
                 jobs.fail(id, "Unable to render export: ${error.message ?: "unknown error"}")
                 updateNotification(jobs.state.value)
                 stopJob()
@@ -132,6 +229,11 @@ class ExportService : Service() {
         }
         if (id != activeJobId) return
         cancellingJobId = id
+        reversePreparation?.let { preparation ->
+            preparation.interrupt()
+            updateNotification(jobs.state.value.copy(message = "Cancelling reverse preparation…"))
+            return
+        }
         if (exporter?.cancel() == true) {
             jobs.cancelled(id)
             updateNotification(jobs.state.value)
@@ -143,6 +245,10 @@ class ExportService : Service() {
     }
 
     private fun stopJob() {
+        reversePreparation?.interrupt()
+        reversePreparation = null
+        preparedReverseSequences.values.forEach { runCatching { it.close() } }
+        preparedReverseSequences = emptyMap()
         exporter = null
         activeJobId = null
         cancellingJobId = null
@@ -224,6 +330,7 @@ class ExportService : Service() {
         val id = activeJobId
         if (id != null) {
             cancellingJobId = id
+            reversePreparation?.interrupt()
             exporter?.cancel()
             ExportJobs.get(applicationContext).fail(
                 id,
@@ -239,8 +346,18 @@ class ExportService : Service() {
             cancellingJobId = interruptedId
             if (exporter?.cancel() == true) {
                 ExportJobs.get(applicationContext).interrupted(interruptedId)
+            } else {
+                // A false cancel result means output may already be in its publish/save phase.
+                // Persist recovery state now but leave cleanup to the next service restore.
+                ExportJobs.get(applicationContext).interrupted(
+                    interruptedId,
+                    cleanupIncomplete = false
+                )
             }
         } else exporter?.cancel()
+        reversePreparation?.interrupt()
+        preparedReverseSequences.values.forEach { runCatching { it.close() } }
+        preparedReverseSequences = emptyMap()
         exporter = null
         activeJobId = null
         super.onDestroy()

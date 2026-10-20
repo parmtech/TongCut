@@ -222,7 +222,7 @@ internal class ExportJobs private constructor(context: Context) {
     }
 
     @Synchronized
-    internal fun interrupted(id: String) {
+    internal fun interrupted(id: String, cleanupIncomplete: Boolean = true) {
         val current = mutableState.value
         if (current.id != id || current.phase != ExportPhase.RUNNING) return
         publish(current.copy(
@@ -230,7 +230,9 @@ internal class ExportJobs private constructor(context: Context) {
             message = "Export stopped before it finished. Start it again from the saved edit.",
             updatedAtMs = System.currentTimeMillis()
         ))
-        runCatching { ExportOutputCleanup.removeIncomplete(appContext, id) }
+        if (cleanupIncomplete) {
+            runCatching { ExportOutputCleanup.removeIncomplete(appContext, id) }
+        }
     }
 
     private fun publish(next: ExportJobState) {
