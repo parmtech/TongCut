@@ -102,7 +102,9 @@ data class TimelineLayer(
     val fade: LayerFade = LayerFade(),
     // An explicit PiP screen slot is required for a freeze still to cover its source video.
     val visualSlot: Int? = null,
-    val captionStyle: CaptionStyle = CaptionStyle()
+    val captionStyle: CaptionStyle = CaptionStyle(),
+    /** Whether AUDIO time stretching keeps the source pitch instead of raising/lowering it. */
+    val preservePitch: Boolean = true
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -128,6 +130,9 @@ data class TimelineLayer(
             }
         }
         require(playbackSpeed.isFinite() && playbackSpeed in 0.25f..4f)
+        require(preservePitch || kind == LayerKind.AUDIO) {
+            "Pitch policy applies only to audio clips"
+        }
         // Both VIDEO and AUDIO may consume source at a non-unit speed.
         // Other layers are static and must never carry a source-time curve.
         if (kind != LayerKind.VIDEO && kind != LayerKind.AUDIO) {

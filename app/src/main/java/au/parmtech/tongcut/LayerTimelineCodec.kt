@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 19)
+        put("schema", 20)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -51,6 +51,7 @@ object LayerTimelineCodec {
                         put("shadow", item.captionStyle.shadow)
                     })
                     put("playbackSpeed", item.playbackSpeed.toDouble())
+                    put("preservePitch", item.preservePitch)
                     put("visualSlot", item.visualSlot ?: JSONObject.NULL)
                     put("sourceSpanUs", item.sourceSpanUs ?: JSONObject.NULL)
                     put("fade", JSONObject().apply {
@@ -116,7 +117,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..19) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..20) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -208,6 +209,7 @@ object LayerTimelineCodec {
                     )
                 } ?: PhotoEffects(),
                 playbackSpeed = item.optDouble("playbackSpeed", 1.0).toFloat(),
+                preservePitch = item.opt("preservePitch") as? Boolean ?: true,
                 visualSlot = if (item.has("visualSlot") && !item.isNull("visualSlot"))
                     item.getInt("visualSlot") else null,
                 sourceSpanUs = if (item.has("sourceSpanUs") &&

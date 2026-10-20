@@ -1,5 +1,6 @@
 package au.parmtech.tongcut
 
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -23,10 +24,29 @@ class AudioSpeedEditsTest {
         assertEquals(2_000_000L,source.durationUs)
         assertEquals(4_000_000L,source.consumedSourceUs)
         assertEquals(2f,source.playbackSpeed,0f)
+        assertTrue(source.preservePitch)
         val history=EditHistory(original)
         history.apply(fast)
         assertEquals(original,history.undo())
         assertEquals(fast,history.redo())
+    }
+
+    @Test fun pitchPolicyIsClipLocalUndoableAndPassedToMixPlan() {
+        val original = draft()
+        val id = original.layers.layers.single().id
+        val changed = AudioSpeedEdits.setPreservePitch(original, id, false)
+        assertFalse(changed.layers.layers.single().preservePitch)
+        val source = AudioMixPlan.from(changed.layers, 12_000_000L).single()
+            .parts.filterIsInstance<AudioPart.Source>().single()
+        assertFalse(source.preservePitch)
+        assertTrue(original.layers.layers.single().preservePitch)
+        val encoded = LayerTimelineCodec.encode(changed.layers)
+        assertEquals(changed.layers, LayerTimelineCodec.decode(encoded))
+        val legacy = JSONObject(encoded.toString()).put("schema", 19)
+        legacy.getJSONArray("layers").getJSONObject(0).remove("preservePitch")
+        assertTrue(LayerTimelineCodec.decode(legacy).layers.single().preservePitch)
+        legacy.getJSONArray("layers").getJSONObject(0).put("preservePitch", "invalid")
+        assertTrue(LayerTimelineCodec.decode(legacy).layers.single().preservePitch)
     }
 
     @Test fun audioRampHasDistinctSourceClockAndSurvivesSerialization() {

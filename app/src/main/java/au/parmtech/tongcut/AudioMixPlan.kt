@@ -19,7 +19,8 @@ sealed interface AudioPart {
         val playbackSpeed: Float = 1f,
         val sourceSpanUs: Long? = null,
         val speedRamp: List<SpeedKeyframe> = emptyList(),
-        val envelope: List<AudioGainKeyframe> = emptyList()
+        val envelope: List<AudioGainKeyframe> = emptyList(),
+        val preservePitch: Boolean = true
     ) : AudioPart {
         init {
             require(uri.isNotBlank())
@@ -87,7 +88,8 @@ object AudioMixPlan {
                     sourceSpanUs = layer.sourceSpanUs,
                     speedRamp = layer.speedRamp,
                     envelope = if (track.duckingSource) layer.audioEnvelope
-                        else AudioDucking.envelopeFor(layer, duckingWindows)
+                        else AudioDucking.envelopeFor(layer, duckingWindows),
+                    preservePitch = layer.preservePitch
                 )
                 cursor = layer.endUs
             }

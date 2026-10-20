@@ -6,6 +6,7 @@ import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import kotlin.math.abs
 
@@ -114,8 +115,10 @@ class AudioOverlayEngine(private val context: Context) {
                 // Avoid rebuilding the audio processor on every ~90ms UI tick:
                 // speed ramps only need a new parameter at a source-clock keyframe.
                 // Repeated setPlaybackSpeed calls can cause audible clicks/glitches.
-                if (abs(player.playbackParameters.speed - speed) > 0.0001f) {
-                    player.setPlaybackSpeed(speed)
+                val pitch = if (layer.preservePitch) 1f else speed
+                if (abs(player.playbackParameters.speed - speed) > 0.0001f ||
+                    abs(player.playbackParameters.pitch - pitch) > 0.0001f) {
+                    player.setPlaybackParameters(PlaybackParameters(speed, pitch))
                 }
                 val trackGain = tracks[layer.trackId]?.gain ?: 1f
                 val track = tracks[layer.trackId]

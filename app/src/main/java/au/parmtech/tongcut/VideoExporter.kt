@@ -259,8 +259,8 @@ class VideoExporter(private val context: Context) {
                                 .setRemoveVideo(true)
                             // Media3's setSpeed(SpeedProvider) defaults to
                             // shouldMaintainPitch=false: 2x audio becomes 880 Hz
-                            // from 440 Hz. Use SpeedParameters(true) for the
-                            // time-stretching audio path; VIDEO PiP remains separate.
+                            // from 440 Hz. Persist a per-clip pitch policy; VIDEO PiP
+                            // remains separate from the audio time-stretch path.
                             if (part.speedRamp.isNotEmpty()) {
                                 val speedCurve = part.speedRamp
                                 edited.setSpeed(SpeedParameters(
@@ -272,7 +272,7 @@ class VideoExporter(private val context: Context) {
                                             SpeedRamp.nextChangeAfter(timeUs, speedCurve)
                                                 ?: C.TIME_UNSET
                                     },
-                                    /* shouldMaintainPitch = */ true
+                                    /* shouldMaintainPitch = */ part.preservePitch
                                 ))
                             } else if (part.playbackSpeed != 1f) {
                                 val clipSpeed = part.playbackSpeed
@@ -282,7 +282,7 @@ class VideoExporter(private val context: Context) {
                                         override fun getNextSpeedChangeTimeUs(timeUs: Long): Long =
                                             C.TIME_UNSET
                                     },
-                                    /* shouldMaintainPitch = */ true
+                                    /* shouldMaintainPitch = */ part.preservePitch
                                 ))
                             }
                             if (lane.gain < 1f || part.envelope.isNotEmpty()) {

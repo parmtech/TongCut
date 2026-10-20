@@ -20,6 +20,14 @@ object AudioSpeedEdits {
     private fun projectEnd(draft: EditorDraft): Long =
         Math.multiplyExact(SequentialTimeline(draft.clips).totalMs, 1_000L)
 
+    /** Select whether a clip's speed changes preserve or intentionally shift pitch. */
+    fun setPreservePitch(draft: EditorDraft, id: String, preserve: Boolean): EditorDraft {
+        audio(draft, id)
+        return draft.copy(layers = draft.layers.copy(layers = draft.layers.layers.map {
+            if (it.id == id) it.copy(preservePitch = preserve) else it
+        }))
+    }
+
     /** A constant clip-local speed, 0.25x–4x, preserving the consumed source. */
     fun setConstant(draft: EditorDraft, id: String, speed: Float): EditorDraft {
         require(speed.isFinite() && speed in 0.25f..4f)
