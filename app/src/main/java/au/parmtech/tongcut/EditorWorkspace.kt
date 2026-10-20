@@ -1704,6 +1704,15 @@ internal fun VideoEditorScreen(
                     "Text" -> LayerTools(
                         active, playMs, LayerKind.TEXT, onChange,
                         onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                        onAddTextTemplate = { template ->
+                            runCatching { TongCutCaptionTemplates.insert(active, playMs, template) }
+                                .onSuccess { updated ->
+                                    onChange(updated)
+                                    onInfo("${template.title} added as editable offline text.")
+                                }.onFailure { error ->
+                                    onInfo(error.message ?: "Unable to add text template")
+                                }
+                        },
                         onError = onInfo,
                         focusedLayerId = selectedLayerId,
                             selectedGroupIds = groupIds,
@@ -1732,6 +1741,15 @@ internal fun VideoEditorScreen(
                         LayerTools(
                             active, playMs, LayerKind.TEXT, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                            onAddTextTemplate = { template ->
+                                runCatching { TongCutCaptionTemplates.insert(active, playMs, template) }
+                                    .onSuccess { updated ->
+                                        onChange(updated)
+                                        onInfo("${template.title} added as editable offline text.")
+                                    }.onFailure { error ->
+                                        onInfo(error.message ?: "Unable to add text template")
+                                    }
+                            },
                             onError = onInfo, focusedLayerId = selectedLayerId,
                             selectedGroupIds = groupIds,
                             onGroupToggle = onGroupToggle, onGroupClear = onGroupClear
