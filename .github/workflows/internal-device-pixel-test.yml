@@ -57,11 +57,14 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          # CI runners have a constrained free disk. The Pixel 6 AVD's default
-          # userdata image exceeds available space; disk-size sets the AVD's
-          # disk.dataPartition.size (the emulator CLI partition flag does not).
+          # CI runners have a constrained free disk. Replace the AVD's existing
+          # userdata size: the action appends disk-size, and duplicate INI keys
+          # leave the larger default effective on this emulator build.
           disk-size: 4096M
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          pre-emulator-launch-script: >-
+            sed -i '/^disk\.dataPartition\.size=/d' "$ANDROID_AVD_HOME/test.avd/config.ini" &&
+            printf '\ndisk.dataPartition.size=4096M\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
           disable-animations: true
           # Emulator runner sends every newline as a separate command.
           # Keep failure capture in a single shell command to retain its exit code.
