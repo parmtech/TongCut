@@ -1,5 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
-Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import android.Manifest
@@ -196,6 +194,7 @@ internal fun VideoEditorScreen(
     var muteOriginal by remember { mutableStateOf(draft.muteOriginalAudio) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
+    var selectedHslBand by remember { mutableIntStateOf(0) }
     var audioWarning by remember { mutableStateOf<String?>(null) }
     // Selected independent clips can span AUDIO/TEXT/VIDEO/IMAGE panels.
     // Selection is transient UI state; moving them commits one persistent undo edit.
@@ -1431,6 +1430,24 @@ internal fun VideoEditorScreen(
                         GradeSlider("HSL lightness", grade.hslLightness, -1f..1f, { value ->
                             previewDraft = active.copy(colorGrade = grade.copy(hslLightness = value))
                         }, ::commitGradePreview)
+                        ToolChips(HSL_BAND_NAMES, selectedHslBand,
+                            { selectedHslBand = it }) { it }
+                        val band = grade.hslBands[selectedHslBand]
+                        fun updateBand(next: HslBandAdjustment) {
+                            val bands = grade.hslBands.toMutableList().apply {
+                                this[selectedHslBand] = next
+                            }
+                            previewDraft = active.copy(colorGrade = grade.copy(hslBands = bands))
+                        }
+                        GradeSlider("${HSL_BAND_NAMES[selectedHslBand]} hue",
+                            band.hueDegrees, -180f..180f,
+                            { updateBand(band.copy(hueDegrees = it)) }, ::commitGradePreview)
+                        GradeSlider("${HSL_BAND_NAMES[selectedHslBand]} saturation",
+                            band.saturation, -1f..1f,
+                            { updateBand(band.copy(saturation = it)) }, ::commitGradePreview)
+                        GradeSlider("${HSL_BAND_NAMES[selectedHslBand]} lightness",
+                            band.lightness, -1f..1f,
+                            { updateBand(band.copy(lightness = it)) }, ::commitGradePreview)
                         GradeSlider("Footage blur", active.primaryBlur, 0f..0.08f, { value ->
                             previewDraft = active.copy(primaryBlur = value)
                         }, ::commitGradePreview)

@@ -109,10 +109,17 @@ internal fun VisualOverlayPreview(
             // The SAME per-source GPU key/mask as the exported Media3 MP4.
             // Reconfigure only on actual effect changes; don't reset source time.
             LaunchedEffect(player, layer.photoEffects) {
-                player.setVideoEffects(
-                    if (layer.photoEffects == PhotoEffects()) emptyList()
-                    else listOf(VideoMatteEffect(layer.photoEffects))
-                )
+                val videoEffects = if (layer.photoEffects == PhotoEffects()) emptyList()
+                else buildList {
+                    add(VideoMatteEffect(layer.photoEffects))
+                    if (layer.photoEffects.colorGrade.hslBands != DEFAULT_HSL_BANDS) {
+                        add(ColorGradeEffect(
+                            ColorGrade(hslBands = layer.photoEffects.colorGrade.hslBands),
+                            premultipliedInput = true
+                        ))
+                    }
+                }
+                player.setVideoEffects(videoEffects)
             }
             LaunchedEffect(player, layer.sourceUri, layer.sourceInUs, layer.durationUs,
                 layer.sourceSpanUs, layer.playbackSpeed, layer.speedRamp) {

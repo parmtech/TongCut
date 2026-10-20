@@ -1,5 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
-Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import org.json.JSONObject
@@ -81,6 +79,20 @@ class ColorGradeTest {
         assertEquals(gray, ColorGrade(hslSaturation = 1f).apply(gray))
     }
 
+    @Test fun selectiveHslChangesOnlyItsHueBandAndPersistsWithLegacyDefaults() {
+        val bands = DEFAULT_HSL_BANDS.toMutableList().apply {
+            this[0] = HslBandAdjustment(saturation = -1f)
+        }
+        val grade = ColorGrade(hslBands = bands)
+        val red = grade.apply(0xFFFF0000.toInt())
+        val green = grade.apply(0xFF00FF00.toInt())
+
+        assertEquals(0xFF7F7F7F.toInt(), red)
+        assertEquals(0xFF00FF00.toInt(), green)
+        assertEquals(grade, ColorGradeCodec.decode(ColorGradeCodec.encode(grade)))
+        assertEquals(DEFAULT_HSL_BANDS, ColorGradeCodec.decode(JSONObject()).hslBands)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedExposure() { ColorGrade(exposure = 2.01f) }
 
@@ -113,6 +125,7 @@ class ColorGradeTest {
         assertEquals(0f, decoded.hueDegrees)
         assertEquals(0f, decoded.hslLightness)
         assertEquals(0f, decoded.hslSaturation)
+        assertEquals(DEFAULT_HSL_BANDS, decoded.hslBands)
     }
 
     @Test fun gradeCodecRejectsMalformedRangesToNeutralDefaults() {

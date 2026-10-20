@@ -349,6 +349,7 @@ internal fun LayerTools(
                         }
                         val fx = layer.photoEffects
                         var selectedPolygonVertex by remember(layer.id) { mutableIntStateOf(0) }
+                        var selectedHslBand by remember(layer.id) { mutableIntStateOf(0) }
                         fun grade(next: ColorGrade) {
                             runCatching { applyMatte(fx.copy(colorGrade = next)) }
                                 .onSuccess(onChange)
@@ -417,6 +418,51 @@ internal fun LayerTools(
                         SmallLayerButton("Light +") {
                             grade(fx.colorGrade.copy(hslLightness =
                                 (fx.colorGrade.hslLightness + 0.1f).coerceAtMost(1f)))
+                        }
+                        SmallLayerButton("HSL ${HSL_BAND_NAMES[selectedHslBand]}") {
+                            selectedHslBand = (selectedHslBand + 1) % HSL_BAND_NAMES.size
+                        }
+                        SmallLayerButton("Band Hue −") {
+                            val bands = fx.colorGrade.hslBands.toMutableList()
+                            val band = bands[selectedHslBand]
+                            bands[selectedHslBand] = band.copy(
+                                hueDegrees = (band.hueDegrees - 15f).coerceAtLeast(-180f))
+                            grade(fx.colorGrade.copy(hslBands = bands))
+                        }
+                        SmallLayerButton("Band Hue +") {
+                            val bands = fx.colorGrade.hslBands.toMutableList()
+                            val band = bands[selectedHslBand]
+                            bands[selectedHslBand] = band.copy(
+                                hueDegrees = (band.hueDegrees + 15f).coerceAtMost(180f))
+                            grade(fx.colorGrade.copy(hslBands = bands))
+                        }
+                        SmallLayerButton("Band Sat −") {
+                            val bands = fx.colorGrade.hslBands.toMutableList()
+                            val band = bands[selectedHslBand]
+                            bands[selectedHslBand] = band.copy(
+                                saturation = (band.saturation - 0.1f).coerceAtLeast(-1f))
+                            grade(fx.colorGrade.copy(hslBands = bands))
+                        }
+                        SmallLayerButton("Band Sat +") {
+                            val bands = fx.colorGrade.hslBands.toMutableList()
+                            val band = bands[selectedHslBand]
+                            bands[selectedHslBand] = band.copy(
+                                saturation = (band.saturation + 0.1f).coerceAtMost(1f))
+                            grade(fx.colorGrade.copy(hslBands = bands))
+                        }
+                        SmallLayerButton("Band Light −") {
+                            val bands = fx.colorGrade.hslBands.toMutableList()
+                            val band = bands[selectedHslBand]
+                            bands[selectedHslBand] = band.copy(
+                                lightness = (band.lightness - 0.1f).coerceAtLeast(-1f))
+                            grade(fx.colorGrade.copy(hslBands = bands))
+                        }
+                        SmallLayerButton("Band Light +") {
+                            val bands = fx.colorGrade.hslBands.toMutableList()
+                            val band = bands[selectedHslBand]
+                            bands[selectedHslBand] = band.copy(
+                                lightness = (band.lightness + 0.1f).coerceAtMost(1f))
+                            grade(fx.colorGrade.copy(hslBands = bands))
                         }
                         SmallLayerButton("Blur −") {
                             runCatching { applyMatte(fx.copy(blur =

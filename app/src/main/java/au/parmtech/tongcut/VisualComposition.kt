@@ -70,10 +70,16 @@ object VisualComposition {
                         if (effects != PhotoEffects()) {
                             // Each source input has its own GL matte before layering.
                             // Unsupported HDR fails explicitly; never drop the authored matte.
-                            edited.setEffects(Effects(
-                                emptyList(),
-                                listOf(VideoMatteEffect(effects))
-                            ))
+                            val videoEffects = buildList {
+                                add(VideoMatteEffect(effects))
+                                if (effects.colorGrade.hslBands != DEFAULT_HSL_BANDS) {
+                                    add(ColorGradeEffect(
+                                        ColorGrade(hslBands = effects.colorGrade.hslBands),
+                                        premultipliedInput = true
+                                    ))
+                                }
+                            }
+                            edited.setEffects(Effects(emptyList(), videoEffects))
                         }
                         if (part.speedRamp.isNotEmpty()) {
                             // The provider's input clock begins at the clipped source zero.

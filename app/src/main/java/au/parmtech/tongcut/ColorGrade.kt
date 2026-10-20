@@ -1,9 +1,26 @@
-Warning: fs was declared with const; use let for reassignable variables.
-Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import org.json.JSONObject
 import kotlin.math.pow
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+
+/** One of six smoothly overlapping hue ranges: red, yellow, green, cyan, blue, magenta. */
+data class HslBandAdjustment(
+    val hueDegrees: Float = 0f,
+    val saturation: Float = 0f,
+    val lightness: Float = 0f
+) {
+    init {
+        require(hueDegrees.isFinite() && hueDegrees in -180f..180f)
+        require(saturation.isFinite() && saturation in -1f..1f)
+        require(lightness.isFinite() && lightness in -1f..1f)
+    }
+}
+
+internal val DEFAULT_HSL_BANDS = List(6) { HslBandAdjustment() }
+internal val HSL_BAND_NAMES = listOf("Red", "Yellow", "Green", "Cyan", "Blue", "Magenta")
 
 /** Bounded, SDR-oriented primary-footage grade shared by preview and export. */
 data class ColorGrade(
@@ -21,7 +38,9 @@ data class ColorGrade(
     /** Additive HSL saturation adjustment. */
     val hslSaturation: Float = 0f,
     /** Additive HSL lightness shift; -1/1 move to black/white. */
-    val hslLightness: Float = 0f
+    val hslLightness: Float = 0f,
+    /** Selective hue/saturation/lightness edits, in red-to-magenta order. */
+    val hslBands: List<HslBandAdjustment> = DEFAULT_HSL_BANDS
 ) {
     init {
         require(exposure.isFinite() && exposure in -2f..2f)
@@ -32,6 +51,7 @@ data class ColorGrade(
         require(hueDegrees.isFinite() && hueDegrees in -180f..180f)
         require(hslSaturation.isFinite() && hslSaturation in -1f..1f)
         require(hslLightness.isFinite() && hslLightness in -1f..1f)
+        require(hslBands.size == 6)
     }
 
     fun apply(argb: Int): Int {
@@ -87,6 +107,10 @@ data class ColorGrade(
             blue = b + offset
         }
         fun channel(value: Float) = (value.coerceIn(0f, 1f) * 255f).toInt()
+        val selective = HslBandMath.apply(red, green, blue, hslBands)
+        red = selective.first
+        green = selective.second
+        blue = selective.third
         return (argb and -0x1000000) or (channel(red) shl 16) or
             (channel(green) shl 8) or channel(blue)
     }
@@ -102,6 +126,15 @@ object ColorGradeCodec {
         put("hueDegrees", grade.hueDegrees.toDouble())
         put("hslSaturation", grade.hslSaturation.toDouble())
         put("hslLightness", grade.hslLightness.toDouble())
+        put("hslBands", org.json.JSONArray().apply {
+            grade.hslBands.forEach { band ->
+                put(JSONObject().apply {
+                    put("hue", band.hueDegrees.toDouble())
+                    put("saturation", band.saturation.toDouble())
+                    put("lightness", band.lightness.toDouble())
+                })
+            }
+        })
     }
 
     /** Missing/invalid adjustment data safely restores neutral colour. */
@@ -116,8 +149,71 @@ object ColorGradeCodec {
                 tint = value.optDouble("tint", 0.0).toFloat(),
                 hueDegrees = value.optDouble("hueDegrees", 0.0).toFloat(),
                 hslSaturation = value.optDouble("hslSaturation", 0.0).toFloat(),
-                hslLightness = value.optDouble("hslLightness", 0.0).toFloat()
+                hslLightness = value.optDouble("hslLightness", 0.0).toFloat(),
+                hslBands = value.optJSONArray("hslBands")?.let { bands ->
+                    require(bands.length() == 6)
+                    (0 until 6).map { index ->
+                        val band = bands.getJSONObject(index)
+                        HslBandAdjustment(
+                            hueDegrees = band.optDouble("hue", 0.0).toFloat(),
+                            saturation = band.optDouble("saturation", 0.0).toFloat(),
+                            lightness = band.optDouble("lightness", 0.0).toFloat()
+                        )
+                    }
+                } ?: DEFAULT_HSL_BANDS
             )
         }.getOrDefault(ColorGrade())
+    }
+}
+
+/** Deterministic CPU selective HSL transform; the GLSL paths mirror its triangular weights. */
+internal object HslBandMath {
+    fun apply(red: Float, green: Float, blue: Float,
+        bands: List<HslBandAdjustment>): Triple<Float, Float, Float> {
+        if (bands.all { it == HslBandAdjustment() }) return Triple(red, green, blue)
+        val boundedRed = red.coerceIn(0f, 1f)
+        val boundedGreen = green.coerceIn(0f, 1f)
+        val boundedBlue = blue.coerceIn(0f, 1f)
+        val maximum = max(boundedRed, max(boundedGreen, boundedBlue))
+        val minimum = min(boundedRed, min(boundedGreen, boundedBlue))
+        val delta = maximum - minimum
+        if (delta <= 0.000001f) return Triple(boundedRed, boundedGreen, boundedBlue)
+        val lightness = (maximum + minimum) * 0.5f
+        val saturation = delta / (1f - abs(2f * lightness - 1f)).coerceAtLeast(0.000001f)
+        val rawHue = when {
+            maximum == boundedRed -> ((boundedGreen - boundedBlue) / delta).let {
+                if (it < 0f) it + 6f else it
+            }
+            maximum == boundedGreen -> (boundedBlue - boundedRed) / delta + 2f
+            else -> (boundedRed - boundedGreen) / delta + 4f
+        }
+        val hueDegrees = rawHue * 60f
+        var hueShift = 0f
+        var saturationShift = 0f
+        var lightnessShift = 0f
+        bands.forEachIndexed { index, band ->
+            val center = index * 60f
+            val rawDistance = abs(hueDegrees - center)
+            val distance = min(rawDistance, 360f - rawDistance)
+            val weight = (1f - distance / 60f).coerceIn(0f, 1f)
+            hueShift += band.hueDegrees * weight
+            saturationShift += band.saturation * weight
+            lightnessShift += band.lightness * weight
+        }
+        val adjustedSaturation = (saturation + saturationShift).coerceIn(0f, 1f)
+        val adjustedLightness = (lightness + lightnessShift * 0.5f).coerceIn(0f, 1f)
+        val hue = ((rawHue + hueShift / 60f) % 6f + 6f) % 6f
+        val chroma = (1f - abs(2f * adjustedLightness - 1f)) * adjustedSaturation
+        val secondary = chroma * (1f - abs(hue % 2f - 1f))
+        val offset = adjustedLightness - chroma * 0.5f
+        val rgb = when {
+            hue < 1f -> Triple(chroma, secondary, 0f)
+            hue < 2f -> Triple(secondary, chroma, 0f)
+            hue < 3f -> Triple(0f, chroma, secondary)
+            hue < 4f -> Triple(0f, secondary, chroma)
+            hue < 5f -> Triple(secondary, 0f, chroma)
+            else -> Triple(chroma, 0f, secondary)
+        }
+        return Triple(rgb.first + offset, rgb.second + offset, rgb.third + offset)
     }
 }

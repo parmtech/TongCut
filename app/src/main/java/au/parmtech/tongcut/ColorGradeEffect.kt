@@ -1,5 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
-Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import android.content.Context
@@ -15,17 +13,21 @@ import androidx.media3.effect.GlShaderProgram
 
 /** Same bounded SDR color transform for the ExoPlayer preview and Transformer output. */
 @androidx.annotation.OptIn(UnstableApi::class)
-internal class ColorGradeEffect(private val grade: ColorGrade) : GlEffect {
+internal class ColorGradeEffect(
+    private val grade: ColorGrade,
+    private val premultipliedInput: Boolean = false
+) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram {
         if (useHdr) throw VideoFrameProcessingException(
             IllegalArgumentException("TongCut color adjustments currently require SDR footage")
         )
-        return ColorGradeShader(grade)
+        return ColorGradeShader(grade, premultipliedInput)
     }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
-private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1) {
+private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
+    BaseGlShaderProgram(false, 1) {
     private val program = try {
         GlProgram(VERTEX_SHADER, FRAGMENT_SHADER)
     } catch (error: GlUtil.GlException) {
@@ -45,6 +47,11 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
         program.setFloatUniform("uHueDegrees", grade.hueDegrees)
         program.setFloatUniform("uHslSaturation", grade.hslSaturation)
         program.setFloatUniform("uHslLightness", grade.hslLightness)
+        program.setFloatUniform("uPremultipliedInput", if (premultipliedInput) 1f else 0f)
+        grade.hslBands.forEachIndexed { index, band ->
+            program.setFloatsUniform("uHslBand$index",
+                floatArrayOf(band.hueDegrees, band.saturation, band.lightness))
+        }
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -96,6 +103,13 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
             uniform float uHueDegrees;
             uniform float uHslSaturation;
             uniform float uHslLightness;
+            uniform float uPremultipliedInput;
+            uniform vec3 uHslBand0;
+            uniform vec3 uHslBand1;
+            uniform vec3 uHslBand2;
+            uniform vec3 uHslBand3;
+            uniform vec3 uHslBand4;
+            uniform vec3 uHslBand5;
             varying vec2 vTexSamplingCoord;
             vec3 adjustHsl(vec3 color, float degrees, float saturationShift,
                 float lightnessShift) {
@@ -127,9 +141,37 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
                 if (hue < 5.0) return vec3(secondary, 0.0, chroma) + offset;
                 return vec3(chroma, 0.0, secondary) + offset;
             }
+            float bandWeight(float hueDegrees, float center) {
+                float distance = abs(hueDegrees - center);
+                distance = min(distance, 360.0 - distance);
+                return max(1.0 - distance / 60.0, 0.0);
+            }
+            vec3 adjustSelectiveHsl(vec3 color) {
+                vec3 bounded = clamp(color, 0.0, 1.0);
+                float maximum = max(bounded.r, max(bounded.g, bounded.b));
+                float minimum = min(bounded.r, min(bounded.g, bounded.b));
+                float delta = maximum - minimum;
+                if (delta <= 0.000001) return bounded;
+                float hue;
+                if (maximum == bounded.r) hue = mod((bounded.g - bounded.b) / delta, 6.0);
+                else if (maximum == bounded.g) hue = (bounded.b - bounded.r) / delta + 2.0;
+                else hue = (bounded.r - bounded.g) / delta + 4.0;
+                float degrees = hue * 60.0;
+                vec3 adjustment = uHslBand0 * bandWeight(degrees, 0.0) +
+                    uHslBand1 * bandWeight(degrees, 60.0) +
+                    uHslBand2 * bandWeight(degrees, 120.0) +
+                    uHslBand3 * bandWeight(degrees, 180.0) +
+                    uHslBand4 * bandWeight(degrees, 240.0) +
+                    uHslBand5 * bandWeight(degrees, 300.0);
+                return adjustHsl(bounded, adjustment.x, adjustment.y, adjustment.z);
+            }
             void main() {
                 vec4 source = texture2D(uTexSampler, vTexSamplingCoord);
-                vec3 color = source.rgb * exp2(uExposure);
+                float alpha = source.a;
+                vec3 inputColor = source.rgb;
+                if (uPremultipliedInput > 0.5 && alpha > 0.00001)
+                    inputColor /= alpha;
+                vec3 color = inputColor * exp2(uExposure);
                 color = (color - vec3(0.5)) * uContrast + vec3(0.5);
                 float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
                 color = mix(vec3(luminance), color, uSaturation);
@@ -139,7 +181,9 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
                 color.g -= uTint * 0.10;
                 color.b += uTint * 0.05;
                 color = adjustHsl(color, uHueDegrees, uHslSaturation, uHslLightness);
-                gl_FragColor = vec4(clamp(color, 0.0, 1.0), source.a);
+                color = adjustSelectiveHsl(color);
+                float outputAlpha = uPremultipliedInput > 0.5 ? alpha : 1.0;
+                gl_FragColor = vec4(clamp(color, 0.0, 1.0) * outputAlpha, alpha);
             }
         """
     }
