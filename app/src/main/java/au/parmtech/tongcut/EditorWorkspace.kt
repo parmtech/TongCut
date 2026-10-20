@@ -1120,7 +1120,8 @@ internal fun VideoEditorScreen(
                     VisualOverlayPreview(
                         layer = layer, timelineMs = playMs, playing = playing,
                         modifier = Modifier.align(position).fillMaxWidth(0.42f)
-                            .aspectRatio(16f / 9f)
+                            .aspectRatio(16f / 9f),
+                        colorLutProfile = active.colorLutProfile
                     )
                 }
             }
