@@ -36,6 +36,10 @@ class VideoMaskShapesDeviceTest {
     }
 
     private fun renderedFrame(mask: PhotoMask): Bitmap {
+        return renderedFrame(PhotoEffects(mask = mask, feather = 0.025f))
+    }
+
+    private fun renderedFrame(effects: PhotoEffects): Bitmap {
         val blue = fixture("main_blue.mp4")
         val red = fixture("overlay_red.mp4")
         val graph = LayerTimeline(
@@ -45,7 +49,7 @@ class VideoMaskShapesDeviceTest {
                     id = "masked", trackId = "pip", kind = LayerKind.VIDEO,
                     startUs = 500_000L, durationUs = 1_500_000L,
                     sourceUri = red.toString(), sourceDurationUs = 3_000_000L,
-                    photoEffects = PhotoEffects(mask = mask, feather = 0.025f)
+                    photoEffects = effects
                 )
             )
         )
@@ -62,23 +66,28 @@ class VideoMaskShapesDeviceTest {
                 onError = { error = it; done.countDown() }
             )
         }
-        assertTrue("Mask export timed out for " + mask,
+        assertTrue("Mask export timed out for " + effects.mask,
             done.await(240L, TimeUnit.SECONDS))
-        assertNull("Failed to render " + mask + ": " + error, error)
-        val media = result ?: throw AssertionError("No MP4 output for " + mask)
+        assertNull("Failed to render " + effects.mask + ": " + error, error)
+        val media = result ?: throw AssertionError("No MP4 output for " + effects.mask)
         try {
             return MediaMetadataRetriever().use { retriever ->
                 retriever.setDataSource(context, media)
                 retriever.getFrameAtTime(1_000_000L,
                     MediaMetadataRetriever.OPTION_CLOSEST)
-                    ?: throw AssertionError("No output frame for " + mask)
+                    ?: throw AssertionError("No output frame for " + effects.mask)
             }
         } finally {
             context.contentResolver.delete(media, null, null)
         }
     }
 
-    /** Anchor 0 is bottom right 42%-wide and fit to 16:9 video over 16:9 base. */
+    /**
+     * Slot 0 is bottom-right. A 16:9 PiP fitted to 42% of the canvas width
+     * occupies x/y=[.58,1] on a 16:9 canvas. Thus (.675,.675) is local
+     * (.226,.226): ellipse L2 distance .81 (inside), diamond L1 distance
+     * 1.14 (outside, with >8 source-pixel margin beyond its edge).
+     */
     private fun at(frame: Bitmap, normX: Float, normY: Float): Int =
         frame.getPixel(
             (frame.width * normX).toInt().coerceIn(0, frame.width - 1),
@@ -135,4 +144,43 @@ class VideoMaskShapesDeviceTest {
             frame.recycle()
         }
     }
+
+    @Test fun ellipseMaskKeepsDiagonalThatDiamondCuts() {
+        val ellipse = renderedFrame(PhotoEffects(mask = PhotoMask.ELLIPSE, feather = 0.015f))
+        try {
+            assertRed(at(ellipse, 0.79f, 0.79f), "Ellipse centre")
+            assertRed(at(ellipse, 0.675f, 0.675f), "Ellipse diagonal interior")
+            assertBlue(at(ellipse, 0.59f, 0.59f), "Ellipse corner")
+        } finally {
+            ellipse.recycle()
+        }
+
+        val diamond = renderedFrame(PhotoEffects(mask = PhotoMask.DIAMOND, feather = 0.015f))
+        try {
+            assertRed(at(diamond, 0.79f, 0.79f), "Diamond centre")
+            assertBlue(at(diamond, 0.675f, 0.675f), "Diamond diagonal")
+        } finally {
+            diamond.recycle()
+        }
+    }
+
+    @Test fun invertedResizedMaskMovesItsExteriorInExportPixels() {
+        val frame = renderedFrame(PhotoEffects(
+            mask = PhotoMask.ELLIPSE,
+            feather = 0.01f,
+            maskCenterX = 0.2f,
+            maskCenterY = -0.15f,
+            maskScaleX = 0.55f,
+            maskScaleY = 0.8f,
+            invertMask = true,
+            maskRotationDegrees = 30f
+        ))
+        try {
+            assertBlue(at(frame, 0.83f, 0.75f), "Inverted ellipse interior")
+            assertRed(at(frame, 0.96f, 0.79f), "Inverted ellipse exterior")
+        } finally {
+            frame.recycle()
+        }
+    }
 }
+

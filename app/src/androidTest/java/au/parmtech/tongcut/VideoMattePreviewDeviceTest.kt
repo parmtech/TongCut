@@ -34,6 +34,107 @@ import java.util.concurrent.atomic.AtomicReference
 @RunWith(AndroidJUnit4::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoMattePreviewDeviceTest {
+    @Test fun ellipseMaskAppearsInTheLiveVideoPreview() {
+        val app = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val fixture = File(app.cacheDir, "ellipse-geometry-preview.mp4")
+        InstrumentationRegistry.getInstrumentation().context.assets
+            .open("overlay_red.mp4").use { input ->
+                fixture.outputStream().use { output -> input.copyTo(output) }
+            }
+
+        val shown = CountDownLatch(1)
+        val failure = AtomicReference<String?>()
+        val player = AtomicReference<ExoPlayer?>()
+        val holder = AtomicReference<Pair<FrameLayout, TextureView>?>()
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                val frame = FrameLayout(activity).apply { setBackgroundColor(Color.BLUE) }
+                val texture = TextureView(activity).apply { isOpaque = false }
+                frame.addView(texture, FrameLayout.LayoutParams(640, 360, Gravity.CENTER))
+                activity.setContentView(frame)
+                holder.set(frame to texture)
+                val preview = ExoPlayer.Builder(activity).build()
+                player.set(preview)
+                preview.addListener(object : Player.Listener {
+                    override fun onRenderedFirstFrame() { shown.countDown() }
+                    override fun onPlayerError(error: PlaybackException) {
+                        failure.set(error.message ?: "GPU video preview failed")
+                        shown.countDown()
+                    }
+                })
+                preview.setVideoEffects(listOf(VideoMatteEffect(PhotoEffects(
+                    mask = PhotoMask.ELLIPSE,
+                    feather = 0.01f
+                ))))
+                preview.repeatMode = Player.REPEAT_MODE_ONE
+                preview.setVideoTextureView(texture)
+                preview.setMediaItem(MediaItem.fromUri(Uri.fromFile(fixture)))
+                preview.prepare()
+                preview.play()
+            }
+            assertTrue("Never received ellipse-masked preview frame",
+                shown.await(30L, TimeUnit.SECONDS))
+            assertNull("GPU effect rejected ellipse geometry: ${failure.get()}", failure.get())
+
+            var validFrames = 0
+            var lastInterior = 0
+            var lastExterior = 0
+            for (attempt in 0 until 20) {
+                val copied = CountDownLatch(1)
+                val result = AtomicReference<Int>()
+                val snapshot = AtomicReference<Bitmap?>()
+                var point = IntArray(2)
+                var size = 0 to 0
+                scenario.onActivity { activity ->
+                    val (_, texture) = requireNotNull(holder.get())
+                    point = IntArray(2).also(texture::getLocationInWindow)
+                    size = texture.width to texture.height
+                    val bitmap = Bitmap.createBitmap(
+                        activity.window.decorView.width,
+                        activity.window.decorView.height,
+                        Bitmap.Config.ARGB_8888
+                    )
+                    snapshot.set(bitmap)
+                    PixelCopy.request(activity.window, bitmap, { status ->
+                        result.set(status)
+                        copied.countDown()
+                    }, Handler(Looper.getMainLooper()))
+                }
+                assertTrue("PixelCopy timed out for ellipse preview",
+                    copied.await(8L, TimeUnit.SECONDS))
+                assertEquals(PixelCopy.SUCCESS, result.get())
+                val image = requireNotNull(snapshot.getAndSet(null))
+                try {
+                    val (width, height) = size
+                    lastInterior = image.getPixel(
+                        point[0] + (width * 0.75f).toInt(),
+                        point[1] + (height * 0.75f).toInt()
+                    )
+                    lastExterior = image.getPixel(
+                        point[0] + (width * 0.92f).toInt(),
+                        point[1] + (height * 0.92f).toInt()
+                    )
+                    val interiorIsRed = Color.red(lastInterior) >
+                        Color.blue(lastInterior) + 70
+                    val exteriorShowsBlue = Color.blue(lastExterior) >
+                        Color.red(lastExterior) + 70
+                    validFrames = if (interiorIsRed && exteriorShowsBlue) validFrames + 1 else 0
+                } finally {
+                    image.recycle()
+                }
+                if (validFrames >= 2) break
+                Thread.sleep(150L)
+            }
+            assertTrue("Live ellipse matte pixels mismatch: interior=" +
+                Integer.toHexString(lastInterior) + ", exterior=" +
+                Integer.toHexString(lastExterior), validFrames >= 2)
+        } finally {
+            scenario.onActivity { player.getAndSet(null)?.release() }
+            scenario.close()
+        }
+    }
+
     @Test fun keyedVideoPreviewShowsBlueParentBehindGreenAndKeepsRedObject() {
         val app = ApplicationProvider.getApplicationContext<android.content.Context>()
         val fixture = File(app.cacheDir, "realtime-chroma-preview.mp4")
@@ -171,3 +272,4 @@ class VideoMattePreviewDeviceTest {
         }
     }
 }
+
