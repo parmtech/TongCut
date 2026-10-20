@@ -280,7 +280,8 @@ This map groups implementation by shared dependencies so features are developed 
 - [ ] **P9-03** All source/build/unit/Lint/instrumentation/integration/security/load tests green on final commit SHA.
 - [ ] **P9-04** All in-scope offline phases P0–P5 and P7–P8 signed off; applicable issues #1–#3, #5–#6 and other offline acceptance issues closed with documented evidence. P6/issue #4 is excluded until a future online/AI release.
 - [ ] **P9-05** Release signing, version/migration/upgrade test, privacy/policy/notices, crash rollback plan and owner approval.
-- [ ] **P9-06** Install, edit, export, verify output, uninstall/upgrade regressions and final owner hands-on signoff.
+- [ ] **P9-06** Install, edit, export, verify output, uninstall/upgrade regressions and final owner hands-on signoff.
+  - Owner report (2026-10-20): installed and tried audited debug APK from [CI run 39403179039](https://github.com/manbir6-ux/TongCut/actions/runs/39403179039) on a phone; user reports it was “very good.” Phone model/API level and exercised workflows/output checks were not recorded, so this is a positive smoke-test milestone only; comprehensive P9-06 remains open.
 - [ ] **P9-07** ONLY NOW delete this TEMP_MASTER_PROJECT_CHECKLIST.md via a commit. Keep permanent docs, CI run URLs and issues for historical evidence.
 
 ## Evidence and known limitations as of the checkpoint
