@@ -22,13 +22,29 @@
 10. The P2 owner TEST APK was built and passed earlier CI; physical phone acceptance remains open. **Updated owner direction (2026-10-20): prioritize implementation of features across all P3–P9 phases before comprehensive testing and bug-fix cycles.** Avoid repeated full QA campaigns during feature construction; use minimal compilation safeguards when practical. Keep every unverified acceptance item unchecked. Do not label an untested feature or phase complete.
 11. For P3, document implementation and verification separately: editor control + persistence + GPU export + mixed-media Android pixel test + owner hardware acceptance for each advanced effect.
 
+## P3–P9 coordinated production execution map (2026-10-20)
+
+This map groups implementation by shared dependencies so features are developed coherently across editor state, persistence, preview, export, and tests. It is an execution order, not a completion claim. Check off each leaf item only with its own evidence; the parent phase and all release gates remain open until accepted.
+
+| Workstream | Scope and dependency order | Exit evidence |
+|---|---|---|
+| A. Shared edit/render contracts (P3/P5/P7) | Establish common timeline/source-clock and render-effect contracts; preserve schema defaults and undo; make preview/export consume the same edit values. | JVM invariants, migration round-trips, source/Lint; then decoded synthetic MP4 and preview pixel comparisons. |
+| B. Advanced timeline effects (P3) | Reverse pipeline (decode/cache/cancel/codec handling), finish masks/blends/chroma, primary transitions, tracking and grouped gestures. Sequence by required decoder/compositor capabilities; do not imply PiP effects equal primary-footage effects. | Per-effect persistence/UI, seek/cancel/resource tests, encoded-pixel acceptance, parity evidence; owner hardware still separate. |
+| C. Audio studio (P4) | Detach and edit audio; record voiceover; complete gain/fade/ducking, time-stretch/noise/EQ/channel behavior. Reuse source-clock envelope and mixer contracts. | Source anchoring and migration tests, decoded PCM/AAC onset/gain/pitch tests, lifecycle/device acceptance. |
+| D. Visual and captions (P5) | Finish colour-managed SDR/HDR and grading; effects/stabilization/crop; typography/templates and multilingual subtitle workflow; maintain TongCut-owned original/licensed assets. | Numeric/parser tests, preview/export pixel comparisons, supported-device HDR/SDR acceptance and asset provenance. |
+| E. AI studio (P6) | Provider/capability registry → Keystore credentials → explicit consent/privacy boundaries → real provider adapters → durable jobs/cancel/budget → editable result provenance. Keep offline editor usable when no provider is configured. | Contract tests with non-secret fixtures; security/privacy review; owner-approved real-provider tests outside source control. |
+| F. Export and resilience (P7/P8) | Complete capability-aware codec/size/FPS/audio preflight; robust background jobs, cancellation, cleanup/resume; performance and security/accessibility/device matrix. | Independently probed files, stress/cancel/recovery tests, lint/static review and API/device matrix. |
+| G. Release acceptance (P9) | Owner-approved parity matrix and UI walkthrough; full regression/security/load suite on final commit; signed/versioned upgrade plan, release notes/privacy notices and rollback; owner installs and signs off. | All P0–P8 acceptance leaves, GitHub issues, and installed production checks signed off. Only then package/deliver production APK and retire this temporary ledger. |
+
+**Working cadence:** one dependency-coherent implementation slice at a time; update its leaf checklist and evidence in the same change; run targeted JVM/source checks during feature construction; reserve full emulator/device and production/release campaigns for the designated gates. A read-only watcher reviews changed files, cross-layer parity, compatibility, test claims and checklist consistency before each remote update. If local and remote commit identities diverge, append commits to the verified remote head with an expected-head check; never force-rewrite the project branch.
+
 ## Phase completion dashboard
 
 | Phase | Implementation | Device / final acceptance | Status |
 |---|---|---|---|
 | P0 Reference/foundations | Architecture and initial source inventory | Complete, legally safe feature-by-feature acceptance inventory | OPEN |
 | P1 Project editor core | Project catalog, snapshots, history, relink, migration | Real phone restart/relink/edit/export/migration | OPEN |
-| P2 True layered timeline | Source largely implemented; several emulator MP4 tests passed | Preview/export parity, real-phone mixed tracks, codecs/performance/accessibility | OPEN — PRIORITY |
+| P2 True layered timeline | Source largely implemented; several emulator MP4 tests passed | Preview/export parity, real-phone mixed tracks, codecs/performance/accessibility | OPEN — OWNER ACCEPTANCE |
 | P3 Advanced edit | Keyframes, speed, PiP freeze, photo chroma/masks partly working | Reverse, video masks, blending, transitions, tracking, full parity | OPEN |
 | P4 Audio studio | Independent audio lanes and volume in P2 | Voiceover, envelopes, ducking, timing/pitch, noise tools | OPEN |
 | P5 Visual/colour | Basic looks and some photo/text effects | HDR, colour controls, licensed visuals/assets, all render parity | OPEN |
