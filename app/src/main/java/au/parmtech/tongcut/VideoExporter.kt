@@ -56,7 +56,8 @@ class VideoExporter(private val context: Context) {
         onWarning: (String) -> Unit = {},
         exportJobId: String? = null,
         reverseSequences: Map<Int, ReverseImageSequence> = emptyMap(),
-        reverseAudioFiles: Map<Int, File> = emptyMap()
+        reverseAudioFiles: Map<Int, File> = emptyMap(),
+        primaryTransitions: List<PrimaryTransitionSpec> = emptyList()
     ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
@@ -72,6 +73,23 @@ class VideoExporter(private val context: Context) {
             "Sticker compositor has not been implemented"
         }
         val original = clips.toList()
+        val primaryPlan = if (primaryTransitions.isEmpty()) null else {
+            require(reverseSequences.isEmpty() && reverseAudioFiles.isEmpty() &&
+                original.none { it.reverseVideo }) {
+                "Primary transitions currently require ordinary forward clips; disable Reverse on every primary clip."
+            }
+            PrimaryTransitionPlan.build(
+                original.map { clip ->
+                    PrimaryTransitionClip(
+                        id = clip.id,
+                        sourceDurationUs = clip.durationMs * 1_000L,
+                        sourceInUs = clip.startMs * 1_000L,
+                        sourceOutUs = clip.endMs * 1_000L
+                    )
+                },
+                primaryTransitions
+            )
+        }
         val generation = Math.addExact(runGeneration, 1L).also { runGeneration = it }
         val runReverseSequences = reverseSequences.values.distinct()
         val runReverseAudioFiles = reverseAudioFiles.values.distinct()
@@ -140,11 +158,14 @@ class VideoExporter(private val context: Context) {
                 compositionEffects += OverlayEffect(visibleOverlays)
             }
 
+            val incomingOverlapMs = primaryPlan?.transitions
+                ?.associate { it.incomingClipId to it.durationUs / 1_000L }.orEmpty()
             val editedClips = original.map { clip ->
+                val sourceStartMs = Math.addExact(clip.startMs, incomingOverlapMs[clip.id] ?: 0L)
                 val source = MediaItem.Builder().setUri(clip.uri)
                     .setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
-                            .setStartPositionMs(clip.startMs)
+                            .setStartPositionMs(sourceStartMs)
                             .setEndPositionMs(clip.endMs)
                             .build()
                     ).build()
@@ -159,9 +180,16 @@ class VideoExporter(private val context: Context) {
             } else {
                 EditedMediaItemSequence.withAudioAndVideoFrom(editedClips)
             }
-            val baseVideoDurationUs = original.sumOf { it.trimmedDurationMs * 1_000L }
+            val baseVideoDurationUs = primaryPlan?.durationUs
+                ?: original.sumOf { it.trimmedDurationMs * 1_000L }
             val audioPlans = AudioMixPlan.from(overlayLayers, baseVideoDurationUs)
             val videoLanes = VisualComposition.exportLanes(overlayLayers, baseVideoDurationUs)
+            if (primaryPlan != null) {
+                require(videoLanes.isEmpty()) {
+                    "Primary transitions currently require no PiP video or image layers. Remove those visual layers and export again."
+                }
+                onWarning("Primary picture dissolves are enabled. Source audio remains cut at the transition boundary in this build.")
+            }
             val allSequences = mutableListOf<EditedMediaItemSequence>()
             var reverseVideoSequence: EditedMediaItemSequence? = null
             if (reverseSequences.isNotEmpty()) {
@@ -201,6 +229,9 @@ class VideoExporter(private val context: Context) {
             allSequences.addAll(VisualComposition.sequences(
                 videoLanes, baseVideoDurationUs, overlayLayers, options.maxFrameRate
             ))
+            primaryPlan?.let {
+                allSequences += PrimaryTransitionComposition.sequence(original, it, options.maxFrameRate)
+            }
             reverseVideoSequence?.let(allSequences::add)
             allSequences += sequence
             if (!options.mute && reverseAudioFiles.isNotEmpty()) {
@@ -329,7 +360,11 @@ class VideoExporter(private val context: Context) {
             }
             val compositionBuilder = Composition.Builder(allSequences)
                 .setEffects(Effects(emptyList(), compositionEffects))
-            if (videoLanes.isNotEmpty()) {
+            if (primaryPlan != null) {
+                compositionBuilder.setVideoCompositorSettings(
+                    PrimaryTransitionComposition.settings(primaryPlan)
+                )
+            } else if (videoLanes.isNotEmpty()) {
                 compositionBuilder.setVideoCompositorSettings(
                     VisualComposition.settings(videoLanes, overlayLayers, baseVideoDurationUs)
                 )
