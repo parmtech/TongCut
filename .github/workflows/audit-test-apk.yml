@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/audit-test-apk.yml'
       - 'app/src/main/java/au/parmtech/tongcut/SequentialTimeline.kt'
+      - 'app/src/test/java/au/parmtech/tongcut/SequentialTimelineTest.kt'
       - 'app/src/main/java/au/parmtech/tongcut/ManualFaceRetouch.kt'
       - 'app/src/main/java/au/parmtech/tongcut/PhotoMatte.kt'
       - 'app/src/main/java/au/parmtech/tongcut/ExactReverseFrameDecoder.kt'
