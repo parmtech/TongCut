@@ -38,7 +38,7 @@ If worktree branches are not available locally, fetch the named branches first. 
 - [ ] Master reviewed the PR and merged only after green checks.
 
 ## Legacy 20-agent project
-All previously created `agent/A01...A20` and `agent/a01...a20` branches are retired. **Do not launch or assign sessions for them.** Historical branches may contain useful unmerged work; inspect commits before deleting. Their presence does not count as a running agent. Retired branches must not be used to bypass the three-agent policy. Existing APK build and test actions continue to operate independently of Codex.
+All previously created `agent/A01...A20` and `agent/a01...a20` branches are retired. **Do not launch or assign sessions for them.** Both historical 20-branch sets were archived to Git tags under `archive/retired-agents-20261020/` and removed by GitHub Actions on 2026-10-20. The archived source remains recoverable. Old branches did not themselves represent running sessions. Retired branches must not be used to bypass the three-agent policy. Existing APK build and test actions continue to operate independently of Codex.
 
 ## Operating reality
-This repository stores the protocol; it is not a Codex session orchestrator. GitHub Actions can check code but cannot, by this configuration alone, open or terminate Codex sessions, create continuous autonomous work or remove external running sessions.
+Use `.codex/config.toml` to cap this repository's single Master Codex session at two concurrent spawned workers; the main thread is the hands-on coding Master. Alternatively use three separate sessions/worktrees, but never also spawn subagents in them. This repository stores the protocol; it does not itself launch a Codex session. GitHub Actions can check code but cannot, by this configuration alone, open or terminate Codex sessions, create continuous autonomous work or remove external running sessions.

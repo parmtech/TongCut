@@ -1,0 +1,13 @@
+# TongCut: one coding Master (the primary thread) + two worker subagents.
+# This caps subagents PER Codex session; it cannot cancel separate sessions.
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 2
+
+[agents.worker_1]
+description = "Worker 1: implement TongCut Kotlin/Compose editor UI, import, preview, project/timeline features and related tests. No other agent spawning."
+config_file = "./agents/worker_1.toml"
+
+[agents.worker_2]
+description = "Worker 2: implement TongCut Media3 export/render, audio, effects, codec compatibility and related tests. No other agent spawning."
+config_file = "./agents/worker_2.toml"

@@ -22,4 +22,4 @@ The only approved agents are **Master**, **Worker 1**, and **Worker 2**. Master 
 - Do not claim CapCut feature parity, 4K guarantees or finished APK without evidence. Alpha debug APK workflow is separate from production release.
 - Never overwrite another agent's branch, reset others' commits, commit secrets or signed keystores, or copy proprietary assets.
 - Existing workflows `.github/workflows/android.yml` and `build-apk.yml` are preserved.
-- **Instructions/configuration do not start Codex agents automatically**. An operator must launch the three Codex sessions explicitly. Do not assume an agent is running just because a branch exists.
+- **Instructions/configuration do not start Codex agents automatically.** Start ONE Master/root Codex session and delegate only `worker_1` and `worker_2` (two spawned subagents), OR start three separate sessions/worktrees, never both simultaneously. `.codex/config.toml` caps the spawned subagents in a single Codex session at two; it does not stop other independently running sessions. Do not assume an agent is running just because a branch exists.
