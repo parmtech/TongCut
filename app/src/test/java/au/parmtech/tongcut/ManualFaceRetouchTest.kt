@@ -105,6 +105,70 @@ class ManualFaceRetouchTest {
         }
     }
 
+    @Test fun reversePreviewRotationAndMirrorMapIntoThePostTransformFrame() {
+        val uv = FloatArray(2)
+        val rawU = 0.2f
+        val rawV = 0.3f
+        val expected = listOf(
+            listOf(0.2f, 0.3f), listOf(0.3f, 0.8f),
+            listOf(0.8f, 0.7f), listOf(0.7f, 0.2f)
+        )
+        val mirroredExpected = listOf(
+            listOf(0.8f, 0.3f), listOf(0.3f, 0.2f),
+            listOf(0.2f, 0.7f), listOf(0.7f, 0.8f)
+        )
+        for (turns in 0..3) {
+            ManualFaceRetouchMath.rawToOrientedUv(rawU, rawV, turns, false, uv)
+            assertEquals(expected[turns][0], uv[0], 0.00001f)
+            assertEquals(expected[turns][1], uv[1], 0.00001f)
+            ManualFaceRetouchMath.orientedToRawUv(
+                uv[0], uv[1], turns, false, uv
+            )
+            assertEquals(rawU, uv[0], 0.00001f)
+            assertEquals(rawV, uv[1], 0.00001f)
+
+            ManualFaceRetouchMath.rawToOrientedUv(rawU, rawV, turns, true, uv)
+            assertEquals(mirroredExpected[turns][0], uv[0], 0.00001f)
+            assertEquals(mirroredExpected[turns][1], uv[1], 0.00001f)
+            ManualFaceRetouchMath.orientedToRawUv(
+                uv[0], uv[1], turns, true, uv
+            )
+            assertEquals(rawU, uv[0], 0.00001f)
+            assertEquals(rawV, uv[1], 0.00001f)
+        }
+    }
+
+    @Test fun reversePreviewRetouchUsesTheSameOrientedRegionCoordinates() {
+        val settings = ManualFaceRetouch(
+            centerX = 0.30f, centerY = 0.70f, radiusX = 0.24f, radiusY = 0.28f,
+            faceWidth = 0.16f, jawWidth = 0.08f, noseWidth = 0.04f, eyeScale = 0.12f
+        )
+        val uv = FloatArray(2)
+        val oriented = FloatArray(2)
+        val expectedRaw = FloatArray(2)
+        val rawU = 0.22f
+        val rawV = 0.41f
+        val turns = 1
+        val flip = true
+        ManualFaceRetouchMath.rawToOrientedUv(rawU, rawV, turns, flip, oriented)
+        ManualFaceRetouchMath.mapSourceUv(
+            settings, oriented[0], oriented[1], 360, 640, expectedRaw
+        )
+        ManualFaceRetouchMath.orientedToRawUv(
+            expectedRaw[0], expectedRaw[1], turns, flip, expectedRaw
+        )
+        ManualFaceRetouchMath.mapSourceUv(
+            settings, rawU, rawV, 640, 360, uv, turns, flip
+        )
+        assertEquals(expectedRaw[0], uv[0], 0.00001f)
+        assertEquals(expectedRaw[1], uv[1], 0.00001f)
+        assertEquals(
+            ManualFaceRetouchMath.softeningAmount(settings, oriented[0], oriented[1]),
+            ManualFaceRetouchMath.softeningAmount(settings, rawU, rawV, turns, flip),
+            0.00001f
+        )
+    }
+
     @Test fun reversePreviewPixelBudgetPreservesLandscapeAndPortraitAspect() {
         val landscape = ManualFaceRetouchBitmapPreview.previewSize(1920, 1080)
         val portrait = ManualFaceRetouchBitmapPreview.previewSize(1080, 1920)

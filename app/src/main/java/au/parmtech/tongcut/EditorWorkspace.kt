@@ -897,7 +897,7 @@ internal fun VideoEditorScreen(
     LaunchedEffect(
         reversePreviewSession, reverseClipIndex, reverseClip?.sourceUri,
         reverseClip?.inMs, reverseClip?.outMs, reverseClip?.reverseVideo,
-        active.faceRetouch
+        active.faceRetouch, active.primaryQuarterTurns, active.primaryFlipHorizontal
     ) {
         val session = reversePreviewSession
         session?.let { frameSession ->
@@ -925,8 +925,8 @@ internal fun VideoEditorScreen(
                 (currentPlayMs - selectedStartMs).coerceAtLeast(0L), 1_000L
             )
             val next = decodeReverseFrameCancellable(
-                session, localTimeUs, active.faceRetouch,
-                reversePreviewWorker, reversePreviewDecodeBusy
+                session, localTimeUs, active.faceRetouch, active.primaryQuarterTurns,
+                active.primaryFlipHorizontal, reversePreviewWorker, reversePreviewDecodeBusy
             )
             if (next != null) {
                 if (currentCoroutineContext().isActive) {
@@ -1604,8 +1604,9 @@ internal fun VideoEditorScreen(
                     "Retouch" -> {
                         val face = active.faceRetouch
                         val retouchNote = if (reverseClip != null) {
-                            "Reverse frames use a reduced CPU preview capped at 230,400 pixels; export uses " +
-                                "the full-resolution GPU effect. Pixel match and speed need device checks."
+                            "Reverse frames use a reduced CPU preview capped at 230,400 pixels; the " +
+                                "clip's rotation and mirror are applied before retouch. Export uses the " +
+                                "full-resolution GPU effect. Pixel match and speed need device checks."
                         } else {
                             "Place the oval manually. Controls use fixed positions, not detected " +
                                 "landmarks. Face-region softening affects the whole oval; edits stay " +
@@ -2138,6 +2139,8 @@ private suspend fun decodeReverseFrameCancellable(
     session: ReversePreviewSession,
     outputTimeUs: Long,
     faceRetouch: ManualFaceRetouch,
+    quarterTurns: Int,
+    flipHorizontal: Boolean,
     worker: ExecutorService,
     decodeBusy: AtomicBoolean
 ): Bitmap? {
@@ -2161,7 +2164,9 @@ private suspend fun decodeReverseFrameCancellable(
                         decoded = null
                         val frame = if (raw != null && faceRetouch.isActive) {
                             try {
-                                ManualFaceRetouchBitmapPreview.render(raw, faceRetouch) {
+                                ManualFaceRetouchBitmapPreview.render(
+                                    raw, faceRetouch, quarterTurns, flipHorizontal
+                                ) {
                                     cancelled.get() || Thread.currentThread().isInterrupted
                                 }
                             } finally {

@@ -12,23 +12,99 @@ import kotlin.math.sqrt
 internal object ManualFaceRetouchMath {
     private val eyeSides = floatArrayOf(-1f, 1f)
 
+    fun normalizeQuarterTurns(quarterTurns: Int): Int =
+        ((quarterTurns % 4) + 4) % 4
+
+    fun rawToOrientedUv(
+        rawU: Float,
+        rawV: Float,
+        quarterTurns: Int,
+        flipHorizontal: Boolean,
+        out: FloatArray
+    ) {
+        require(out.size >= 2 && rawU.isFinite() && rawV.isFinite())
+        val turns = normalizeQuarterTurns(quarterTurns)
+        out[0] = orientedU(rawU, rawV, turns, flipHorizontal)
+        out[1] = orientedV(rawU, rawV, turns, flipHorizontal)
+    }
+
+    fun orientedToRawUv(
+        orientedU: Float,
+        orientedV: Float,
+        quarterTurns: Int,
+        flipHorizontal: Boolean,
+        out: FloatArray
+    ) {
+        require(out.size >= 2 && orientedU.isFinite() && orientedV.isFinite())
+        val turns = normalizeQuarterTurns(quarterTurns)
+        out[0] = rawUFromOriented(orientedU, orientedV, turns, flipHorizontal)
+        out[1] = rawVFromOriented(orientedU, orientedV, turns)
+    }
+
+    internal fun rawUFromOriented(
+        orientedU: Float, orientedV: Float, turns: Int, flipHorizontal: Boolean
+    ): Float {
+        val rawU = when (turns) {
+            0 -> orientedU
+            1 -> 1f - orientedV
+            2 -> 1f - orientedU
+            else -> orientedV
+        }
+        return if (flipHorizontal) 1f - rawU else rawU
+    }
+
+    internal fun rawVFromOriented(orientedU: Float, orientedV: Float, turns: Int): Float =
+        when (turns) {
+            0 -> orientedV
+            1 -> orientedU
+            2 -> 1f - orientedV
+            else -> 1f - orientedU
+        }
+
+    private fun orientedU(rawU: Float, rawV: Float, turns: Int, flipHorizontal: Boolean): Float {
+        val u = if (flipHorizontal) 1f - rawU else rawU
+        return when (turns) {
+            0 -> u
+            1 -> rawV
+            2 -> 1f - u
+            else -> 1f - rawV
+        }
+    }
+
+    private fun orientedV(rawU: Float, rawV: Float, turns: Int, flipHorizontal: Boolean): Float {
+        val u = if (flipHorizontal) 1f - rawU else rawU
+        return when (turns) {
+            0 -> rawV
+            1 -> 1f - u
+            2 -> 1f - rawV
+            else -> u
+        }
+    }
+
     fun mapSourceUv(
         settings: ManualFaceRetouch,
         outputU: Float,
         outputV: Float,
         frameWidth: Int,
         frameHeight: Int,
-        out: FloatArray
+        out: FloatArray,
+        quarterTurns: Int = 0,
+        flipHorizontal: Boolean = false
     ) {
         require(frameWidth > 0 && frameHeight > 0 && out.size >= 2)
         require(outputU.isFinite() && outputV.isFinite())
+        val turns = normalizeQuarterTurns(quarterTurns)
+        val orientedWidth = if (turns % 2 == 0) frameWidth else frameHeight
+        val orientedHeight = if (turns % 2 == 0) frameHeight else frameWidth
+        val orientedOutputU = orientedU(outputU, outputV, turns, flipHorizontal)
+        val orientedOutputV = orientedV(outputU, outputV, turns, flipHorizontal)
 
-        val localX = (outputU - settings.centerX) / settings.radiusX
-        val localY = (outputV - settings.centerY) / settings.radiusY
+        val localX = (orientedOutputU - settings.centerX) / settings.radiusX
+        val localY = (orientedOutputV - settings.centerY) / settings.radiusY
         val faceY = verticalFalloff(localY)
         val jawY = faceY * smoothStep(-0.12f, 0.72f, localY)
-        var sourceU = outputU
-        var sourceV = outputV
+        var sourceU = orientedOutputU
+        var sourceV = orientedOutputV
 
         if (settings.faceWidth != 0f || settings.jawWidth != 0f) {
             val contour = (settings.faceWidth * faceY + settings.jawWidth * jawY)
@@ -47,31 +123,36 @@ internal object ManualFaceRetouchMath {
             eyeSides.forEach { side ->
                 val eyeCenterU = settings.centerX + side * 0.29f * settings.radiusX
                 val eyeCenterV = settings.centerY - 0.21f * settings.radiusY
-                val offsetPixelsX = (sourceU - eyeCenterU) * frameWidth
-                val offsetPixelsY = (sourceV - eyeCenterV) * frameHeight
-                val eyeRadiusPixelsX = settings.radiusX * frameWidth * 0.22f
-                val eyeRadiusPixelsY = settings.radiusY * frameHeight * 0.15f
+                val offsetPixelsX = (sourceU - eyeCenterU) * orientedWidth
+                val offsetPixelsY = (sourceV - eyeCenterV) * orientedHeight
+                val eyeRadiusPixelsX = settings.radiusX * orientedWidth * 0.22f
+                val eyeRadiusPixelsY = settings.radiusY * orientedHeight * 0.15f
                 val normalizedX = offsetPixelsX / eyeRadiusPixelsX
                 val normalizedY = offsetPixelsY / eyeRadiusPixelsY
                 val distance = sqrt(normalizedX * normalizedX + normalizedY * normalizedY)
                 val influence = 1f - smoothStep(0f, 1f, distance)
                 val scale = 1f + settings.eyeScale * influence
-                sourceU = eyeCenterU + (offsetPixelsX / scale) / frameWidth
-                sourceV = eyeCenterV + (offsetPixelsY / scale) / frameHeight
+                sourceU = eyeCenterU + (offsetPixelsX / scale) / orientedWidth
+                sourceV = eyeCenterV + (offsetPixelsY / scale) / orientedHeight
             }
         }
-        out[0] = sourceU
-        out[1] = sourceV
+        out[0] = rawUFromOriented(sourceU, sourceV, turns, flipHorizontal)
+        out[1] = rawVFromOriented(sourceU, sourceV, turns)
     }
 
     fun softeningAmount(
         settings: ManualFaceRetouch,
         outputU: Float,
-        outputV: Float
+        outputV: Float,
+        quarterTurns: Int = 0,
+        flipHorizontal: Boolean = false
     ): Float {
         if (settings.skinSoftening <= 0f) return 0f
-        val localX = (outputU - settings.centerX) / settings.radiusX
-        val localY = (outputV - settings.centerY) / settings.radiusY
+        val turns = normalizeQuarterTurns(quarterTurns)
+        val orientedOutputU = orientedU(outputU, outputV, turns, flipHorizontal)
+        val orientedOutputV = orientedV(outputU, outputV, turns, flipHorizontal)
+        val localX = (orientedOutputU - settings.centerX) / settings.radiusX
+        val localY = (orientedOutputV - settings.centerY) / settings.radiusY
         val distance = sqrt(localX * localX + localY * localY)
         return (1f - smoothStep(0.68f, 1f, distance)) *
             settings.skinSoftening * 0.34f
@@ -114,10 +195,15 @@ internal object ManualFaceRetouchBitmapPreview {
     fun render(
         source: Bitmap,
         settings: ManualFaceRetouch,
+        quarterTurns: Int = 0,
+        flipHorizontal: Boolean = false,
         isCancelled: () -> Boolean = { false }
     ): Bitmap {
         if (!settings.isActive) return source
+        val turns = ManualFaceRetouchMath.normalizeQuarterTurns(quarterTurns)
         val (width, height) = previewSize(source.width, source.height)
+        val orientedWidth = if (turns % 2 == 0) width else height
+        val orientedHeight = if (turns % 2 == 0) height else width
         val working = if (width == source.width && height == source.height) source
             else Bitmap.createScaledBitmap(source, width, height, true)
         var processed: Bitmap? = null
@@ -126,6 +212,7 @@ internal object ManualFaceRetouchBitmapPreview {
             working.getPixels(input, 0, width, 0, 0, width, height)
             val output = IntArray(input.size)
             val outputUv = FloatArray(2)
+            val orientedSourceUv = FloatArray(2)
             val center = FloatArray(4)
             val right = FloatArray(4)
             val left = FloatArray(4)
@@ -141,23 +228,33 @@ internal object ManualFaceRetouchBitmapPreview {
                 for (x in 0 until width) {
                     val outputU = (x + 0.5f) / width
                     ManualFaceRetouchMath.mapSourceUv(
-                        settings, outputU, outputV, width, height, outputUv
+                        settings, outputU, outputV, width, height, outputUv, turns,
+                        flipHorizontal
                     )
-                    val sourceU = outputUv[0]
-                    val sourceV = outputUv[1]
-                    sample(input, width, height, sourceU, sourceV, center)
+                    ManualFaceRetouchMath.rawToOrientedUv(
+                        outputUv[0], outputUv[1], turns, flipHorizontal, orientedSourceUv
+                    )
+                    val sourceU = orientedSourceUv[0]
+                    val sourceV = orientedSourceUv[1]
+                    sampleOriented(
+                        input, width, height, sourceU, sourceV, turns, flipHorizontal, center
+                    )
                     val amount = ManualFaceRetouchMath.softeningAmount(
-                        settings, outputU, outputV
+                        settings, outputU, outputV, turns, flipHorizontal
                     )
                     var red = center[0]
                     var green = center[1]
                     var blue = center[2]
                     var alpha = center[3]
                     if (amount > 0f) {
-                        sample(input, width, height, sourceU + 1f / width, sourceV, right)
-                        sample(input, width, height, sourceU - 1f / width, sourceV, left)
-                        sample(input, width, height, sourceU, sourceV + 1f / height, down)
-                        sample(input, width, height, sourceU, sourceV - 1f / height, up)
+                        sampleOriented(input, width, height, sourceU + 1f / orientedWidth,
+                            sourceV, turns, flipHorizontal, right)
+                        sampleOriented(input, width, height, sourceU - 1f / orientedWidth,
+                            sourceV, turns, flipHorizontal, left)
+                        sampleOriented(input, width, height, sourceU,
+                            sourceV + 1f / orientedHeight, turns, flipHorizontal, down)
+                        sampleOriented(input, width, height, sourceU,
+                            sourceV - 1f / orientedHeight, turns, flipHorizontal, up)
                         val wr = edgeWeight(center, right)
                         val wl = edgeWeight(center, left)
                         val wd = edgeWeight(center, down)
@@ -183,6 +280,25 @@ internal object ManualFaceRetouchBitmapPreview {
         } finally {
             if (working !== source && !working.isRecycled) working.recycle()
         }
+    }
+
+    private fun sampleOriented(
+        pixels: IntArray,
+        width: Int,
+        height: Int,
+        orientedU: Float,
+        orientedV: Float,
+        quarterTurns: Int,
+        flipHorizontal: Boolean,
+        out: FloatArray
+    ) {
+        val rawU = ManualFaceRetouchMath.rawUFromOriented(
+            orientedU, orientedV, quarterTurns, flipHorizontal
+        )
+        val rawV = ManualFaceRetouchMath.rawVFromOriented(
+            orientedU, orientedV, quarterTurns
+        )
+        sample(pixels, width, height, rawU, rawV, out)
     }
 
     private fun sample(
