@@ -128,6 +128,9 @@ internal fun VisualOverlayPreview(
                     if (layer.photoEffects.vignette > 0f) {
                         add(VideoVignetteEffect(layer.photoEffects.vignette))
                     }
+                    layer.photoEffects.offlineEffectPreset?.let {
+                        add(VideoOfflineEffectPreset(it))
+                    }
                 }
                 player.setVideoEffects(videoEffects)
             }

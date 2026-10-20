@@ -87,6 +87,9 @@ object VisualComposition {
                                 if (effects.vignette > 0f) {
                                     add(VideoVignetteEffect(effects.vignette))
                                 }
+                                effects.offlineEffectPreset?.let {
+                                    add(VideoOfflineEffectPreset(it))
+                                }
                             }
                             edited.setEffects(Effects(emptyList(), videoEffects))
                         }

@@ -37,15 +37,28 @@ data class EffectRenderDescriptor(
     val previewKernelId: String,
     val exportKernelId: String,
     val previewMedia: String = "still/ARGB_8888",
-    val exportMedia: String = "still/ARGB_8888"
+    val exportMedia: String = "still/ARGB_8888",
+    val videoPreviewKernelId: String? = null,
+    val videoExportKernelId: String? = null,
+    val videoPreviewMedia: String? = null,
+    val videoExportMedia: String? = null
 ) {
     init {
         require(previewKernelId.isNotBlank() && exportKernelId.isNotBlank())
         require(previewMedia.isNotBlank() && exportMedia.isNotBlank())
+        val videoFields = listOf(
+            videoPreviewKernelId, videoExportKernelId, videoPreviewMedia, videoExportMedia
+        )
+        require(videoFields.all { it == null } || videoFields.all { !it.isNullOrBlank() })
     }
 
     val stillPreviewExportParityDeclared: Boolean
         get() = previewKernelId == exportKernelId && previewMedia == exportMedia
+
+    val videoPreviewExportParityDeclared: Boolean
+        get() = videoPreviewKernelId != null &&
+            videoPreviewKernelId == videoExportKernelId &&
+            videoPreviewMedia == videoExportMedia
 }
 
 data class OfflineEffectPreset(
@@ -62,6 +75,11 @@ data class OfflineEffectPreset(
         require(title.isNotBlank() && description.isNotBlank() && provenance.isNotBlank())
         require(parameters.map { it.id }.distinct().size == parameters.size)
         require(render.previewKernelId == kernel.id && render.exportKernelId == kernel.id)
+        require(render.videoPreviewKernelId == kernel.id &&
+            render.videoExportKernelId == kernel.id &&
+            render.videoPreviewExportParityDeclared) {
+            "Offline look requires an explicitly declared SDR VIDEO preview/export kernel"
+        }
     }
 
     fun defaults(): EffectPresetState =
@@ -89,7 +107,13 @@ object OfflineEffectPresets {
             description = "A restrained cool lift with a TongCut aqua tint.",
             kernel = EffectKernel.SEA_GLASS,
             parameters = listOf(strength()),
-            render = EffectRenderDescriptor(EffectKernel.SEA_GLASS.id, EffectKernel.SEA_GLASS.id)
+            render = EffectRenderDescriptor(
+                EffectKernel.SEA_GLASS.id, EffectKernel.SEA_GLASS.id,
+                videoPreviewKernelId = EffectKernel.SEA_GLASS.id,
+                videoExportKernelId = EffectKernel.SEA_GLASS.id,
+                videoPreviewMedia = "video/SDR/GLES2",
+                videoExportMedia = "video/SDR/GLES2"
+            )
         ),
         OfflineEffectPreset(
             id = "sun-print",
@@ -97,7 +121,13 @@ object OfflineEffectPresets {
             description = "A warm highlight bias with gently cooled deep tones.",
             kernel = EffectKernel.SUN_PRINT,
             parameters = listOf(strength()),
-            render = EffectRenderDescriptor(EffectKernel.SUN_PRINT.id, EffectKernel.SUN_PRINT.id)
+            render = EffectRenderDescriptor(
+                EffectKernel.SUN_PRINT.id, EffectKernel.SUN_PRINT.id,
+                videoPreviewKernelId = EffectKernel.SUN_PRINT.id,
+                videoExportKernelId = EffectKernel.SUN_PRINT.id,
+                videoPreviewMedia = "video/SDR/GLES2",
+                videoExportMedia = "video/SDR/GLES2"
+            )
         ),
         OfflineEffectPreset(
             id = "paper-mono",
@@ -105,7 +135,13 @@ object OfflineEffectPresets {
             description = "A soft neutral monochrome with a subtle warm paper cast.",
             kernel = EffectKernel.PAPER_MONO,
             parameters = listOf(strength()),
-            render = EffectRenderDescriptor(EffectKernel.PAPER_MONO.id, EffectKernel.PAPER_MONO.id)
+            render = EffectRenderDescriptor(
+                EffectKernel.PAPER_MONO.id, EffectKernel.PAPER_MONO.id,
+                videoPreviewKernelId = EffectKernel.PAPER_MONO.id,
+                videoExportKernelId = EffectKernel.PAPER_MONO.id,
+                videoPreviewMedia = "video/SDR/GLES2",
+                videoExportMedia = "video/SDR/GLES2"
+            )
         )
     )
 

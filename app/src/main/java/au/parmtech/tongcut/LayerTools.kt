@@ -446,8 +446,16 @@ internal fun LayerTools(
                                 color = Color(0xFFFFC987),
                                 fontSize = 10.sp
                             )
-                            Text("Original offline still-image looks",
-                                color = Color.LightGray, fontSize = 10.sp)
+                            Text(
+                                if (kind == LayerKind.VIDEO)
+                                    "Original offline VIDEO looks · SDR GPU · HDR unsupported"
+                                else "Original offline IMAGE looks · CPU renderer",
+                                color = Color.LightGray, fontSize = 10.sp
+                            )
+                            Text(
+                                "Same kernel/order; GPU rounding may differ from IMAGE output",
+                                color = Color(0xFFFFC987), fontSize = 9.sp
+                            )
                             OfflineEffectPresets.all.forEach { preset ->
                                 val selected = fx.offlineEffectPreset?.presetId == preset.id
                                 SmallLayerButton(if (selected) "✓ ${preset.title}" else preset.title) {

@@ -4,7 +4,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import au.parmtech.tongcut.beauty.ManualFaceBeautyJson
 import au.parmtech.tongcut.effects.presets.EffectPresetCodec
-import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
 
 /**
  * Schema v1 for layered state nested inside ProjectStore schema v2.
@@ -41,10 +40,6 @@ object LayerTimelineCodec {
         })
         put("layers", JSONArray().apply {
             timeline.layers.forEach { item ->
-                require(item.kind != LayerKind.VIDEO || item.photoEffects.offlineEffectPreset
-                    ?.let { OfflineEffectPresets.isNeutral(it) } != false) {
-                    "Non-neutral still-image presets are not supported on VIDEO layers"
-                }
                 put(JSONObject().apply {
                     put("id", item.id)
                     put("trackId", item.trackId)
@@ -257,11 +252,6 @@ object LayerTimelineCodec {
                                 ?: throw IllegalArgumentException("Invalid offline still-image preset")
                             EffectPresetCodec.decode(config.toString())
                                 ?: throw IllegalArgumentException("Invalid offline still-image preset")
-                        }.also { preset ->
-                            require(item.optString("kind") != "VIDEO" || preset == null ||
-                                OfflineEffectPresets.isNeutral(preset)) {
-                                "Non-neutral still-image presets are not supported on VIDEO layers"
-                            }
                         },
                         manualFaceBeauty = ManualFaceBeautyJson.decode(fx.optJSONObject("manualFaceBeauty"))
                             .also { beauty ->
