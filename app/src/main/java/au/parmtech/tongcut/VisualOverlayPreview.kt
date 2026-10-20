@@ -63,15 +63,31 @@ internal fun VisualOverlayPreview(
             val bitmap by produceState<android.graphics.Bitmap?>(
                 initialValue = null, layer.sourceUri, layer.photoEffects
             ) {
-                value = withContext(Dispatchers.IO) {
-                    runCatching {
-                        PhotoBitmapDecoder.decode(
-                            context, Uri.parse(requireNotNull(layer.sourceUri)), layer.photoEffects
-                        )
-                    }.getOrNull()
+                var created: android.graphics.Bitmap? = null
+                var transferredToState = false
+                try {
+                    val decoded = withContext(Dispatchers.IO) {
+                        runCatching {
+                            PhotoBitmapDecoder.decode(
+                                context, Uri.parse(requireNotNull(layer.sourceUri)),
+                                layer.photoEffects
+                            ).also { created = it }
+                        }.getOrNull()
+                    }
+                    value = decoded
+                    transferredToState = true
+                } finally {
+                    if (!transferredToState) {
+                        created?.let { if (!it.isRecycled) it.recycle() }
+                    }
                 }
             }
-            bitmap?.let { image ->
+            val image = bitmap
+            if (image != null) {
+                // The displayed state owns each decoded bitmap until it is replaced or removed.
+                DisposableEffect(image) {
+                    onDispose { if (!image.isRecycled) image.recycle() }
+                }
                 Image(
                     bitmap = image.asImageBitmap(),
                     contentDescription = "Photo with mask and chroma",
