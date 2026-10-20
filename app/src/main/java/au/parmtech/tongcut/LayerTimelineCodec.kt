@@ -95,9 +95,8 @@ object LayerTimelineCodec {
                             item.photoEffects.faceRetouch
                         ))
                         put("colorGrade", ColorGradeCodec.encode(item.photoEffects.colorGrade))
-                        put("lutProfile", item.photoEffects.lutProfile?.let {
-                            ColorLutProfileCodec.encode(it)
-                        } ?: JSONObject.NULL)
+                        put("applyColorLut", item.photoEffects.applyColorLut)
+                        put("colorLutStrength", item.photoEffects.colorLutStrength.toDouble())
                         put("chroma", item.photoEffects.chroma?.let { key ->
                             JSONObject().apply {
                                 put("color", key.keyArgb)
@@ -239,7 +238,8 @@ object LayerTimelineCodec {
                             }
                         } ?: DEFAULT_MASK_POLYGON_POINTS,
                         colorGrade = ColorGradeCodec.decode(fx.optJSONObject("colorGrade")),
-                        lutProfile = ColorLutProfileCodec.decode(fx.optJSONObject("lutProfile")),
+                        applyColorLut = fx.optBoolean("applyColorLut", false),
+                        colorLutStrength = fx.optDouble("colorLutStrength", 1.0).toFloat(),
                         blur = fx.optDouble("blur",0.0).toFloat(),
                         sharpen = fx.optDouble("sharpen",0.0).toFloat(),
                         grain = fx.optDouble("grain",0.0).toFloat(),

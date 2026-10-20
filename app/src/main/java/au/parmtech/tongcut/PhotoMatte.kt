@@ -66,8 +66,10 @@ data class PhotoEffects(
     val vignette: Float = 0f,
     /** Manual, local non-generative face reshape shared across visual overlay types. */
     val faceRetouch: ManualFaceRetouch = ManualFaceRetouch(),
-    /** Optional locally imported/generated LUT authored for this visual layer. */
-    val lutProfile: ColorLutProfile? = null
+    /** Apply the project-level LUT to this visual layer when enabled. */
+    val applyColorLut: Boolean = false,
+    /** Per-layer mix for the project LUT, which is stored once. */
+    val colorLutStrength: Float = 1f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -93,6 +95,7 @@ data class PhotoEffects(
         require(sharpen.isFinite() && sharpen in 0f..1f)
         require(grain.isFinite() && grain in 0f..1f)
         require(vignette.isFinite() && vignette in 0f..1f)
+        require(colorLutStrength.isFinite() && colorLutStrength in 0f..1f)
     }
 }
 

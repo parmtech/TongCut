@@ -287,28 +287,37 @@ class LayerTimelineCodecTest {
     }
 
 
-    @Test fun overlayLutProfilePersistsAndSchema26DefaultsNeutral() {
-        val profile = ColorLutPresets.all.first().copy(strength = 0.42f)
+    @Test fun overlayLutSelectionPersistsAndSchema26DefaultsNeutral() {
         val image = TimelineTrack("lut-image", "Image", LayerKind.IMAGE, 0)
         val video = TimelineTrack("lut-video", "Video", LayerKind.VIDEO, 1)
         val graph = LayerTimeline(tracks = listOf(image, video), layers = listOf(
             TimelineLayer("photo", "lut-image", LayerKind.IMAGE, 0, 1_000_000L,
-                sourceUri = "content://photo", photoEffects = PhotoEffects(lutProfile = profile)),
+                sourceUri = "content://photo", photoEffects = PhotoEffects(
+                    applyColorLut = true, colorLutStrength = 0.42f)),
             TimelineLayer("video", "lut-video", LayerKind.VIDEO, 1_000_000L, 1_000_000L,
-                sourceUri = "content://video",
-                photoEffects = PhotoEffects(lutProfile = profile.copy(name = "Video look")))
+                sourceUri = "content://video", photoEffects = PhotoEffects(
+                    applyColorLut = true, colorLutStrength = 0.85f))
         ))
         val encoded = LayerTimelineCodec.encode(graph)
         assertEquals(27, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 26)
-        legacy.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx").remove("lutProfile")
-        legacy.getJSONArray("layers").getJSONObject(1).getJSONObject("photoFx").remove("lutProfile")
-        assertNull(LayerTimelineCodec.decode(legacy).layers
-            .single { it.kind == LayerKind.IMAGE }.photoEffects.lutProfile)
-        assertNull(LayerTimelineCodec.decode(legacy).layers
-            .single { it.kind == LayerKind.VIDEO }.photoEffects.lutProfile)
+        legacy.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx")
+            .remove("applyColorLut")
+        legacy.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx")
+            .remove("colorLutStrength")
+        legacy.getJSONArray("layers").getJSONObject(1).getJSONObject("photoFx")
+            .remove("applyColorLut")
+        legacy.getJSONArray("layers").getJSONObject(1).getJSONObject("photoFx")
+            .remove("colorLutStrength")
+        val restored = LayerTimelineCodec.decode(legacy).layers
+        assertFalse(restored.single { it.kind == LayerKind.IMAGE }.photoEffects.applyColorLut)
+        assertEquals(1f, restored.single { it.kind == LayerKind.IMAGE }
+            .photoEffects.colorLutStrength, 0f)
+        assertFalse(restored.single { it.kind == LayerKind.VIDEO }.photoEffects.applyColorLut)
+        assertEquals(1f, restored.single { it.kind == LayerKind.VIDEO }
+            .photoEffects.colorLutStrength, 0f)
     }
 
     @Test fun dialogueDuckingPersistsAndSchemaTenDefaultsOff() {
