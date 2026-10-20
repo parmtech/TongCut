@@ -174,6 +174,34 @@ class LayerEditsTest {
         LayerEdits.addVisual(base(),0,LayerKind.AUDIO,"content://x",1_000)
     }
 
+    @Test fun overlayLutSelectionIsImmutableAndUndoableForImageAndVideo() {
+        val image = LayerEdits.addVisual(
+            base(), 0, LayerKind.IMAGE, "content://image", 5_000
+        )
+        val video = LayerEdits.addVisual(
+            image, 5_000, LayerKind.VIDEO, "content://video", 5_000
+        )
+        val photoLayer = image.layers.layers.single()
+        val videoLayer = video.layers.layers.single { it.kind == LayerKind.VIDEO }
+        val editedImage = LayerEdits.setPhotoEffects(
+            image, photoLayer.id,
+            PhotoEffects(applyColorLut = true, colorLutStrength = 0.6f)
+        )
+        val editedVideo = LayerEdits.setVideoEffects(
+            video, videoLayer.id,
+            PhotoEffects(applyColorLut = true, colorLutStrength = 0.8f)
+        )
+        assertFalse(photoLayer.photoEffects.applyColorLut)
+        assertEquals(0.6f, editedImage.layers.layers.single().photoEffects.colorLutStrength, 0f)
+        assertEquals(0.8f, editedVideo.layers.layers.single {
+            it.kind == LayerKind.VIDEO
+        }.photoEffects.colorLutStrength, 0f)
+        val history = EditHistory(video)
+        history.apply(editedVideo)
+        assertEquals(video, history.undo())
+        assertEquals(editedVideo, history.redo())
+    }
+
     @Test fun photoAndVideoOverlayModelsAreExportCandidates() {
         val original = base()
         val photo = LayerEdits.addVisual(

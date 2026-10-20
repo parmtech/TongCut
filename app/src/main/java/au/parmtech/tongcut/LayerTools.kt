@@ -754,6 +754,50 @@ internal fun LayerTools(
                         }
                         Text("Vignette ${(fx.vignette * 100).toInt()}%",
                             color = Color.LightGray, fontSize = 10.sp)
+                        if (draft.colorLutProfile == null) {
+                            Text(
+                                "Import a project LUT in Adjust to enable overlay grading.",
+                                color = Color.LightGray, fontSize = 10.sp
+                            )
+                        } else {
+                            Text(
+                                "Project LUT: ${draft.colorLutProfile.name} · overlay render pending",
+                                color = Color(0xFFFFC987), fontSize = 10.sp
+                            )
+                            SmallLayerButton(
+                                if (fx.applyColorLut) "Overlay LUT on" else "Apply project LUT"
+                            ) {
+                                runCatching { applyMatte(fx.copy(applyColorLut = !fx.applyColorLut)) }
+                                    .onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Overlay LUT change failed") }
+                            }
+                            if (fx.applyColorLut) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Strength ${(fx.colorLutStrength * 100f).toInt()}%",
+                                        color = Color.LightGray, fontSize = 10.sp)
+                                    SmallLayerButton("− 10%") {
+                                        runCatching {
+                                            applyMatte(fx.copy(colorLutStrength =
+                                                (fx.colorLutStrength - 0.1f).coerceAtLeast(0f)))
+                                        }.onSuccess(onChange)
+                                            .onFailure { onError(it.message ?: "LUT strength change failed") }
+                                    }
+                                    SmallLayerButton("+ 10%") {
+                                        runCatching {
+                                            applyMatte(fx.copy(colorLutStrength =
+                                                (fx.colorLutStrength + 0.1f).coerceAtMost(1f)))
+                                        }.onSuccess(onChange)
+                                            .onFailure { onError(it.message ?: "LUT strength change failed") }
+                                    }
+                                }
+                            }
+                            Text("Saved and undoable; preview/export effect is not connected yet.",
+                                color = Color.LightGray, fontSize = 10.sp)
+                        }
                         if (fx.colorGrade != ColorGrade()) {
                             SmallLayerButton("Reset colour") { grade(ColorGrade()) }
                         }
