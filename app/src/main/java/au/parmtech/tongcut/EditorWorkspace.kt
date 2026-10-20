@@ -195,6 +195,8 @@ internal fun VideoEditorScreen(
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
     var selectedHslBand by remember { mutableIntStateOf(0) }
+    var selectedCurveChannel by remember { mutableIntStateOf(0) }
+    var selectedCurvePoint by remember { mutableIntStateOf(1) }
     var audioWarning by remember { mutableStateOf<String?>(null) }
     // Selected independent clips can span AUDIO/TEXT/VIDEO/IMAGE panels.
     // Selection is transient UI state; moving them commits one persistent undo edit.
@@ -1448,6 +1450,54 @@ internal fun VideoEditorScreen(
                         GradeSlider("${HSL_BAND_NAMES[selectedHslBand]} lightness",
                             band.lightness, -1f..1f,
                             { updateBand(band.copy(lightness = it)) }, ::commitGradePreview)
+                        ToolChips(CURVE_CHANNEL_NAMES, selectedCurveChannel,
+                            { selectedCurveChannel = it }) { it }
+                        val curve = grade.curves.curve(selectedCurveChannel)
+                        if (curve.points.size > 2) {
+                            val pointIndex = selectedCurvePoint.coerceIn(1,
+                                curve.points.lastIndex - 1)
+                            val point = curve.points[pointIndex]
+                            val leftX = curve.points[pointIndex - 1].x
+                            val rightX = curve.points[pointIndex + 1].x
+                            GradeSlider("Curve input", point.x, leftX..rightX, { value ->
+                                val next = curve.withPoint(pointIndex, point.copy(x = value))
+                                previewDraft = active.copy(colorGrade =
+                                    grade.copy(curves = grade.curves.withCurve(
+                                        selectedCurveChannel, next)))
+                            }, ::commitGradePreview)
+                            GradeSlider("Curve output", point.y, 0f..1f, { value ->
+                                val next = curve.withPoint(pointIndex, point.copy(y = value))
+                                previewDraft = active.copy(colorGrade =
+                                    grade.copy(curves = grade.curves.withCurve(
+                                        selectedCurveChannel, next)))
+                            }, ::commitGradePreview)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ToolPill("Previous point") {
+                                    selectedCurvePoint = (pointIndex - 1).coerceAtLeast(1)
+                                }
+                                ToolPill("Next point") {
+                                    selectedCurvePoint = (pointIndex + 1)
+                                        .coerceAtMost(curve.points.lastIndex - 1)
+                                }
+                                ToolPill("Remove point") {
+                                    val next = curve.removePoint(pointIndex)
+                                    previewDraft = active.copy(colorGrade =
+                                        grade.copy(curves = grade.curves.withCurve(
+                                            selectedCurveChannel, next)))
+                                    selectedCurvePoint = (pointIndex - 1).coerceAtLeast(1)
+                                }
+                            }
+                        }
+                        ToolPill("Add curve point") {
+                            if (curve.points.size < 8) {
+                                val after = (selectedCurvePoint - 1).coerceIn(
+                                    0, curve.points.lastIndex - 1)
+                                val next = curve.addMidpoint(after)
+                                previewDraft = active.copy(colorGrade = grade.copy(curves =
+                                    grade.curves.withCurve(selectedCurveChannel, next)))
+                                selectedCurvePoint = after + 1
+                            }
+                        }
                         GradeSlider("Footage blur", active.primaryBlur, 0f..0.08f, { value ->
                             previewDraft = active.copy(primaryBlur = value)
                         }, ::commitGradePreview)

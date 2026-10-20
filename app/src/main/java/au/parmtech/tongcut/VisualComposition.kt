@@ -72,9 +72,11 @@ object VisualComposition {
                             // Unsupported HDR fails explicitly; never drop the authored matte.
                             val videoEffects = buildList {
                                 add(VideoMatteEffect(effects))
-                                if (effects.colorGrade.hslBands != DEFAULT_HSL_BANDS) {
+                                if (effects.colorGrade.hslBands != DEFAULT_HSL_BANDS ||
+                                    effects.colorGrade.curves != ColorCurves()) {
                                     add(ColorGradeEffect(
-                                        ColorGrade(hslBands = effects.colorGrade.hslBands),
+                                        ColorGrade(hslBands = effects.colorGrade.hslBands,
+                                            curves = effects.colorGrade.curves),
                                         premultipliedInput = true
                                     ))
                                 }

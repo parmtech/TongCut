@@ -2,6 +2,8 @@ package au.parmtech.tongcut
 
 import android.content.Context
 import android.opengl.GLES20
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import androidx.media3.common.VideoFrameProcessingException
 import androidx.media3.common.util.GlProgram
 import androidx.media3.common.util.GlUtil
@@ -33,6 +35,7 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
     } catch (error: GlUtil.GlException) {
         throw VideoFrameProcessingException(error)
     }
+    private val curveTextureId = IntArray(1)
 
     init {
         program.setBufferAttribute(
@@ -48,9 +51,34 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
         program.setFloatUniform("uHslSaturation", grade.hslSaturation)
         program.setFloatUniform("uHslLightness", grade.hslLightness)
         program.setFloatUniform("uPremultipliedInput", if (premultipliedInput) 1f else 0f)
+        program.setFloatUniform("uUseCurves", if (grade.curves == ColorCurves()) 0f else 1f)
         grade.hslBands.forEachIndexed { index, band ->
             program.setFloatsUniform("uHslBand$index",
                 floatArrayOf(band.hueDegrees, band.saturation, band.lightness))
+        }
+        GLES20.glGenTextures(1, curveTextureId, 0)
+        try {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, curveTextureId[0])
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER,
+                GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER,
+                GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S,
+                GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T,
+                GLES20.GL_CLAMP_TO_EDGE)
+            val curvePixels = ByteBuffer.allocateDirect(256 * 4)
+                .order(ByteOrder.nativeOrder()).put(grade.curves.rgbaLut()).apply { position(0) }
+            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, 256, 1, 0,
+                GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, curvePixels)
+            GlUtil.checkGlError()
+        } catch (failure: Throwable) {
+            if (curveTextureId[0] != 0) {
+                GLES20.glDeleteTextures(1, curveTextureId, 0)
+                curveTextureId[0] = 0
+            }
+            throw failure
         }
     }
 
@@ -63,6 +91,7 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
         try {
             program.use()
             program.setSamplerTexIdUniform("uTexSampler", inputTexId, 0)
+            program.setSamplerTexIdUniform("uCurveLut", curveTextureId[0], 1)
             program.bindAttributesAndUniforms()
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
             GlUtil.checkGlError()
@@ -77,6 +106,7 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
         } catch (error: GlUtil.GlException) {
             throw VideoFrameProcessingException(error)
         } finally {
+            if (curveTextureId[0] != 0) GLES20.glDeleteTextures(1, curveTextureId, 0)
             super.release()
         }
     }
@@ -95,6 +125,7 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
             #version 100
             precision mediump float;
             uniform sampler2D uTexSampler;
+            uniform sampler2D uCurveLut;
             uniform float uExposure;
             uniform float uContrast;
             uniform float uSaturation;
@@ -104,6 +135,7 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
             uniform float uHslSaturation;
             uniform float uHslLightness;
             uniform float uPremultipliedInput;
+            uniform float uUseCurves;
             uniform vec3 uHslBand0;
             uniform vec3 uHslBand1;
             uniform vec3 uHslBand2;
@@ -182,6 +214,14 @@ private class ColorGradeShader(grade: ColorGrade, premultipliedInput: Boolean) :
                 color.b += uTint * 0.05;
                 color = adjustHsl(color, uHueDegrees, uHslSaturation, uHslLightness);
                 color = adjustSelectiveHsl(color);
+                if (uUseCurves > 0.5) {
+                    color.r = texture2D(uCurveLut,
+                        vec2((color.r * 255.0 + 0.5) / 256.0, 0.5)).r;
+                    color.g = texture2D(uCurveLut,
+                        vec2((color.g * 255.0 + 0.5) / 256.0, 0.5)).g;
+                    color.b = texture2D(uCurveLut,
+                        vec2((color.b * 255.0 + 0.5) / 256.0, 0.5)).b;
+                }
                 float outputAlpha = uPremultipliedInput > 0.5 ? alpha : 1.0;
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0) * outputAlpha, alpha);
             }

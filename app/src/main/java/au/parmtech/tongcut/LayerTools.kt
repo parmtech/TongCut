@@ -350,6 +350,8 @@ internal fun LayerTools(
                         val fx = layer.photoEffects
                         var selectedPolygonVertex by remember(layer.id) { mutableIntStateOf(0) }
                         var selectedHslBand by remember(layer.id) { mutableIntStateOf(0) }
+                        var selectedCurveChannel by remember(layer.id) { mutableIntStateOf(0) }
+                        var selectedCurvePoint by remember(layer.id) { mutableIntStateOf(1) }
                         fun grade(next: ColorGrade) {
                             runCatching { applyMatte(fx.copy(colorGrade = next)) }
                                 .onSuccess(onChange)
@@ -463,6 +465,43 @@ internal fun LayerTools(
                             bands[selectedHslBand] = band.copy(
                                 lightness = (band.lightness + 0.1f).coerceAtMost(1f))
                             grade(fx.colorGrade.copy(hslBands = bands))
+                        }
+                        SmallLayerButton("Curve ${CURVE_CHANNEL_NAMES[selectedCurveChannel]}") {
+                            selectedCurveChannel =
+                                (selectedCurveChannel + 1) % CURVE_CHANNEL_NAMES.size
+                        }
+                        SmallLayerButton("Curve add") {
+                            val curve = fx.colorGrade.curves.curve(selectedCurveChannel)
+                            if (curve.points.size < 8) {
+                                val after = (selectedCurvePoint - 1).coerceIn(
+                                    0, curve.points.lastIndex - 1)
+                                val next = curve.addMidpoint(after)
+                                grade(fx.colorGrade.copy(curves =
+                                    fx.colorGrade.curves.withCurve(selectedCurveChannel, next)))
+                                selectedCurvePoint = after + 1
+                            }
+                        }
+                        val activeCurve = fx.colorGrade.curves.curve(selectedCurveChannel)
+                        if (activeCurve.points.size > 2) {
+                            val pointIndex = selectedCurvePoint.coerceIn(1,
+                                activeCurve.points.lastIndex - 1)
+                            val point = activeCurve.points[pointIndex]
+                            fun moveCurvePoint(dx: Float, dy: Float) {
+                                val next = activeCurve.withPoint(pointIndex,
+                                    point.copy(x = point.x + dx, y = point.y + dy))
+                                grade(fx.colorGrade.copy(curves =
+                                    fx.colorGrade.curves.withCurve(selectedCurveChannel, next)))
+                            }
+                            SmallLayerButton("Curve X−") { moveCurvePoint(-0.05f, 0f) }
+                            SmallLayerButton("Curve X+") { moveCurvePoint(0.05f, 0f) }
+                            SmallLayerButton("Curve Y−") { moveCurvePoint(0f, -0.05f) }
+                            SmallLayerButton("Curve Y+") { moveCurvePoint(0f, 0.05f) }
+                            SmallLayerButton("Curve remove") {
+                                val next = activeCurve.removePoint(pointIndex)
+                                grade(fx.colorGrade.copy(curves =
+                                    fx.colorGrade.curves.withCurve(selectedCurveChannel, next)))
+                                selectedCurvePoint = (pointIndex - 1).coerceAtLeast(1)
+                            }
                         }
                         SmallLayerButton("Blur −") {
                             runCatching { applyMatte(fx.copy(blur =

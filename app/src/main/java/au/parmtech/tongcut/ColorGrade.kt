@@ -40,7 +40,9 @@ data class ColorGrade(
     /** Additive HSL lightness shift; -1/1 move to black/white. */
     val hslLightness: Float = 0f,
     /** Selective hue/saturation/lightness edits, in red-to-magenta order. */
-    val hslBands: List<HslBandAdjustment> = DEFAULT_HSL_BANDS
+    val hslBands: List<HslBandAdjustment> = DEFAULT_HSL_BANDS,
+    /** Master plus per-channel RGB tone curves. */
+    val curves: ColorCurves = ColorCurves()
 ) {
     init {
         require(exposure.isFinite() && exposure in -2f..2f)
@@ -111,6 +113,10 @@ data class ColorGrade(
         red = selective.first
         green = selective.second
         blue = selective.third
+        val curved = curves.apply(red, green, blue)
+        red = curved.first
+        green = curved.second
+        blue = curved.third
         return (argb and -0x1000000) or (channel(red) shl 16) or
             (channel(green) shl 8) or channel(blue)
     }
@@ -134,6 +140,12 @@ object ColorGradeCodec {
                     put("lightness", band.lightness.toDouble())
                 })
             }
+        })
+        put("curves", JSONObject().apply {
+            put("master", curveJson(grade.curves.master))
+            put("red", curveJson(grade.curves.red))
+            put("green", curveJson(grade.curves.green))
+            put("blue", curveJson(grade.curves.blue))
         })
     }
 
@@ -160,9 +172,31 @@ object ColorGradeCodec {
                             lightness = band.optDouble("lightness", 0.0).toFloat()
                         )
                     }
-                } ?: DEFAULT_HSL_BANDS
+                } ?: DEFAULT_HSL_BANDS,
+                curves = value.optJSONObject("curves")?.let { curves ->
+                    ColorCurves(
+                        master = decodeCurve(curves.optJSONArray("master")),
+                        red = decodeCurve(curves.optJSONArray("red")),
+                        green = decodeCurve(curves.optJSONArray("green")),
+                        blue = decodeCurve(curves.optJSONArray("blue"))
+                    )
+                } ?: ColorCurves()
             )
         }.getOrDefault(ColorGrade())
+    }
+
+    private fun curveJson(curve: ToneCurve) = org.json.JSONArray().apply {
+        curve.points.forEach { put(org.json.JSONArray().put(it.x.toDouble()).put(it.y.toDouble())) }
+    }
+
+    private fun decodeCurve(points: org.json.JSONArray?): ToneCurve {
+        if (points == null) return ToneCurve()
+        require(points.length() in 2..8)
+        return ToneCurve((0 until points.length()).map { index ->
+            val point = points.getJSONArray(index)
+            require(point.length() == 2)
+            CurvePoint(point.getDouble(0).toFloat(), point.getDouble(1).toFloat())
+        })
     }
 }
 

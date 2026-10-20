@@ -112,9 +112,11 @@ internal fun VisualOverlayPreview(
                 val videoEffects = if (layer.photoEffects == PhotoEffects()) emptyList()
                 else buildList {
                     add(VideoMatteEffect(layer.photoEffects))
-                    if (layer.photoEffects.colorGrade.hslBands != DEFAULT_HSL_BANDS) {
+                    if (layer.photoEffects.colorGrade.hslBands != DEFAULT_HSL_BANDS ||
+                        layer.photoEffects.colorGrade.curves != ColorCurves()) {
                         add(ColorGradeEffect(
-                            ColorGrade(hslBands = layer.photoEffects.colorGrade.hslBands),
+                            ColorGrade(hslBands = layer.photoEffects.colorGrade.hslBands,
+                                curves = layer.photoEffects.colorGrade.curves),
                             premultipliedInput = true
                         ))
                     }

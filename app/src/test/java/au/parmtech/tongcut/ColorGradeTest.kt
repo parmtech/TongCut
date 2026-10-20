@@ -93,6 +93,21 @@ class ColorGradeTest {
         assertEquals(DEFAULT_HSL_BANDS, ColorGradeCodec.decode(JSONObject()).hslBands)
     }
 
+    @Test fun toneCurvesInterpolatePersistAndProduceGpuLookupTable() {
+        val curve = ToneCurve(listOf(
+            CurvePoint(0f, 0f), CurvePoint(0.5f, 0.8f), CurvePoint(1f, 1f)
+        ))
+        assertEquals(0.4f, curve.map(0.25f), 0.0001f)
+        val grade = ColorGrade(curves = ColorCurves(red = curve))
+        val restored = ColorGradeCodec.decode(ColorGradeCodec.encode(grade))
+        assertEquals(grade, restored)
+        val legacy = ColorGradeCodec.decode(JSONObject())
+        assertEquals(ColorCurves(), legacy.curves)
+        val lut = grade.curves.rgbaLut()
+        assertEquals(204, lut[128 * 4].toInt() and 255)
+        assertEquals(128, lut[128 * 4 + 1].toInt() and 255)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedExposure() { ColorGrade(exposure = 2.01f) }
 
