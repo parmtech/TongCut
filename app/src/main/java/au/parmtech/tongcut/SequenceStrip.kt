@@ -62,7 +62,9 @@ internal fun SequenceStrip(
     onTrimLayerEnd: (String, Long) -> Unit,
     onUnavailable: (String) -> Unit
 ) {
-    val timeline = remember(draft.clips) { SequentialTimeline(draft.clips) }
+    val timeline = remember(draft.clips, draft.primaryTransitions) {
+        SequentialTimeline(draft.clips, draft.primaryTransitions)
+    }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     var pxPerSecond by remember { mutableFloatStateOf(PIXELS_PER_SECOND_DP) }
@@ -150,7 +152,11 @@ internal fun SequenceStrip(
                     }
                     Row(Modifier.fillMaxWidth().height(76.dp)) {
                         timeline.clips.forEachIndexed { index, clip ->
-                            val width = (clip.editedDurationMs / 1000f * pxPerSecond).coerceAtLeast(1f).dp
+                            val incomingOverlapMs = draft.primaryTransitions.firstOrNull {
+                                it.afterClipIndex == index - 1
+                            }?.durationUs?.div(1_000L) ?: 0L
+                            val visibleDurationMs = clip.editedDurationMs - incomingOverlapMs
+                            val width = (visibleDurationMs / 1000f * pxPerSecond).coerceAtLeast(1f).dp
                             Surface(
                                 color = Color(0xFF323232),
                                 shape = RoundedCornerShape(3.dp),
@@ -160,12 +166,12 @@ internal fun SequenceStrip(
                             ) {
                                 Box {
                                     Row(Modifier.fillMaxSize()) {
-                                        val frames = (clip.editedDurationMs / 1200L).toInt().coerceIn(1, 8)
+                                        val frames = (visibleDurationMs / 1200L).toInt().coerceIn(1, 8)
                                         repeat(frames) { frameIndex ->
                                             // Sample evenly across the trimmed SOURCE interval.
                                             val fraction = (frameIndex + 0.5) / frames.toDouble()
                                             val sampledMs = clip.inMs +
-                                                (clip.editedDurationMs * fraction).toLong()
+                                                (visibleDurationMs * fraction).toLong() + incomingOverlapMs
                                             VideoFrameThumbnail(
                                                 uri = clip.sourceUri.toUri(),
                                                 sourceTimestampUs = sampledMs * 1_000L,
