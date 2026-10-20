@@ -38,7 +38,8 @@ object VisualComposition {
     /** Audio/video media sources with a full-length black (transparent) gap tail. */
     fun sequences(
         plans: List<VisualLanePlan>, totalUs: Long, timeline: LayerTimeline,
-        maxFrameRate: Int = ExportFrameRate.DEFAULT
+        maxFrameRate: Int = ExportFrameRate.DEFAULT,
+        colorLutProfile: ColorLutProfile? = null
     ): List<EditedMediaItemSequence> =
         plans.map { lane ->
             val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
@@ -80,6 +81,9 @@ object VisualComposition {
                                         premultipliedInput = true
                                     ))
                                 }
+                                addAll(VideoOverlayLutEffects.forLayer(
+                                    colorLutProfile, effects
+                                ))
                                 if (effects.vignette > 0f) {
                                     add(VideoVignetteEffect(effects.vignette))
                                 }
