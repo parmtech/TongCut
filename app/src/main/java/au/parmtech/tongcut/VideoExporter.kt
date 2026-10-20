@@ -32,6 +32,7 @@ import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Export stays in the foreground for the alpha build; cancelling leaves no partial MediaStore file. */
 @androidx.annotation.OptIn(UnstableApi::class, ExperimentalApi::class)
@@ -42,6 +43,8 @@ class VideoExporter(private val context: Context) {
     private var scratch: File? = null
     private var active = false
     private var saving = false
+    @Volatile private var runGeneration = 0L
+    private var activeReverseCleanup: (() -> Unit)? = null
 
     fun start(
         clips: List<Clip>,
@@ -51,7 +54,8 @@ class VideoExporter(private val context: Context) {
         onError: (String) -> Unit,
         overlayLayers: LayerTimeline = LayerTimeline(),
         onWarning: (String) -> Unit = {},
-        exportJobId: String? = null
+        exportJobId: String? = null,
+        reverseSequences: Map<Int, ReverseImageSequence> = emptyMap()
     ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
@@ -63,9 +67,18 @@ class VideoExporter(private val context: Context) {
             "Sticker compositor has not been implemented"
         }
         val original = clips.toList()
+        val generation = Math.addExact(runGeneration, 1L).also { runGeneration = it }
+        val runReverseSequences = reverseSequences.values.distinct()
+        val reverseSequencesClosed = AtomicBoolean(false)
+        fun releaseRunReverseSequences() {
+            if (reverseSequencesClosed.compareAndSet(false, true)) {
+                runReverseSequences.forEach { runCatching { it.close() } }
+            }
+        }
+        activeReverseCleanup = { releaseRunReverseSequences() }
         val file = File(
             context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.cacheDir,
-            "TongCut-${exportJobId ?: System.currentTimeMillis()}.mp4"
+            "TongCut-${exportJobId ?: System.currentTimeMillis()}-$generation.mp4"
         )
         scratch = file
         active = true
@@ -156,11 +169,40 @@ class VideoExporter(private val context: Context) {
             val audioPlans = AudioMixPlan.from(overlayLayers, baseVideoDurationUs)
             val videoLanes = VisualComposition.exportLanes(overlayLayers, baseVideoDurationUs)
             val allSequences = mutableListOf<EditedMediaItemSequence>()
+            var reverseVideoSequence: EditedMediaItemSequence? = null
+            if (reverseSequences.isNotEmpty()) {
+                require(reverseSequences.keys.all { it in original.indices }) {
+                    "Reverse sequence points to a missing primary clip"
+                }
+                reverseSequences.forEach { (index, reverse) ->
+                    val expectedUs = Math.multiplyExact(original[index].trimmedDurationMs, 1_000L)
+                    val sequenceUs = reverse.items.fold(0L) { total, item ->
+                        Math.addExact(total, item.durationUs)
+                    }
+                    require(sequenceUs == expectedUs) {
+                        "Reverse frame sequence duration does not match primary clip $index"
+                    }
+                }
+                val reverseVideo = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_VIDEO))
+                original.forEachIndexed { index, clip ->
+                    val reverse = reverseSequences[index]
+                    if (reverse == null) {
+                        reverseVideo.addGap(Math.multiplyExact(clip.trimmedDurationMs, 1_000L))
+                    } else {
+                        reverse.items.forEach(reverseVideo::addItem)
+                    }
+                }
+                // Opaque reverse frames replace the matching forward video interval while the
+                // main sequence below retains ordinary clip audio and project timing.
+                reverseVideoSequence = reverseVideo.build()
+                onWarning("Reverse video is enabled for ${reverseSequences.size} clip(s); their source audio remains forward unless muted.")
+            }
             // Media3 composites in reverse sequence order, so PiP video lanes MUST
             // be registered before the fully opaque main video, then audio-only lanes.
             allSequences.addAll(VisualComposition.sequences(
                 videoLanes, baseVideoDurationUs, overlayLayers, options.maxFrameRate
             ))
+            reverseVideoSequence?.let(allSequences::add)
             allSequences += sequence
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
@@ -273,13 +315,23 @@ class VideoExporter(private val context: Context) {
                         fallbackTransformationRequest: androidx.media3.transformer.TransformationRequest
                     ) {
                         main.post {
-                            onWarning("The device could not use the requested codec or size; the renderer selected a supported fallback.")
+                            if (generation == runGeneration) {
+                                onWarning("The device could not use the requested codec or size; the renderer selected a supported fallback.")
+                            }
                         }
                     }
 
                     override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                        if (generation != runGeneration) {
+                            releaseRunReverseSequences()
+                            file.delete()
+                            return
+                        }
+                        runGeneration = Math.addExact(runGeneration, 1L)
                         stopPoll()
                         transformer = null
+                        releaseRunReverseSequences()
+                        activeReverseCleanup = null
                         saving = true
                         // MediaStore copy is I/O intensive; never block Android's UI thread.
                         Thread {
@@ -309,8 +361,16 @@ class VideoExporter(private val context: Context) {
                         exportResult: ExportResult,
                         exportException: ExportException
                     ) {
+                        if (generation != runGeneration) {
+                            releaseRunReverseSequences()
+                            file.delete()
+                            return
+                        }
+                        runGeneration = Math.addExact(runGeneration, 1L)
                         stopPoll()
                         transformer = null
+                        releaseRunReverseSequences()
+                        activeReverseCleanup = null
                         active = false
                         scratch = null
                         file.delete()
@@ -338,9 +398,17 @@ class VideoExporter(private val context: Context) {
             poller = task
             main.post(task)
         } catch (t: Exception) {
+            if (generation != runGeneration) {
+                releaseRunReverseSequences()
+                file.delete()
+                return
+            }
+            runGeneration = Math.addExact(runGeneration, 1L)
             stopPoll()
             transformer?.cancel()
             transformer = null
+            releaseRunReverseSequences()
+            activeReverseCleanup = null
             active = false
             scratch = null
             file.delete()
@@ -351,9 +419,12 @@ class VideoExporter(private val context: Context) {
     fun cancel(): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (saving) return false
+        runGeneration = Math.addExact(runGeneration, 1L)
         stopPoll()
         transformer?.cancel()
         transformer = null
+        activeReverseCleanup?.invoke()
+        activeReverseCleanup = null
         active = false
         scratch?.delete()
         scratch = null
