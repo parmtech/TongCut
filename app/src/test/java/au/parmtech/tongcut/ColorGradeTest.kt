@@ -6,6 +6,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ColorGradeTest {
+    @Test fun originalColorLooksAreUniqueBoundedAndKeepNeutralIdentity() {
+        val presets = ColorGradePresets.all
+        assertEquals(10, presets.size)
+        assertEquals(presets.size, presets.map { it.name }.toSet().size)
+        assertEquals(presets.size, presets.map { it.grade }.toSet().size)
+        assertEquals(ColorGrade(), presets.single { it.name == "Neutral" }.grade)
+        assertEquals(0x7F123456, presets.single { it.name == "Neutral" }
+            .grade.apply(0x7F123456))
+        assertTrue(presets.map { it.name }.containsAll(listOf(
+            "Cobalt Film", "Rose Quartz", "Graphite", "Apricot Glow",
+            "Moss Light", "Midnight Teal"
+        )))
+    }
+
     @Test fun defaultGradePreservesAllArgbBits() {
         val pixel = 0x7F36A8E1
         assertEquals(pixel, ColorGrade().apply(pixel))
