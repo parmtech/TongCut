@@ -18,7 +18,6 @@ data class VfrPresentationSample(
 class VfrPresentationIndex private constructor(
     private val presentationTimesUs: LongArray,
     private val extractorOrdinals: IntArray,
-    private val sampleCount: Int,
     private val rangeStart: Int,
     private val rangeEndExclusive: Int,
     val extractorOrderWasStrictlyIncreasing: Boolean
@@ -61,7 +60,7 @@ class VfrPresentationIndex private constructor(
             require(rangeStart in 0..sampleCount)
             require(rangeEndExclusive in rangeStart..sampleCount)
             return VfrPresentationIndex(
-                presentationTimesUs, extractorOrdinals, sampleCount,
+                presentationTimesUs, extractorOrdinals,
                 rangeStart, rangeEndExclusive, extractorOrderWasStrictlyIncreasing
             )
         }
