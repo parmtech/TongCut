@@ -38,8 +38,9 @@ private enum class Screen { HOME, GALLERY, EDITOR }
 
 /** Navigation and project ownership. Editor/Picker are implemented as independently testable screens. */
 @Composable
-fun TongCutApp(exporter: VideoExporter) {
+internal fun TongCutApp(exportJobs: ExportJobs) {
     val context = LocalContext.current
+    val exportState by exportJobs.state.collectAsState()
     val library = remember(context) { ProjectLibrary(context.applicationContext) }
     val history = remember { EditHistory(EditorDraft()) }
     val scope = rememberCoroutineScope()
@@ -80,6 +81,10 @@ fun TongCutApp(exporter: VideoExporter) {
             banner = "Project recovery failed: original files remain untouched."
             dialogText = "Cannot safely read projects: ${failure.message}. Files have not been overwritten."
         } finally { loaded = true }
+    }
+
+    LaunchedEffect(exportJobs) {
+        withContext(Dispatchers.IO) { exportJobs.restore() }
     }
 
     // Capture the project ID together with the snapshot: do not save a switched draft
@@ -260,44 +265,68 @@ fun TongCutApp(exporter: VideoExporter) {
         importMedia(uris)
     }
 
-    when (screen) {
-        Screen.HOME -> HomeScreen(
-            draft = draft,
-            projects = catalog.projects,
-            activeId = activeId,
-            banner = banner,
-            canResume = saveAllowed && !operationBusy,
-            onNew = { createProject(false) },
-            onPhotos = { createProject(true) },
-            onResume = { activeId?.let(::openProject) },
-            onOpen = ::openProject,
-            onDuplicate = ::duplicateProject,
-            onRename = ::renameProject,
-            onDelete = ::deleteProject,
-            onFeature = { name ->
-                dialogText = "$name is planned but not functional yet."
+    Column(Modifier.fillMaxSize()) {
+        if (exportState.id != null && exportState.phase != ExportPhase.IDLE &&
+            (!exportState.dismissed || exportState.isActive)) {
+            ExportJobBanner(
+                state = exportState,
+                onCancel = exportJobs::cancel,
+                onRetry = { runCatching { exportJobs.retry() }
+                    .onFailure { banner = "Could not restart export: ${it.message}" } },
+                onOpen = {
+                    exportState.outputUri?.let { output ->
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(Uri.parse(output), "video/mp4")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            })
+                        }.onFailure { banner = "Export saved to Movies/TongCut." }
+                    }
+                },
+                onDismiss = exportJobs::dismiss
+            )
+        }
+        Box(Modifier.weight(1f)) {
+            when (screen) {
+                Screen.HOME -> HomeScreen(
+                    draft = draft,
+                    projects = catalog.projects,
+                    activeId = activeId,
+                    banner = banner,
+                    canResume = saveAllowed && !operationBusy,
+                    onNew = { createProject(false) },
+                    onPhotos = { createProject(true) },
+                    onResume = { activeId?.let(::openProject) },
+                    onOpen = ::openProject,
+                    onDuplicate = ::duplicateProject,
+                    onRename = ::renameProject,
+                    onDelete = ::deleteProject,
+                    onFeature = { name ->
+                        dialogText = "$name is planned but not functional yet."
+                    }
+                )
+                Screen.GALLERY -> GalleryScreen(
+                    initialPhotos = galleryPhotos,
+                    onBack = { screen = Screen.HOME },
+                    onAdd = { importMedia(it) },
+                    onFiles = { documentPicker.launch(arrayOf("video/*")) },
+                    onInfo = { dialogText = it }
+                )
+                Screen.EDITOR -> VideoEditorScreen(
+                    draft = draft,
+                    exportJobs = exportJobs,
+                    onBack = { screen = Screen.HOME },
+                    onMedia = { galleryPhotos = false; screen = Screen.GALLERY },
+                    onChange = { updated -> commit(updated) },
+                    canUndo = history.canUndo,
+                    canRedo = history.canRedo,
+                    onUndo = { history.undo()?.let { draft = it } },
+                    onRedo = { history.redo()?.let { draft = it } },
+                    onUnavailable = { dialogText = "$it is in development. It will only be enabled once preview and export both work." },
+                    onInfo = { banner = it }
+                )
             }
-        )
-        Screen.GALLERY -> GalleryScreen(
-            initialPhotos = galleryPhotos,
-            onBack = { screen = Screen.HOME },
-            onAdd = { importMedia(it) },
-            onFiles = { documentPicker.launch(arrayOf("video/*")) },
-            onInfo = { dialogText = it }
-        )
-        Screen.EDITOR -> VideoEditorScreen(
-            draft = draft,
-            exporter = exporter,
-            onBack = { screen = Screen.HOME },
-            onMedia = { galleryPhotos = false; screen = Screen.GALLERY },
-            onChange = { updated -> commit(updated) },
-            canUndo = history.canUndo,
-            canRedo = history.canRedo,
-            onUndo = { history.undo()?.let { draft = it } },
-            onRedo = { history.redo()?.let { draft = it } },
-            onUnavailable = { dialogText = "$it is in development. It will only be enabled once preview and export both work." },
-            onInfo = { banner = it }
-        )
+        }
     }
 
     dialogText?.let { message ->
@@ -332,6 +361,58 @@ fun TongCutApp(exporter: VideoExporter) {
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ExportJobBanner(
+    state: ExportJobState,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF202A30),
+        contentColor = Color.White,
+        shadowElevation = 3.dp
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                val title = when (state.phase) {
+                    ExportPhase.QUEUED -> "Preparing ${state.title.ifBlank { "video" }} export"
+                    ExportPhase.RUNNING -> "Exporting ${state.title.ifBlank { "video" }} · ${state.progress}%"
+                    ExportPhase.INTERRUPTED -> "Export paused"
+                    ExportPhase.FAILED -> "Export needs attention"
+                    ExportPhase.CANCELLED -> "Export cancelled"
+                    ExportPhase.COMPLETED -> "Export saved to Movies/TongCut"
+                    ExportPhase.IDLE -> ""
+                }
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                when (state.phase) {
+                    ExportPhase.RUNNING, ExportPhase.QUEUED -> LinearProgressIndicator(
+                        progress = { state.progress.coerceIn(0, 100) / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    ExportPhase.INTERRUPTED, ExportPhase.FAILED, ExportPhase.CANCELLED ->
+                        Text(state.message ?: "Restart this export from the saved edit.",
+                            fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    else -> Unit
+                }
+            }
+            when {
+                state.isActive -> TextButton(onClick = onCancel) { Text("Cancel") }
+                state.canRetry -> TextButton(onClick = onRetry) { Text("Retry") }
+                state.phase == ExportPhase.COMPLETED -> TextButton(onClick = onOpen) { Text("Open") }
+            }
+            if (!state.isActive) {
+                TextButton(onClick = onDismiss) { Text("Hide") }
+            }
+        }
     }
 }
 

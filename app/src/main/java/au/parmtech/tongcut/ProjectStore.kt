@@ -6,24 +6,39 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** A versioned, atomic draft snapshot; legacy single-project format remains readable. */
-class ProjectStore(context: Context, projectId: String? = null) {
-    private val file: AtomicFile
-
-    init {
-        val filename = if (projectId == null) {
-            File(context.filesDir, "tongcut-current-project.json")
-        } else {
-            require(Regex("[a-zA-Z0-9_-]{1,80}").matches(projectId)) {
-                "Unsafe project identifier"
-            }
-            val folder = File(context.filesDir, "tongcut-projects")
-            if (!folder.isDirectory && !folder.mkdirs()) {
-                throw IllegalStateException("Cannot create project storage")
-            }
-            File(folder, "$projectId.json")
+private fun projectStoreFile(context: Context, projectId: String?): AtomicFile {
+    val filename = if (projectId == null) {
+        File(context.filesDir, "tongcut-current-project.json")
+    } else {
+        require(Regex("[a-zA-Z0-9_-]{1,80}").matches(projectId)) {
+            "Unsafe project identifier"
         }
-        file = AtomicFile(filename)
+        val folder = File(context.filesDir, "tongcut-projects")
+        if (!folder.isDirectory && !folder.mkdirs()) {
+            throw IllegalStateException("Cannot create project storage")
+        }
+        File(folder, "$projectId.json")
+    }
+    return AtomicFile(filename)
+}
+
+/** A versioned, atomic draft snapshot; legacy single-project format remains readable. */
+class ProjectStore private constructor(private val file: AtomicFile) {
+    constructor(context: Context, projectId: String? = null) :
+        this(projectStoreFile(context, projectId))
+
+    companion object {
+        /** Separate from the project catalog so recovery snapshots never appear as projects. */
+        internal fun exportSnapshot(context: Context, exportId: String): ProjectStore {
+            require(Regex("[a-fA-F0-9-]{36}").matches(exportId)) {
+                "Unsafe export identifier"
+            }
+            val folder = File(context.filesDir, "tongcut-export")
+            if (!folder.isDirectory && !folder.mkdirs()) {
+                throw IllegalStateException("Cannot create export storage")
+            }
+            return ProjectStore(AtomicFile(File(folder, "snapshot-$exportId.json")))
+        }
     }
 
     fun load(): EditorDraft? {

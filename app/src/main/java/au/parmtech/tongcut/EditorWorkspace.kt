@@ -86,9 +86,9 @@ private val tools = listOf(
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-fun VideoEditorScreen(
+internal fun VideoEditorScreen(
     draft: EditorDraft,
-    exporter: VideoExporter,
+    exportJobs: ExportJobs,
     onBack: () -> Unit,
     onMedia: () -> Unit,
     onChange: (EditorDraft) -> Unit,
@@ -100,6 +100,9 @@ fun VideoEditorScreen(
     onInfo: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val exportState by exportJobs.state.collectAsState()
+    val processing = exportState.isActive
+    val progress = exportState.progress
     val player = remember(context) { ExoPlayer.Builder(context).build() }
     val audioMonitor = remember(context) { AudioOverlayEngine(context) }
     val voiceoverCapture = remember(context) { VoiceoverCapture(context.applicationContext) }
@@ -113,8 +116,6 @@ fun VideoEditorScreen(
     var fullscreen by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<String?>(null) }
     var exportDialog by remember { mutableStateOf(false) }
-    var processing by remember { mutableStateOf(false) }
-    var progress by remember { mutableIntStateOf(0) }
     var exportCodec by remember(draft.exportVideoCodec) { mutableStateOf(draft.exportVideoCodec) }
     var exportBitrate by remember(draft.exportVideoBitrateBps) {
         mutableIntStateOf(draft.exportVideoBitrateBps)
@@ -152,7 +153,6 @@ fun VideoEditorScreen(
     }
     val exportResolution = draft.shortSidePixels.takeIf { it in supportedResolutions }
         ?: supportedResolutions.firstOrNull() ?: draft.shortSidePixels
-    var exportWarning by remember { mutableStateOf<String?>(null) }
     var muteOriginal by remember { mutableStateOf(draft.muteOriginalAudio) }
     var lastExport by remember { mutableStateOf<Uri?>(null) }
     var previewDraft by remember { mutableStateOf<EditorDraft?>(null) }
@@ -163,6 +163,23 @@ fun VideoEditorScreen(
     // A single selected layer drives the familiar clip-first editing tool rail.
     // This is transient navigation state, not a second mutable edit timeline.
     var selectedLayerId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(exportState.id, exportState.phase) {
+        if (exportState.title == draft.title) {
+            when (exportState.phase) {
+                ExportPhase.COMPLETED -> {
+                    lastExport = exportState.outputUri?.let(Uri::parse)
+                    exportDialog = false
+                    onInfo(exportState.message?.let {
+                        "Exported using a supported fallback. $it"
+                    } ?: "Exported to Movies/TongCut")
+                }
+                ExportPhase.FAILED -> onInfo("Export failed: ${exportState.message ?: "unknown error"}")
+                ExportPhase.CANCELLED -> onInfo(exportState.message ?: "Export cancelled")
+                else -> Unit
+            }
+        }
+    }
     val onGroupToggle: (String) -> Unit = { id ->
         groupIds = if (id in groupIds) groupIds - id else groupIds + id
     }
@@ -1300,7 +1317,7 @@ fun VideoEditorScreen(
                     if (processing) {
                         LinearProgressIndicator(progress = { progress / 100f },
                             modifier = Modifier.fillMaxWidth())
-                        Text("$progress% · Keep TongCut open")
+                        Text("$progress% · Export continues while TongCut is in the background")
                     } else {
                         Text("Short-edge resolution (reported by selected encoder)")
                         if (supportedResolutions.isEmpty()) {
@@ -1371,36 +1388,16 @@ fun VideoEditorScreen(
                             onInfo("Cannot export: ${inputs.exceptionOrNull()?.message}")
                             return@Button
                         }
-                        processing = true
-                        progress = 0
-                        exportWarning = null
-                        exporter.start(
-                            inputs.getOrThrow(),
-                            active.exportOptions().copy(
-                                shortSidePixels = exportResolution,
-                                mute = muteOriginal,
-                                videoCodec = exportCodec,
-                                videoBitrateBps = exportBitrate,
-                                audioBitrateBps = exportAudioBitrate,
-                                maxFrameRate = exportMaxFrameRate
-                            ),
-                            onProgress = { progress = it },
-                            onSuccess = {
-                                processing = false
-                                lastExport = it
-                                exportDialog = false
-                                onInfo(exportWarning?.let {
-                                    "Exported using a supported fallback. $it"
-                                } ?: "Exported to Movies/TongCut")
-                                exportWarning = null
-                            },
-                            onError = {
-                                processing = false
-                                exportWarning = null
-                                onInfo("Export failed: $it")
-                            },
-                            onWarning = { exportWarning = it }
-                        )
+                        val snapshot = active.copy(
+                            shortSidePixels = exportResolution,
+                            muteOriginalAudio = muteOriginal,
+                            exportVideoCodec = exportCodec,
+                            exportVideoBitrateBps = exportBitrate,
+                            exportAudioBitrateBps = exportAudioBitrate,
+                            exportMaxFrameRate = exportMaxFrameRate
+                        ).normalized()
+                        runCatching { exportJobs.enqueue(snapshot) }
+                            .onFailure { onInfo("Could not start export: ${it.message}") }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ProCyan)
                 ) { Text("Export MP4", color = Color.Black) }
@@ -1408,11 +1405,7 @@ fun VideoEditorScreen(
             dismissButton = {
                 TextButton(onClick = {
                     if (processing) {
-                        if (exporter.cancel()) {
-                            processing = false
-                            exportWarning = null
-                            onInfo("Export cancelled")
-                        }
+                        exportJobs.cancel()
                     } else exportDialog = false
                 }) { Text(if (processing) "Cancel export" else "Close") }
             }

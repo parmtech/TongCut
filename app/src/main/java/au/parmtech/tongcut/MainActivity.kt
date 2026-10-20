@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 
 /** App entry point. Screens live in TongCutApp/MediaGallery/EditorWorkspace. */
 class MainActivity : ComponentActivity() {
-    private val exporter by lazy { VideoExporter(this) }
+    private val exportJobs by lazy { ExportJobs.get(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,13 +25,9 @@ class MainActivity : ComponentActivity() {
                     onSurfaceVariant = Color(0xFFCBCBCB)
                 )
             ) {
-                TongCutApp(exporter)
+                TongCutApp(exportJobs)
             }
         }
     }
 
-    override fun onDestroy() {
-        exporter.cancel()
-        super.onDestroy()
-    }
 }

@@ -50,18 +50,22 @@ class VideoExporter(private val context: Context) {
         onSuccess: (Uri) -> Unit,
         onError: (String) -> Unit,
         overlayLayers: LayerTimeline = LayerTimeline(),
-        onWarning: (String) -> Unit = {}
+        onWarning: (String) -> Unit = {},
+        exportJobId: String? = null
     ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
+        require(exportJobId == null || Regex("[a-fA-F0-9-]{36}").matches(exportJobId)) {
+            "Invalid export job identifier"
+        }
         require(overlayLayers.layers.none { it.kind == LayerKind.STICKER }) {
             "Sticker compositor has not been implemented"
         }
         val original = clips.toList()
         val file = File(
             context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.cacheDir,
-            "TongCut-${System.currentTimeMillis()}.mp4"
+            "TongCut-${exportJobId ?: System.currentTimeMillis()}.mp4"
         )
         scratch = file
         active = true
@@ -280,7 +284,7 @@ class VideoExporter(private val context: Context) {
                         // MediaStore copy is I/O intensive; never block Android's UI thread.
                         Thread {
                             try {
-                                val savedUri = saveToGallery(file)
+                                val savedUri = saveToGallery(file, exportJobId)
                                 main.post {
                                     active = false
                                     saving = false
@@ -362,10 +366,11 @@ class VideoExporter(private val context: Context) {
     }
 
     @Throws(IOException::class)
-    private fun saveToGallery(file: File): Uri {
+    private fun saveToGallery(file: File, exportJobId: String?): Uri {
         if (!file.exists() || file.length() <= 0) throw IOException("Rendered file is empty")
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, "TongCut_${System.currentTimeMillis()}.mp4")
+            put(MediaStore.Video.Media.DISPLAY_NAME,
+                "TongCut_${exportJobId ?: System.currentTimeMillis()}.mp4")
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/TongCut")
             put(MediaStore.Video.Media.IS_PENDING, 1)
