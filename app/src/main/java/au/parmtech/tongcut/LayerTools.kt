@@ -29,6 +29,7 @@ internal fun LayerTools(
     kind: LayerKind,
     onChange: (EditorDraft) -> Unit,
     onAddAudio: () -> Unit,
+    onAddSoundEffect: (TongCutSoundEffect) -> Unit = {},
     onAddVisual: (LayerKind) -> Unit = {},
     onFreezeVideo: (String, Long) -> Unit = { _, _ -> },
     onError: (String) -> Unit,
@@ -41,6 +42,7 @@ internal fun LayerTools(
     var entry by remember { mutableStateOf("") }
     var pickerId by remember { mutableStateOf<String?>(null) }
     var pickerAtMs by remember { mutableLongStateOf(0L) }
+    var soundEffectMenuExpanded by remember { mutableStateOf(false) }
     val layers = draft.layers.layers
         .filter { it.kind == kind }
         // Selected clip first: avoid scrolling through an unrelated full-page form.
@@ -77,6 +79,24 @@ internal fun LayerTools(
                     LayerKind.IMAGE -> "+ Add photo"
                     else -> "+ Add"
                 }, color = ProCyan)
+            }
+        }
+        if (kind == LayerKind.AUDIO) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                SmallLayerButton(if (soundEffectMenuExpanded) "Hide TongCut SFX" else "TongCut SFX") {
+                    soundEffectMenuExpanded = !soundEffectMenuExpanded
+                }
+                if (soundEffectMenuExpanded) {
+                    TongCutSoundEffect.entries.forEach { effect ->
+                        SmallLayerButton(effect.title) {
+                            soundEffectMenuExpanded = false
+                            onAddSoundEffect(effect)
+                        }
+                    }
+                }
             }
         }
         if (validGroup.isNotEmpty()) {
