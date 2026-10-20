@@ -5,6 +5,7 @@ import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
 import androidx.media3.common.OverlaySettings
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
@@ -45,6 +46,10 @@ object TimedTextEffects {
                             0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                         )
                     }
+                    setSpan(
+                        TypefaceSpan(layer.captionStyle.font.androidFamily),
+                        0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
                 }
                 // Never return an empty string to TextOverlay: it can create a
                 // zero-width Bitmap and crash the GL export worker.

@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1100,6 +1101,11 @@ internal fun VideoEditorScreen(
                             color = Color(layer.captionStyle.tone.argb),
                             fontWeight = if (layer.captionStyle.bold)
                                 FontWeight.Bold else FontWeight.Normal,
+                            fontFamily = when (layer.captionStyle.font) {
+                                CaptionFont.SANS -> FontFamily.SansSerif
+                                CaptionFont.SERIF -> FontFamily.Serif
+                                CaptionFont.MONOSPACE -> FontFamily.Monospace
+                            },
                             fontSize = (21f * layer.captionStyle.size).sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             modifier = Modifier.align(Alignment.Center)

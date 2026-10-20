@@ -154,6 +154,11 @@ internal fun LayerTools(
                         SmallLayerButton("Text +") {
                             style(current.copy(size = (current.size + 0.1f).coerceAtMost(3f)))
                         }
+                        SmallLayerButton("Font: ${current.font.title}") {
+                            val fonts = CaptionFont.entries
+                            val next = fonts[(fonts.indexOf(current.font) + 1) % fonts.size]
+                            style(current.copy(font = next))
+                        }
                     }
                     SmallLayerButton(
                         if (layer.id in validGroup) "✓ Group" else "+ Group"

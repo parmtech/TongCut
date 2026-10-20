@@ -12,10 +12,17 @@ enum class CaptionTone(val title: String, val argb: Int) {
     LILAC("Lilac", 0xFFCDB7FF.toInt())
 }
 
+enum class CaptionFont(val title: String, val androidFamily: String) {
+    SANS("Sans", "sans-serif"),
+    SERIF("Serif", "serif"),
+    MONOSPACE("Mono", "monospace")
+}
+
 data class CaptionStyle(
     val tone: CaptionTone = CaptionTone.PEARL,
     val size: Float = 1f,
-    val bold: Boolean = true
+    val bold: Boolean = true,
+    val font: CaptionFont = CaptionFont.SANS
 ) {
     init {
         require(size.isFinite() && size in 0.5f..3f) {
