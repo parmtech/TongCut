@@ -1129,6 +1129,16 @@ internal fun LayerTools(
                                 }
                             }
                         }
+                        SmallLayerButton(if (track.monoFoldDown)
+                            "Stereo-to-mono: On" else "Stereo-to-mono: Off") {
+                            runCatching { LayerEdits.setAudioMonoFoldDown(draft, track.id,
+                                !track.monoFoldDown)
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Audio channel layout failed")
+                            }
+                        }
+                        Text("Averages stereo inputs; other channel layouts stay unchanged",
+                            color = Color.LightGray, fontSize = 10.sp)
                         Text("Tap the curve to add a clip gain point",
                             color = Color.LightGray, fontSize = 10.sp)
                         AudioEnvelopeCurve(

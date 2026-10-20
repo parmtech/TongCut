@@ -34,7 +34,8 @@ data class AudioEqualizer(
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class AudioEqualizerProcessor(
     private val settings: AudioEqualizer,
-    private val stereoBalance: Float = 0f
+    private val stereoBalance: Float = 0f,
+    private val monoFoldDown: Boolean = false
 ) : BaseAudioProcessor() {
     private data class Coefficients(val b0: Float, val b1: Float, val b2: Float,
                                    val a1: Float, val a2: Float)
@@ -42,6 +43,8 @@ internal class AudioEqualizerProcessor(
     private var z1 = FloatArray(0)
     private var z2 = FloatArray(0)
     private var channels = 0
+    private var inputChannels = 0
+    private var frameSamples = FloatArray(0)
     // The separated peaking bands do not stack their full gain at one frequency.
     // Reserve headroom for the strongest band, then contain residual inter-band
     // overshoot with the output limiter instead of attenuating by all three gains.
@@ -59,8 +62,10 @@ internal class AudioEqualizerProcessor(
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        channels = inputAudioFormat.channelCount
-        require(channels in 1..8 && inputAudioFormat.sampleRate in 8_000..192_000)
+        inputChannels = inputAudioFormat.channelCount
+        require(inputChannels in 1..8 && inputAudioFormat.sampleRate in 8_000..192_000)
+        channels = if (monoFoldDown && inputChannels == 2) 1 else inputChannels
+        frameSamples = FloatArray(channels)
         val sampleRate = inputAudioFormat.sampleRate.toFloat()
         coefficients = listOf(
             peaking(sampleRate, 100f, settings.bassDb),
@@ -69,21 +74,33 @@ internal class AudioEqualizerProcessor(
         )
         z1 = FloatArray(coefficients.size * channels)
         z2 = FloatArray(coefficients.size * channels)
-        return inputAudioFormat
+        return if (channels == inputChannels) inputAudioFormat else
+            AudioProcessor.AudioFormat(sampleRate.toInt(), channels, inputAudioFormat.encoding)
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val bytes = inputBuffer.remaining()
-        val output = replaceOutputBuffer(bytes).order(ByteOrder.nativeOrder())
-        val input = inputBuffer.duplicate().order(ByteOrder.nativeOrder())
         val sampleBytes = if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) 4 else 2
-        val frameBytes = channels * sampleBytes
-        require(bytes % frameBytes == 0) { "PCM buffer splits an interleaved sample frame" }
+        val inputFrameBytes = inputChannels * sampleBytes
+        require(bytes % inputFrameBytes == 0) { "PCM buffer splits an interleaved sample frame" }
+        val outputBytes = bytes / inputFrameBytes * channels * sampleBytes
+        val output = replaceOutputBuffer(outputBytes).order(ByteOrder.nativeOrder())
+        val input = inputBuffer.duplicate().order(ByteOrder.nativeOrder())
         while (input.hasRemaining()) {
-            for (channel in 0 until channels) {
-                val sample = if (sampleBytes == 4) input.getFloat()
+            if (channels == 1 && inputChannels == 2) {
+                val left = if (sampleBytes == 4) input.getFloat()
                     else input.getShort().toFloat() / 32768f
-                var value = sample
+                val right = if (sampleBytes == 4) input.getFloat()
+                    else input.getShort().toFloat() / 32768f
+                frameSamples[0] = (left + right) * 0.5f
+            } else {
+                for (channel in 0 until inputChannels) {
+                    frameSamples[channel] = if (sampleBytes == 4) input.getFloat()
+                        else input.getShort().toFloat() / 32768f
+                }
+            }
+            for (channel in 0 until channels) {
+                var value = frameSamples[channel]
                 for (band in coefficients.indices) {
                     val state = band * channels + channel
                     val c = coefficients[band]
@@ -116,6 +133,8 @@ internal class AudioEqualizerProcessor(
         z1 = FloatArray(0)
         z2 = FloatArray(0)
         channels = 0
+        inputChannels = 0
+        frameSamples = FloatArray(0)
     }
 
     private fun peaking(sampleRate: Float, frequency: Float, gainDb: Float): Coefficients {
@@ -140,7 +159,8 @@ internal class AudioEqualizerProcessor(
 internal class AudioEqualizerRenderersFactory(
     context: Context,
     private val settings: AudioEqualizer,
-    private val stereoBalance: Float = 0f
+    private val stereoBalance: Float = 0f,
+    private val monoFoldDown: Boolean = false
 ) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(
         context: Context,
@@ -149,8 +169,8 @@ internal class AudioEqualizerRenderersFactory(
     ): AudioSink = DefaultAudioSink.Builder(context)
         .setEnableFloatOutput(enableFloatOutput)
         .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-        .setAudioProcessors(if (settings.isNeutral && stereoBalance == 0f)
+        .setAudioProcessors(if (settings.isNeutral && stereoBalance == 0f && !monoFoldDown)
             emptyArray<AudioProcessor>()
-            else arrayOf(AudioEqualizerProcessor(settings, stereoBalance)))
+            else arrayOf(AudioEqualizerProcessor(settings, stereoBalance, monoFoldDown)))
         .build()
 }

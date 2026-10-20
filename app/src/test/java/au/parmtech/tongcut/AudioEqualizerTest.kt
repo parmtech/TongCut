@@ -89,4 +89,17 @@ class AudioEqualizerTest {
         processor.queueInput(input)
         assertEquals(12_345.toShort(), processor.output.order(ByteOrder.nativeOrder()).getShort())
     }
+
+    @Test fun stereoFoldDownAveragesChannelsAndReportsMonoOutputFormat() {
+        val processor = AudioEqualizerProcessor(AudioEqualizer(), monoFoldDown = true)
+        val outputFormat = processor.configure(
+            AudioProcessor.AudioFormat(48_000, 2, C.ENCODING_PCM_16BIT))
+        assertEquals(1, outputFormat.channelCount)
+        processor.flush()
+        val input = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
+            .putShort(10_000).putShort(20_000)
+        input.flip()
+        processor.queueInput(input)
+        assertEquals(15_000.toShort(), processor.output.order(ByteOrder.nativeOrder()).getShort())
+    }
 }

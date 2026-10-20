@@ -69,9 +69,11 @@ data class TimelineTrack(
     /** Target gain for other lanes while this dialogue/priority track is active. */
     val duckingGain: Float = 0.25f,
     /** Optional three-band PCM equalizer for preview and rendered audio. */
-    val equalizer: AudioEqualizer = AudioEqualizer()
+    val equalizer: AudioEqualizer = AudioEqualizer(),
     /** Stereo balance: -1 favors left, +1 favors right; mono sources remain unchanged. */
-    val stereoBalance: Float = 0f
+    val stereoBalance: Float = 0f,
+    /** Average a stereo source to mono; other source channel layouts are preserved. */
+    val monoFoldDown: Boolean = false
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)

@@ -24,6 +24,7 @@ class AudioOverlayEngine(private val context: Context) {
         val layer: TimelineLayer,
         val equalizer: AudioEqualizer,
         val stereoBalance: Float,
+        val monoFoldDown: Boolean,
         val player: ExoPlayer
     )
     private val active = LinkedHashMap<String, Entry>()
@@ -62,9 +63,11 @@ class AudioOverlayEngine(private val context: Context) {
             val currentEqualizer = source?.let { tracks[it.trackId]?.equalizer }
                 ?: AudioEqualizer()
             val currentBalance = source?.let { tracks[it.trackId]?.stereoBalance } ?: 0f
+            val currentMonoFoldDown = source?.let { tracks[it.trackId]?.monoFoldDown } ?: false
             if (source == null || source != item.value.layer ||
                 currentEqualizer != item.value.equalizer ||
                 currentBalance != item.value.stereoBalance ||
+                currentMonoFoldDown != item.value.monoFoldDown ||
                 failures.messageFor(source) != null
             ) {
                 item.value.player.release()
@@ -85,8 +88,10 @@ class AudioOverlayEngine(private val context: Context) {
                 try {
                     val equalizer = tracks[layer.trackId]?.equalizer ?: AudioEqualizer()
                     val stereoBalance = tracks[layer.trackId]?.stereoBalance ?: 0f
+                    val monoFoldDown = tracks[layer.trackId]?.monoFoldDown ?: false
                     val player = ExoPlayer.Builder(context,
-                        AudioEqualizerRenderersFactory(context, equalizer, stereoBalance)).build()
+                        AudioEqualizerRenderersFactory(context, equalizer, stereoBalance,
+                            monoFoldDown)).build()
                     created = player
                     val startMs = layer.sourceInUs / 1_000L
                     val endMs = (layer.sourceInUs + layer.consumedSourceUs) / 1_000L
@@ -107,7 +112,7 @@ class AudioOverlayEngine(private val context: Context) {
                     })
                     player.setMediaItem(media)
                     player.prepare()
-                    Entry(layer, equalizer, stereoBalance, player)
+                    Entry(layer, equalizer, stereoBalance, monoFoldDown, player)
                         .also { active[layer.id] = it }
                 } catch (error: Exception) {
                     created?.release()

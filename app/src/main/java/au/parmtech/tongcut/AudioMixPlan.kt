@@ -45,7 +45,8 @@ data class AudioLanePlan(
     val parts: List<AudioPart>,
     val gain: Float = 1f,
     val equalizer: AudioEqualizer = AudioEqualizer(),
-    val stereoBalance: Float = 0f
+    val stereoBalance: Float = 0f,
+    val monoFoldDown: Boolean = false
 ) {
     init {
         require(gain.isFinite() && gain in 0f..1f)
@@ -100,7 +101,7 @@ object AudioMixPlan {
             }
             if (cursor < videoDurationUs) parts += AudioPart.Gap(videoDurationUs - cursor)
             AudioLanePlan(track.id, parts, track.gain, track.equalizer,
-                track.stereoBalance).also { plan ->
+                track.stereoBalance, track.monoFoldDown).also { plan ->
                 check(plan.totalUs == videoDurationUs) { "Audio layer drift in schedule" }
             }
         }
