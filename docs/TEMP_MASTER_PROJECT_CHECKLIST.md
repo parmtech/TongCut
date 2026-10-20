@@ -19,7 +19,7 @@
 7. Use synthetic media in public CI. Do not upload the owner's private recordings/photos/screenshots, tokens, signing keys or credentials.
 8. Maintain backwards-compatible project schemas and undo/redo through every edit change.
 9. Use GitHub issues #1 (product parity), #2 (P1), #3 (P2), #4 (P6), #5 (UI) and #6 (P3) as supplementary evidence. This file is the cross-phase index.
-10. The P2 owner TEST APK was built and passed earlier CI; physical phone acceptance remains open. **Updated owner direction (2026-10-20): finish all in-scope offline feature implementation across P3–P5 and P7–P9 before starting the comprehensive test/build/fix/release campaign. Do not run tests or build APKs during this feature-construction pass. Keep unverified work unchecked; source presence is not acceptance. AI-provider, cloud, and other network-dependent editing features are deferred to P6/later and are not part of this offline release.
+10. The P2 owner TEST APK was built and passed earlier CI; physical phone acceptance remains open. **Updated owner direction (2026-10-20):** Finish all in-scope offline feature implementation across P3–P5 and P7–P9 before starting the comprehensive test/build/fix/release campaign. Do not run tests or build APKs during this feature-construction pass. Keep unverified work unchecked; source presence is not acceptance. AI-provider, cloud, and other network-dependent editing features are deferred to P6/later and are not part of this offline release.
 11. For P3, document implementation and verification separately: editor control + persistence + GPU export + mixed-media Android pixel test + owner hardware acceptance for each advanced effect.
 
 ## P3–P9 coordinated production execution map (2026-10-20)
@@ -231,6 +231,8 @@ This map groups implementation by shared dependencies so features are developed 
 
 ## P6 — AI studio and APIs
 
+**DEFERRED — future online/AI scope. P6 is not required to ship the current offline release.**
+
 - [ ] **P6-01** User-selectable provider registry, secure settings, base URL/model/task capabilities; no claimed universal schema.
 - [ ] **P6-02** Keystore-backed credentials; no token leakage to log, storage backup, URL or repository.
 - [ ] **P6-03** Explicit consent to upload private media, vendor/data disclosure, privacy and approval.
@@ -262,7 +264,7 @@ This map groups implementation by shared dependencies so features are developed 
 - [ ] **P8-03a (source; not yet tested)** Tone-curve graphs now speak the active channel and selected point's input/output percentages, with TalkBack actions to select prior/next points and nudge left/right/up/down. Graph edits commit on action; vertical nudges clamp at 0–100% output and accessible sliders/buttons remain available ([implementation](https://github.com/manbir6-ux/TongCut/commit/ed9226695371b929d57815f39482cbba17499d70)). TalkBack/large-font/RTL/keyboard and physical-device acceptance remain pending; no tests/build were run.
 - [ ] **P8-04** Device matrix: Pixel/Samsung/low-end Android 10–latest, emulator and owner phone; audio, video, battery and thermal.
 - [ ] **P8-05** Crash/ANR/perf monitoring with opt-in only; secure offline first behavior.
-- [ ] **P8-06** P0–P7 regression tests, automation report archive, all critical and data-loss issues closed.
+- [ ] **P8-06** In-scope offline P0–P5 and P7 regression tests, automation report archive, all critical and data-loss issues closed; P6 is excluded from this release.
 
 ## P9 — CapCut reference parity, final release and retirement of this file
 
@@ -270,7 +272,7 @@ This map groups implementation by shared dependencies so features are developed 
 - [ ] **P9-02** UI screenshot/gesture matches for Home, gallery, editor, panels, tool rails and export on actual phones; close issue #5.
 - [ ] **P9-02a** Feature-first editor workflow milestone: real selected-layer ID passed from `SequenceStrip` into `EditorWorkspace`, selected highlight, clip-specific quick edit rail, undoable Split/Trim/Duplicate/Keyframe/Mute/Delete, Back to global category toolbar, inspector shows selected clip first. Implementation [0b963ab5](https://github.com/manbir6-ux/TongCut/commit/0b963ab506eee6e5f13bbfda2fccd0a538b2480c); design contract [TONGCUT_UI_IDENTITY](TONGCUT_UI_IDENTITY.md). No claim of pixel-for-pixel CapCut imitation, no runtime acceptance yet.
 - [ ] **P9-03** All source/build/unit/Lint/instrumentation/integration/security/load tests green on final commit SHA.
-- [ ] **P9-04** All phases P0–P8 signed off, issues #1–#6 and outstanding acceptance issues closed with documented evidence.
+- [ ] **P9-04** All in-scope offline phases P0–P5 and P7–P8 signed off; applicable issues #1–#3, #5–#6 and other offline acceptance issues closed with documented evidence. P6/issue #4 is excluded until a future online/AI release.
 - [ ] **P9-05** Release signing, version/migration/upgrade test, privacy/policy/notices, crash rollback plan and owner approval.
 - [ ] **P9-06** Install, edit, export, verify output, uninstall/upgrade regressions and final owner hands-on signoff.
 - [ ] **P9-07** ONLY NOW delete this TEMP_MASTER_PROJECT_CHECKLIST.md via a commit. Keep permanent docs, CI run URLs and issues for historical evidence.
