@@ -508,4 +508,5 @@ internal fun primaryClipVideoEffects(options: ExportOptions): List<androidx.medi
         }
         if (options.colorGrade != ColorGrade()) add(ColorGradeEffect(options.colorGrade))
         options.colorLutProfile?.let { add(it.toMedia3Effect()) }
+        if (options.primaryBlur > 0f) add(VideoMatteEffect(PhotoEffects(blur = options.primaryBlur)))
     }

@@ -52,7 +52,9 @@ data class EditorDraft(
     val layers: LayerTimeline = LayerTimeline(),
     val exportAudioBitrateBps: Int = 128_000,
     val exportMaxFrameRate: Int = ExportFrameRate.DEFAULT,
-    val colorLutProfile: ColorLutProfile? = null
+    val colorLutProfile: ColorLutProfile? = null,
+    /** Bounded SDR blur for primary footage, shared by editor preview and export. */
+    val primaryBlur: Float = 0f
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
@@ -60,6 +62,7 @@ data class EditorDraft(
         require(exportVideoBitrateBps in 1_000_000..50_000_000)
         require(exportAudioBitrateBps in 64_000..320_000)
         require(exportMaxFrameRate in ExportFrameRate.choices)
+        require(primaryBlur.isFinite() && primaryBlur in 0f..0.08f)
     }
 
     fun normalized(): EditorDraft =
@@ -123,7 +126,8 @@ data class EditorDraft(
         videoBitrateBps = exportVideoBitrateBps,
         audioBitrateBps = exportAudioBitrateBps,
         maxFrameRate = exportMaxFrameRate,
-        colorLutProfile = colorLutProfile
+        colorLutProfile = colorLutProfile,
+        primaryBlur = primaryBlur
     )
 }
 

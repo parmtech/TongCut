@@ -75,9 +75,17 @@ class EditorDraftTest {
         assertEquals(grade, EditorDraft(colorGrade = grade).exportOptions().colorGrade)
     }
 
+    @Test fun primaryBlurIsBoundedAndFlowsIntoExportOptions() {
+        assertEquals(0.04f, EditorDraft(primaryBlur = 0.04f).exportOptions().primaryBlur)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectUnboundedPrimaryBlur() {
+        EditorDraft(primaryBlur = 0.081f)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectUnusableReplacement() {
         item().relink("content://bad", "bad", 50)
     }
 }
-

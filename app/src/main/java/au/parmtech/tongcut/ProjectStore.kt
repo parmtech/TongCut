@@ -47,7 +47,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..9) { "Unsupported project schema" }
+        require(schema in 1..10) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -79,6 +79,8 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                 .takeIf { it in ExportFrameRate.choices } ?: ExportFrameRate.DEFAULT,
             colorLutProfile = if (schema >= 8)
                 ColorLutProfileCodec.decode(root.optJSONObject("colorLut")) else null,
+            primaryBlur = root.optDouble("primaryBlur", 0.0).toFloat()
+                .takeIf { it.isFinite() && it in 0f..0.08f } ?: 0f,
             canvas = CanvasRatio.entries.firstOrNull { it.name == root.optString("canvas") } ?: CanvasRatio.SOURCE,
             shortSidePixels = root.optInt("shortSide", 1080).takeIf {
                 it in listOf(720, 1080, 2160)
@@ -93,7 +95,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 9)
+            put("schema", 10)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -103,6 +105,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
             put("exportAudioBitrateBps", project.exportAudioBitrateBps)
             put("exportMaxFrameRate", project.exportMaxFrameRate)
             project.colorLutProfile?.let { put("colorLut", ColorLutProfileCodec.encode(it)) }
+            put("primaryBlur", project.primaryBlur.toDouble())
             put("canvas", project.canvas.name)
             put("shortSide", project.shortSidePixels)
             put("mute", project.muteOriginalAudio)

@@ -754,10 +754,13 @@ internal fun VideoEditorScreen(
 
     // A single ExoPlayer playlist plays trimmed media clips consecutively.
     // source URI and clipping window are the same values sent to Transformer.
-    LaunchedEffect(active.colorGrade, active.colorLutProfile) {
+    LaunchedEffect(active.colorGrade, active.colorLutProfile, active.primaryBlur) {
         val effects = mutableListOf<androidx.media3.common.Effect>()
         if (active.colorGrade != ColorGrade()) effects += ColorGradeEffect(active.colorGrade)
         active.colorLutProfile?.let { effects += it.toMedia3Effect() }
+        if (active.primaryBlur > 0f) {
+            effects += VideoMatteEffect(PhotoEffects(blur = active.primaryBlur))
+        }
         player.setVideoEffects(effects)
     }
     LaunchedEffect(active.clips, active.selectedIndex) {
@@ -1333,9 +1336,12 @@ internal fun VideoEditorScreen(
                         GradeSlider("Warmth", grade.temperature, -1f..1f, { value ->
                             previewDraft = active.copy(colorGrade = grade.copy(temperature = value))
                         }, ::commitGradePreview)
+                        GradeSlider("Footage blur", active.primaryBlur, 0f..0.08f, { value ->
+                            previewDraft = active.copy(primaryBlur = value)
+                        }, ::commitGradePreview)
                         ToolPill("Reset adjustments") {
                             previewDraft = null
-                            onChange(active.copy(colorGrade = ColorGrade()))
+                            onChange(active.copy(colorGrade = ColorGrade(), primaryBlur = 0f))
                         }
                     }
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,

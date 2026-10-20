@@ -43,12 +43,15 @@ data class ExportOptions(
     /** Maximum output frame rate; never up-converts slower source video. */
     val maxFrameRate: Int = ExportFrameRate.DEFAULT,
     /** Optional imported SDR 3D LUT, shared by preview and primary-footage export. */
-    val colorLutProfile: ColorLutProfile? = null
+    val colorLutProfile: ColorLutProfile? = null,
+    /** Bounded SDR blur for primary footage. */
+    val primaryBlur: Float = 0f
 ) {
     init {
         require(videoBitrateBps in 1_000_000..50_000_000)
         require(audioBitrateBps in 64_000..320_000)
         require(maxFrameRate in ExportFrameRate.choices)
+        require(primaryBlur.isFinite() && primaryBlur in 0f..0.08f)
     }
 }
 
