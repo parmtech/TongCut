@@ -54,9 +54,7 @@ object AudioEnvelope {
         require(samplePosition >= 0L && sampleRate > 0)
         require(globalGain.isFinite() && globalGain in 0f..1f)
         if (globalGain != 1f) return null
-        val seconds = samplePosition / sampleRate
-        val remainder = samplePosition % sampleRate
-        val positionUs = seconds * 1_000_000L + remainder * 1_000_000L / sampleRate
+        val positionUs = samplePositionUs(samplePosition, sampleRate)
         if (gainAt(positionUs, durationUs, points) != 1f) return null
         if (positionUs >= durationUs) return UNITY_TO_END_OF_STREAM
         if (points.isEmpty()) return UNITY_TO_END_OF_STREAM
@@ -87,6 +85,17 @@ object AudioEnvelope {
         val partialSamples = (partialNumerator + 999_999L) / 1_000_000L
         return if (wholeSamples > Long.MAX_VALUE - partialSamples) Long.MAX_VALUE
             else wholeSamples + partialSamples
+    }
+
+    /** Convert a PCM frame position without overflowing on malformed long timelines. */
+    fun samplePositionUs(samplePosition: Long, sampleRate: Int): Long {
+        require(samplePosition >= 0L && sampleRate > 0)
+        val seconds = samplePosition / sampleRate
+        if (seconds > Long.MAX_VALUE / 1_000_000L) return Long.MAX_VALUE
+        val wholeUs = seconds * 1_000_000L
+        val remainderUs = samplePosition % sampleRate * 1_000_000L / sampleRate
+        return if (wholeUs > Long.MAX_VALUE - remainderUs) Long.MAX_VALUE
+            else wholeUs + remainderUs
     }
 
     fun upsert(durationUs: Long, points: List<AudioGainKeyframe>, point: AudioGainKeyframe): List<AudioGainKeyframe> {

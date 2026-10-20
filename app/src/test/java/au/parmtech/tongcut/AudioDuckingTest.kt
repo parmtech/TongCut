@@ -51,6 +51,12 @@ class AudioDuckingTest {
         assertNull(AudioEnvelope.unityUntilSamplePosition(
             0L, 1_000, 4_000_000L, points, globalGain = 0.5f
         ))
+        val nearMaximumDurationUs = 9_223_372_036_854_775_000L
+        assertNull(AudioEnvelope.unityUntilSamplePosition(
+            Long.MAX_VALUE, 48_000, Long.MAX_VALUE,
+            listOf(AudioGainKeyframe(0L, 1f),
+                AudioGainKeyframe(nearMaximumDurationUs, 0.5f))
+        ))
     }
 
     @Test fun authoredAutomationIsMultipliedAndMutedDialogueDoesNotDuck() {

@@ -215,12 +215,9 @@ class VideoExporter(private val context: Context) {
                                     override fun getGainFactorAtSamplePosition(
                                         samplePosition: Long, sampleRate: Int
                                     ): Float {
-                                        // Divide first so a long export cannot overflow while
-                                        // converting a PCM sample index to microseconds.
-                                        val seconds = samplePosition / sampleRate
-                                        val remainder = samplePosition % sampleRate
-                                        val positionUs = seconds * 1_000_000L +
-                                            remainder * 1_000_000L / sampleRate
+                                        val positionUs = AudioEnvelope.samplePositionUs(
+                                            samplePosition, sampleRate
+                                        )
                                         return lane.gain * AudioEnvelope.gainAt(
                                             positionUs, part.durationUs, part.envelope
                                         )
