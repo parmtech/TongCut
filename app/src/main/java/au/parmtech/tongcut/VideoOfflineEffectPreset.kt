@@ -1,6 +1,10 @@
 package au.parmtech.tongcut
 
 import android.content.Context
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.net.Uri
+import android.os.Build
 import android.opengl.GLES20
 import androidx.media3.common.VideoFrameProcessingException
 import androidx.media3.common.util.GlProgram
@@ -145,4 +149,57 @@ private class OfflineLookShader(
             }
         """
     }
+}
+
+
+/**
+ * Conservative source-color preflight for the SDR-only primary look shader.
+ * Missing transfer metadata is UNKNOWN, never assumed SDR; some valid SDR files
+ * omit this tag and consequently cannot use primary looks until tagged/converted.
+ */
+internal enum class PrimaryVideoColorStatus { CONFIRMED_SDR, HDR, UNKNOWN }
+
+internal object PrimaryVideoColorPreflight {
+    fun inspect(context: Context, uri: Uri): PrimaryVideoColorStatus {
+        if (Build.VERSION.SDK_INT < 24) return PrimaryVideoColorStatus.UNKNOWN
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(context, uri, null)
+            val transferStatuses = (0 until extractor.trackCount).mapNotNull { index ->
+                val format = extractor.getTrackFormat(index)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: return@mapNotNull null
+                if (!mime.startsWith("video/")) return@mapNotNull null
+                if (!format.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) {
+                    return@mapNotNull PrimaryVideoColorStatus.UNKNOWN
+                }
+                when (format.getInteger(MediaFormat.KEY_COLOR_TRANSFER)) {
+                    MediaFormat.COLOR_TRANSFER_ST2084,
+                    MediaFormat.COLOR_TRANSFER_HLG -> PrimaryVideoColorStatus.HDR
+                    MediaFormat.COLOR_TRANSFER_SDR_VIDEO -> PrimaryVideoColorStatus.CONFIRMED_SDR
+                    else -> PrimaryVideoColorStatus.UNKNOWN
+                }
+            }
+            when {
+                transferStatuses.isEmpty() -> PrimaryVideoColorStatus.UNKNOWN
+                transferStatuses.any { it == PrimaryVideoColorStatus.HDR } ->
+                    PrimaryVideoColorStatus.HDR
+                transferStatuses.all { it == PrimaryVideoColorStatus.CONFIRMED_SDR } ->
+                    PrimaryVideoColorStatus.CONFIRMED_SDR
+                else -> PrimaryVideoColorStatus.UNKNOWN
+            }
+        } catch (_: Exception) {
+            PrimaryVideoColorStatus.UNKNOWN
+        } finally {
+            runCatching { extractor.release() }
+        }
+    }
+
+    fun aggregate(statuses: List<PrimaryVideoColorStatus>): PrimaryVideoColorStatus =
+        when {
+            statuses.isEmpty() -> PrimaryVideoColorStatus.UNKNOWN
+            statuses.any { it == PrimaryVideoColorStatus.HDR } -> PrimaryVideoColorStatus.HDR
+            statuses.all { it == PrimaryVideoColorStatus.CONFIRMED_SDR } ->
+                PrimaryVideoColorStatus.CONFIRMED_SDR
+            else -> PrimaryVideoColorStatus.UNKNOWN
+        }
 }

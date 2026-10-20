@@ -641,6 +641,26 @@ internal fun VideoEditorScreen(
 
     val active = previewDraft ?: draft
     val latestInfo by rememberUpdatedState(onInfo)
+    var primaryLookChecking by remember { mutableStateOf(false) }
+    var primaryLookColorStatus by remember { mutableStateOf<PrimaryVideoColorStatus?>(null) }
+    val shouldCheckPrimaryLook = panel == "Adjust" ||
+        active.primaryOfflineEffectPreset != null
+    LaunchedEffect(active.clips.map { it.sourceUri }, shouldCheckPrimaryLook) {
+        if (!shouldCheckPrimaryLook) {
+            primaryLookChecking = false
+            primaryLookColorStatus = null
+        } else {
+            primaryLookChecking = true
+            primaryLookColorStatus = null
+            val result = withContext(Dispatchers.IO) {
+                PrimaryVideoColorPreflight.aggregate(active.clips.map { item ->
+                    PrimaryVideoColorPreflight.inspect(context, Uri.parse(item.sourceUri))
+                })
+            }
+            primaryLookColorStatus = result
+            primaryLookChecking = false
+        }
+    }
     val clip = active.selectedClip
     var reversePreviewSession by remember { mutableStateOf<ReversePreviewSession?>(null) }
     var reversePreviewIssue by remember { mutableStateOf<String?>(null) }
@@ -813,8 +833,8 @@ internal fun VideoEditorScreen(
     // source URI and clipping window are the same values sent to Transformer.
     LaunchedEffect(active.colorGrade, active.colorLutProfile, active.primaryBlur,
         active.primarySharpen, active.primaryGrain, active.primaryVignette,
-        active.primaryOfflineEffectPreset, active.primaryQuarterTurns,
-        active.primaryFlipHorizontal) {
+        active.primaryOfflineEffectPreset, primaryLookColorStatus, primaryLookChecking,
+        active.primaryQuarterTurns, active.primaryFlipHorizontal) {
         val effects = mutableListOf<androidx.media3.common.Effect>()
         if (active.primaryQuarterTurns != 0 || active.primaryFlipHorizontal) {
             effects += androidx.media3.effect.ScaleAndRotateTransformation.Builder()
@@ -834,8 +854,11 @@ internal fun VideoEditorScreen(
         if (active.primaryVignette > 0f) {
             effects += VideoVignetteEffect(active.primaryVignette)
         }
-        active.primaryOfflineEffectPreset?.let {
-            effects += VideoOfflineEffectPreset(it)
+        if (!primaryLookChecking &&
+            primaryLookColorStatus == PrimaryVideoColorStatus.CONFIRMED_SDR) {
+            active.primaryOfflineEffectPreset?.let {
+                effects += VideoOfflineEffectPreset(it)
+            }
         }
         player.setVideoEffects(effects)
     }
@@ -1589,50 +1612,85 @@ internal fun VideoEditorScreen(
                         GradeSlider("Footage vignette", active.primaryVignette, 0f..1f, { value ->
                             previewDraft = active.copy(primaryVignette = value)
                         }, ::commitGradePreview)
-                        Text(
-                            "Original offline primary looks · SDR GPU; HDR is unsupported. " +
-                                "Small GPU/CPU rounding differences may occur.",
-                            color = Color.LightGray, fontSize = 10.sp
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(
-                                rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OfflineEffectPresets.all.forEach { preset ->
-                                val selected =
-                                    active.primaryOfflineEffectPreset?.presetId == preset.id
-                                ToolPill(if (selected) "✓ ${preset.title}" else preset.title) {
-                                    previewDraft = active.copy(
-                                        primaryOfflineEffectPreset =
-                                            if (selected) null else preset.defaults()
+                        when {
+                            primaryLookChecking -> Text(
+                                "Checking source color metadata before enabling looks…",
+                                color = Color.LightGray, fontSize = 10.sp
+                            )
+                            primaryLookColorStatus == PrimaryVideoColorStatus.CONFIRMED_SDR -> {
+                                Text(
+                                    "Original offline primary looks · confirmed SDR GPU. " +
+                                        "Small GPU/CPU rounding differences may occur.",
+                                    color = Color.LightGray, fontSize = 10.sp
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(
+                                        rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OfflineEffectPresets.all.forEach { preset ->
+                                        val selected =
+                                            active.primaryOfflineEffectPreset?.presetId == preset.id
+                                        ToolPill(if (selected) "✓ ${preset.title}" else preset.title) {
+                                            previewDraft = active.copy(
+                                                primaryOfflineEffectPreset =
+                                                    if (selected) null else preset.defaults()
+                                            )
+                                            commitGradePreview()
+                                        }
+                                    }
+                                    ToolPill("Clear look") {
+                                        previewDraft = active.copy(primaryOfflineEffectPreset = null)
+                                        commitGradePreview()
+                                    }
+                                }
+                                active.primaryOfflineEffectPreset?.let { state ->
+                                    val strengthSpec = OfflineEffectPresets.find(state.presetId)
+                                        ?.parameters?.firstOrNull { it.id == "strength" }
+                                    val strength = state.values["strength"]
+                                        ?: strengthSpec?.defaultValue ?: 0f
+                                    GradeSlider(
+                                        "Look strength",
+                                        strength,
+                                        0f..1f,
+                                        { value ->
+                                            previewDraft = active.copy(
+                                                primaryOfflineEffectPreset = state.copy(
+                                                    values = state.values + ("strength" to value)
+                                                )
+                                            )
+                                        },
+                                        ::commitGradePreview
                                     )
-                                    commitGradePreview()
                                 }
                             }
-                            ToolPill("Clear look") {
-                                previewDraft = active.copy(primaryOfflineEffectPreset = null)
-                                commitGradePreview()
+                            primaryLookColorStatus == PrimaryVideoColorStatus.HDR -> {
+                                Text(
+                                    "Primary looks are disabled: HDR footage was detected. " +
+                                        "Convert all primary clips to SDR or remove the saved look.",
+                                    color = Color.LightGray, fontSize = 10.sp
+                                )
+                                if (active.primaryOfflineEffectPreset != null) {
+                                    ToolPill("Remove saved look") {
+                                        previewDraft = active.copy(primaryOfflineEffectPreset = null)
+                                        commitGradePreview()
+                                    }
+                                }
                             }
-                        }
-                        active.primaryOfflineEffectPreset?.let { state ->
-                            val strengthSpec = OfflineEffectPresets.find(state.presetId)
-                                ?.parameters?.firstOrNull { it.id == "strength" }
-                            val strength = state.values["strength"]
-                                ?: strengthSpec?.defaultValue ?: 0f
-                            GradeSlider(
-                                "Look strength",
-                                strength,
-                                0f..1f,
-                                { value ->
-                                    previewDraft = active.copy(
-                                        primaryOfflineEffectPreset = state.copy(
-                                            values = state.values + ("strength" to value)
-                                        )
-                                    )
-                                },
-                                ::commitGradePreview
-                            )
+                            else -> {
+                                Text(
+                                    "Primary looks are disabled because SDR could not be confirmed " +
+                                        "for every source. Some SDR videos omit color-transfer metadata; " +
+                                        "use explicitly SDR-tagged clips or remove the saved look.",
+                                    color = Color.LightGray, fontSize = 10.sp
+                                )
+                                if (active.primaryOfflineEffectPreset != null) {
+                                    ToolPill("Remove saved look") {
+                                        previewDraft = active.copy(primaryOfflineEffectPreset = null)
+                                        commitGradePreview()
+                                    }
+                                }
+                            }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ToolPill("Rotate left") {
