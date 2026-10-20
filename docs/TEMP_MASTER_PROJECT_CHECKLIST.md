@@ -3,10 +3,10 @@
 **Status:** ACTIVE / INCOMPLETE — DO NOT DELETE YET
 **Branch:** development/capcut-parity
 **Last reconciled:** 2026-10-20
-**Scope:** P0 through P9; independently implemented CapCut Android 19.8.0 reference workflows plus TongCut improvements.
+**Scope:** Offline release covers P0–P5 and P7–P9: independently implemented non-AI CapCut Android 19.8.0 workflows plus original TongCut offline tools. P6 provider/AI/network services are explicitly deferred to a future release and are not an offline-release gate.
 **Owner rule:** Work on the earliest unresolved dependency first. Do not call a phase completed merely because a source file, button, unit test, emulator test, or APK exists.
 
-> This is a TEMPORARY execution ledger. DELETE THIS FILE ONLY after ALL P0–P9 items below are checked with test evidence, all GitHub acceptance issues are closed and the owner has signed off the installed production app. Never delete because a test APK builds or one phase is done. Keep historical CI evidence in issues/commits after deleting the ledger.
+> This is a TEMPORARY execution ledger. DELETE THIS FILE ONLY after all in-scope offline P0–P5 and P7–P8 items below are checked with evidence, all P9 release checks pass, the relevant GitHub acceptance issues are resolved, and the owner signs off the installed production app. P6 remains future scope and is excluded from this release. Never delete because a test APK builds or one phase is done. Keep historical CI evidence in issues/commits after deleting the ledger.
 
 ## How to maintain this file
 
@@ -19,7 +19,7 @@
 7. Use synthetic media in public CI. Do not upload the owner's private recordings/photos/screenshots, tokens, signing keys or credentials.
 8. Maintain backwards-compatible project schemas and undo/redo through every edit change.
 9. Use GitHub issues #1 (product parity), #2 (P1), #3 (P2), #4 (P6), #5 (UI) and #6 (P3) as supplementary evidence. This file is the cross-phase index.
-10. The P2 owner TEST APK was built and passed earlier CI; physical phone acceptance remains open. **Updated owner direction (2026-10-20): prioritize implementation of features across all P3–P9 phases before comprehensive testing and bug-fix cycles.** Avoid repeated full QA campaigns during feature construction; use minimal compilation safeguards when practical. Keep every unverified acceptance item unchecked. Do not label an untested feature or phase complete.
+10. The P2 owner TEST APK was built and passed earlier CI; physical phone acceptance remains open. **Updated owner direction (2026-10-20): finish all in-scope offline feature implementation across P3–P5 and P7–P9 before starting the comprehensive test/build/fix/release campaign. Do not run tests or build APKs during this feature-construction pass. Keep unverified work unchecked; source presence is not acceptance. AI-provider, cloud, and other network-dependent editing features are deferred to P6/later and are not part of this offline release.
 11. For P3, document implementation and verification separately: editor control + persistence + GPU export + mixed-media Android pixel test + owner hardware acceptance for each advanced effect.
 
 ## P3–P9 coordinated production execution map (2026-10-20)
@@ -32,11 +32,11 @@ This map groups implementation by shared dependencies so features are developed 
 | B. Advanced timeline effects (P3) | Reverse pipeline (decode/cache/cancel/codec handling), finish masks/blends/chroma, primary transitions, tracking and grouped gestures. Sequence by required decoder/compositor capabilities; do not imply PiP effects equal primary-footage effects. | Per-effect persistence/UI, seek/cancel/resource tests, encoded-pixel acceptance, parity evidence; owner hardware still separate. |
 | C. Audio studio (P4) | Detach and edit audio; record voiceover; complete gain/fade/ducking, time-stretch/noise/EQ/channel behavior. Reuse source-clock envelope and mixer contracts. | Source anchoring and migration tests, decoded PCM/AAC onset/gain/pitch tests, lifecycle/device acceptance. |
 | D. Visual and captions (P5) | Finish colour-managed SDR/HDR and grading; effects/stabilization/crop; typography/templates and multilingual subtitle workflow; maintain TongCut-owned original/licensed assets. | Numeric/parser tests, preview/export pixel comparisons, supported-device HDR/SDR acceptance and asset provenance. |
-| E. AI studio (P6) | Provider/capability registry → Keystore credentials → explicit consent/privacy boundaries → real provider adapters → durable jobs/cancel/budget → editable result provenance. Keep offline editor usable when no provider is configured. | Contract tests with non-secret fixtures; security/privacy review; owner-approved real-provider tests outside source control. |
+| E. Future AI studio (P6; deferred) | Provider registry, Keystore credentials, explicit upload consent, real adapters and durable jobs are future online/AI scope, not part of the current offline release. | A separate owner-approved future release plan and security/privacy review. |
 | F. Export and resilience (P7/P8) | Complete capability-aware codec/size/FPS/audio preflight; robust background jobs, cancellation, cleanup/resume; performance and security/accessibility/device matrix. | Independently probed files, stress/cancel/recovery tests, lint/static review and API/device matrix. |
-| G. Release acceptance (P9) | Owner-approved parity matrix and UI walkthrough; full regression/security/load suite on final commit; signed/versioned upgrade plan, release notes/privacy notices and rollback; owner installs and signs off. | All P0–P8 acceptance leaves, GitHub issues, and installed production checks signed off. Only then package/deliver production APK and retire this temporary ledger. |
+| G. Offline release acceptance (P9) | Owner-approved non-AI offline parity matrix and UI walkthrough; full regression/security/load suite on final commit; signed/versioned upgrade plan, release notes/privacy notices and rollback; owner installs and signs off. | All in-scope P0–P5 and P7–P8 acceptance leaves, applicable GitHub issues, and installed production checks signed off. P6 is excluded until a separately scoped future online/AI release. Only then package/deliver production APK and retire this temporary ledger. |
 
-**Working cadence:** one dependency-coherent implementation slice at a time; update its leaf checklist and evidence in the same change; run targeted JVM/source checks during feature construction; reserve full emulator/device and production/release campaigns for the designated gates. A read-only watcher reviews changed files, cross-layer parity, compatibility, test claims and checklist consistency before each remote update. If local and remote commit identities diverge, append commits to the verified remote head with an expected-head check; never force-rewrite the project branch.
+**Working cadence:** one dependency-coherent implementation slice at a time; update its leaf checklist in the same change. Per the owner, defer all tests and APK builds until the offline feature-construction pass is complete; then run the designated comprehensive QA and release campaign. A read-only watcher reviews changed files, cross-layer wiring, compatibility, and checklist claims before each remote update. If local and remote commit identities diverge, append commits to the verified remote head with an expected-head check; never force-rewrite the project branch.
 
 ## Phase completion dashboard
 
@@ -47,11 +47,11 @@ This map groups implementation by shared dependencies so features are developed 
 | P2 True layered timeline | Source largely implemented; several emulator MP4 tests passed | Preview/export parity, real-phone mixed tracks, codecs/performance/accessibility | OPEN — OWNER ACCEPTANCE |
 | P3 Advanced edit | Keyframes, speed, PiP freeze, photo chroma/masks partly working | Reverse, video masks, blending, transitions, tracking, full parity | OPEN |
 | P4 Audio studio | Independent audio lanes and volume in P2 | Voiceover, envelopes, ducking, timing/pitch, noise tools | OPEN |
-| P5 Visual/colour | Basic looks and some photo/text effects | HDR, colour controls, licensed visuals/assets, all render parity | OPEN |
-| P6 AI studio | Adapter and security architecture | Connected providers, consent, jobs, privacy, contract tests | OPEN |
+| P5 Visual/colour | Offline looks, photo/text tools and original effects | HDR/colour parity, complete offline effects/templates, manual face retouch/reshape, device acceptance | OPEN |
+| P6 AI/online studio | Future provider/security architecture | Separate owner-approved AI/online release | DEFERRED — NOT AN OFFLINE-RELEASE GATE |
 | P7 Export/performance | Experimental H264/Media3 export | Codecs, FPS/bitrate, resume, device matrix, stress tests | OPEN |
 | P8 Security/polish | Initial permissions and local storage guards | Security review, accessibility, privacy and stability | OPEN |
-| P9 Final parity/release | Requirements recorded | Full reference-feature acceptance and owner-approved signed release | OPEN |
+| P9 Offline parity/release | Non-AI/offline requirements recorded | In-scope offline feature acceptance and owner-approved signed release | OPEN |
 
 ## P0 — Reference inventory, project foundations
 
@@ -227,6 +227,7 @@ This map groups implementation by shared dependencies so features are developed 
 - [ ] **P5-06a** Feature-first source: strict local SRT parsing, import as persistent TEXT clips with overlapping lanes, document export and interactive editor captions panel. Source [d9d654cd](https://github.com/manbir6-ux/TongCut/commit/d9d654cd4ae81505e48c53b672742a848a0f36ae) and editor integration [40762572](https://github.com/manbir6-ux/TongCut/commit/40762572b063aab2d136107ab5030717fabf3a0d). Real-device and boundary input audit still needed.
 - [ ] **P5-07** Original/licensed templates, export visuals and screenshot/video comparisons on multiple devices.
 - [ ] **P5-07a (source; not yet tested)** Added a small reusable set of original TongCut caption looks to advance native template authoring without bundling third-party assets. Full multi-layer templates, licensed media-resource browsing, export visual comparisons and device acceptance remain open; no tests/build were run.
+- [ ] **P5-08 Offline face retouch/reshape (planned; manual and local-first)** Build adjustable offline face-region placement and non-generative reshape/retouch controls (such as face width, jaw, nose, eyes, and skin softness) with project persistence, undo, real-time preview, and matching export. Do not depend on remote inference, accounts, network assets, or third-party proprietary models. Automated face detection/tracking is not assumed; its scope must be separately accepted if it requires AI. This item is entirely open until implementation, bounded-performance checks, preview/export parity, and owner-device acceptance pass.
 
 ## P6 — AI studio and APIs
 
