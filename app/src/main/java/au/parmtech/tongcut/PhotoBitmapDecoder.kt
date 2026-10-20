@@ -1,5 +1,7 @@
 package au.parmtech.tongcut
 
+import au.parmtech.tongcut.beauty.ManualFaceWarpRenderer
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -78,8 +80,17 @@ internal object PhotoBitmapDecoder {
         require(width.toLong() * height <= MAX_SIDE.toLong() * MAX_SIDE * 4) {
             "Photo exceeds allocated bitmap safety bound"
         }
-        val pixels = IntArray(width * height)
+        var pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val beauty = effects.manualFaceBeauty
+        if (!beauty.isNeutral) {
+            require(width.toLong() * height <= ManualFaceWarpRenderer.MAX_PIXELS) {
+                "Manual face retouch supports images up to 1.5 megapixels"
+            }
+            pixels = ManualFaceWarpRenderer.render(
+                width, height, pixels, beauty.landmarks, beauty.settings
+            )
+        }
         val blurSource = if (effects.blur > 0f || effects.sharpen > 0f) pixels.copyOf() else pixels
         // Construct once per bitmap, not once per pixel; old callers remain neutral by default.
         val effectiveColorLutProfile = colorLutProfile?.takeIf { effects.applyColorLut }?.copy(
