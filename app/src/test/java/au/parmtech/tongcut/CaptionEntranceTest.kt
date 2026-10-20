@@ -30,6 +30,28 @@ class CaptionEntranceTest {
         }
     }
 
+    @Test fun newOfflineEntrancesHaveDistinctStartingAndMidpointPoses() {
+        val zoomStart = CaptionEntranceMotion.at(
+            CaptionEntrance.ZOOM, 0L, 1_000_000L
+        )
+        val dropStart = CaptionEntranceMotion.at(
+            CaptionEntrance.DROP, 0L, 1_000_000L
+        )
+        val bounceStart = CaptionEntranceMotion.at(
+            CaptionEntrance.BOUNCE, 0L, 1_000_000L
+        )
+        assertEquals(0.55f, zoomStart.scale, 0f)
+        assertEquals(0.18f, dropStart.y, 0f)
+        assertEquals(0.78f, bounceStart.scale, 0.001f)
+        assertTrue(listOf(zoomStart, dropStart, bounceStart).distinct().size == 3)
+
+        for (preset in listOf(CaptionEntrance.ZOOM, CaptionEntrance.DROP, CaptionEntrance.BOUNCE)) {
+            assertEquals(CaptionEntrancePose(), CaptionEntranceMotion.at(
+                preset, CaptionEntranceMotion.DURATION_US, 1_000_000L
+            ))
+        }
+    }
+
     @Test fun shortCaptionsStillFinishEntranceAtTheirEnd() {
         assertEquals(CaptionEntrancePose(), CaptionEntranceMotion.at(
             CaptionEntrance.POP, 120_000L, 120_000L

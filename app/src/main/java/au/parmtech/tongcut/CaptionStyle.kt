@@ -20,7 +20,10 @@ enum class CaptionFont(val title: String, val androidFamily: String) {
 
 enum class CaptionAlignment(val title: String) { LEFT("Left"), CENTER("Center"), RIGHT("Right") }
 enum class CaptionPlacement(val title: String) { TOP("Top"), CENTER("Center"), BOTTOM("Bottom") }
-enum class CaptionEntrance(val title: String) { NONE("None"), FADE("Fade"), POP("Pop"), RISE("Rise") }
+enum class CaptionEntrance(val title: String) {
+    NONE("None"), FADE("Fade"), POP("Pop"), RISE("Rise"),
+    BOUNCE("Bounce"), ZOOM("Zoom"), DROP("Drop")
+}
 
 /** Small original TongCut looks composed only from the editor's built-in caption controls. */
 enum class CaptionLook(
