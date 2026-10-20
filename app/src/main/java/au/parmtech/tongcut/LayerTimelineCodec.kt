@@ -2,6 +2,10 @@ package au.parmtech.tongcut
 
 import org.json.JSONArray
 import org.json.JSONObject
+import au.parmtech.tongcut.beauty.FacePoint
+import au.parmtech.tongcut.beauty.ManualBeautySettings
+import au.parmtech.tongcut.beauty.ManualFaceBeauty
+import au.parmtech.tongcut.beauty.ManualFaceLandmarks
 
 /**
  * Schema v1 for layered state nested inside ProjectStore schema v2.
@@ -9,7 +13,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 26)
+        put("schema", 27)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -136,7 +140,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..26) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..27) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
