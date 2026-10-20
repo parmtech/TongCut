@@ -63,7 +63,11 @@ data class PhotoEffects(
     /** Deterministic fine monochrome grain strength, 0..1. */
     val grain: Float = 0f,
     /** Bounded radial edge darkening, 0..1; zero is a pixel-identical no-op. */
-    val vignette: Float = 0f
+    val vignette: Float = 0f,
+    /** Offline IMAGE LUT switch; persistence is owned by A03 and defaults off. */
+    val applyColorLut: Boolean = false,
+    /** Per-layer multiplier applied to the selected project LUT's own strength. */
+    val colorLutStrength: Float = 1f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -89,6 +93,7 @@ data class PhotoEffects(
         require(sharpen.isFinite() && sharpen in 0f..1f)
         require(grain.isFinite() && grain in 0f..1f)
         require(vignette.isFinite() && vignette in 0f..1f)
+        require(colorLutStrength.isFinite() && colorLutStrength in 0f..1f)
     }
 }
 
@@ -260,7 +265,7 @@ object PhotoMatte {
     }
 
     fun applyAlpha(pixelArgb: Int, x: Int, y: Int, width: Int, height: Int,
-                   settings: PhotoEffects): Int {
+                   settings: PhotoEffects, colorLutProfile: ColorLutProfile? = null): Int {
         val current = pixelArgb ushr 24
         if (current == 0) return pixelArgb
         val mask = maskAlpha(
@@ -274,9 +279,11 @@ object PhotoMatte {
             1f - mask else mask
         val next = (current * shaped * chroma + 0.5f).toInt().coerceIn(0, 255)
         val corrected = settings.chroma?.let { despill(pixelArgb, it) } ?: pixelArgb
-        val graded = vignettePixel(settings.colorGrade.apply(corrected),
-            x, y, width, height, settings.vignette)
-        return (graded and 0x00FFFFFF) or (next shl 24)
+        val graded = settings.colorGrade.apply(corrected)
+        val lutted = if (settings.applyColorLut && colorLutProfile != null)
+            ColorLutOverlayTransform.applyArgb(graded, colorLutProfile) else graded
+        val vignetted = vignettePixel(lutted, x, y, width, height, settings.vignette)
+        return (vignetted and 0x00FFFFFF) or (next shl 24)
     }
 
     /** Darken toward the frame corners while preserving alpha and neutral identity. */
