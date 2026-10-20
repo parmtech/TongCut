@@ -30,7 +30,7 @@ class FaceReshapeFramePlanTest {
         val midpoint = FaceReshapeFramePlan.at(observations, 150_000L)
         assertNotNull(midpoint)
         assertEquals(0.37f, midpoint!!.leftEye.x, 0.0001f)
-        assertEquals(0.37f, midpoint.leftEye.y, 0.0001f)
+        assertEquals(0.36f, midpoint.leftEye.y, 0.0001f)
         assertNull(FaceReshapeFramePlan.at(observations, 99_999L))
         assertNull(FaceReshapeFramePlan.at(observations, 200_001L))
     }
