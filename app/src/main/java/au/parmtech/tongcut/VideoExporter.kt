@@ -200,7 +200,8 @@ class VideoExporter(private val context: Context) {
             // Media3 composites in reverse sequence order, so PiP video lanes MUST
             // be registered before the fully opaque main video, then audio-only lanes.
             allSequences.addAll(VisualComposition.sequences(
-                videoLanes, baseVideoDurationUs, overlayLayers, options.maxFrameRate
+                videoLanes, baseVideoDurationUs, overlayLayers, options.maxFrameRate,
+                options.colorLutProfile
             ))
             reverseVideoSequence?.let(allSequences::add)
             allSequences += sequence
