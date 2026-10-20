@@ -174,6 +174,12 @@ internal fun LayerTools(
                                 placements.size]
                             style(current.copy(placement = next))
                         }
+                        SmallLayerButton("Entrance: ${current.entrance.title}") {
+                            val presets = CaptionEntrance.entries
+                            val next = presets[(presets.indexOf(current.entrance) + 1) %
+                                presets.size]
+                            style(current.copy(entrance = next))
+                        }
                     }
                     SmallLayerButton(
                         if (layer.id in validGroup) "✓ Group" else "+ Group"

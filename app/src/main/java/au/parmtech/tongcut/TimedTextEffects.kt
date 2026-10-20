@@ -71,9 +71,14 @@ object TimedTextEffects {
                     override fun getText(presentationTimeUs: Long): SpannableString = styled
 
                     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings {
+                        val relativeUs = (presentationTimeUs - layer.startUs)
+                            .coerceIn(0L, layer.durationUs)
                         val pose = MotionCurve.at(
                             layer.motion,
-                            (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
+                            relativeUs
+                        )
+                        val entrance = CaptionEntranceMotion.at(
+                            layer.captionStyle.entrance, relativeUs, layer.durationUs
                         )
                         val alignmentOffset = when (layer.captionStyle.alignment) {
                             CaptionAlignment.LEFT ->
@@ -95,19 +100,19 @@ object TimedTextEffects {
                         return StaticOverlaySettings.Builder()
                             .setBackgroundFrameAnchor(
                                 (pose.x + alignmentOffset).coerceIn(-1f, 1f),
-                                (pose.y + placementOffsetY).coerceIn(-1f, 1f)
+                                (pose.y + placementOffsetY + entrance.y).coerceIn(-1f, 1f)
                             )
                             .setOverlayFrameAnchor(overlayAnchorX, 0f)
                             .setScale(
-                                pose.scale * layer.captionStyle.size,
-                                pose.scale * layer.captionStyle.size
+                                pose.scale * layer.captionStyle.size * entrance.scale,
+                                pose.scale * layer.captionStyle.size * entrance.scale
                             )
                             .setRotationDegrees(pose.rotation)
                             .setAlphaScale(
                                 if (visible && presentationTimeUs >= layer.startUs &&
                                     presentationTimeUs < layer.endUs) {
-                                    pose.opacity * layer.fade.alphaAt(
-                                        presentationTimeUs-layer.startUs,layer.durationUs)
+                                    pose.opacity * entrance.alpha * layer.fade.alphaAt(
+                                        relativeUs,layer.durationUs)
                                 } else 0f
                             ).build()
                     }
