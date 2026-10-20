@@ -79,6 +79,7 @@ class VideoExporter(private val context: Context) {
             if (options.colorGrade != ColorGrade()) {
                 clipEffects += ColorGradeEffect(options.colorGrade)
             }
+            options.colorLutProfile?.let { clipEffects += it.toMedia3Effect() }
             // Apply common framing after concatenation, not to each clip independently.
             val compositionEffects = mutableListOf<androidx.media3.common.Effect>()
             options.ratio.ratio?.let { ratio ->

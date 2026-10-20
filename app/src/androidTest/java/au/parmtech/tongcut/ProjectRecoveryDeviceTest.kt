@@ -20,7 +20,8 @@ class ProjectRecoveryDeviceTest {
             title="Recover P2 layers",
             clips=listOf(DraftClip("content://synthetic/main","Main",10_000)),
             exportAudioBitrateBps=192_000,
-            exportMaxFrameRate=60
+            exportMaxFrameRate=60,
+            colorLutProfile=ColorLutProfile("Recovery LUT",2,List(8) { 0xff808080.toInt() },0.6f)
         )
         draft = LayerEdits.addText(draft, 1_000L, "Offline title")
         draft = LayerEdits.addAudio(draft,2_000L,"content://synthetic/audio",5_000L)
@@ -55,7 +56,7 @@ class ProjectRecoveryDeviceTest {
         } finally { store.delete() }
     }
 
-    @Test fun projectSchemaSevenPersistsFrameRateAndLegacyDefaultsToThirty() {
+    @Test fun projectSchemaEightPersistsFrameRateAndLutAndLegacyDefaultsSafely() {
         val id="p7-frame-rate-migration"
         val store=ProjectStore(app,id)
         store.delete()
@@ -63,19 +64,23 @@ class ProjectRecoveryDeviceTest {
         try {
             store.save(layeredProject())
             val current=JSONObject(jsonFile.readText())
-            assertEquals(7,current.getInt("schema"))
+            assertEquals(8,current.getInt("schema"))
             assertEquals(60,current.getInt("exportMaxFrameRate"))
-            assertEquals(60,ProjectStore(app,id).load()!!.exportMaxFrameRate)
+            val loaded=ProjectStore(app,id).load()!!
+            assertEquals(60,loaded.exportMaxFrameRate)
+            assertEquals(layeredProject().colorLutProfile,loaded.colorLutProfile)
 
             current.put("schema",6).remove("exportMaxFrameRate")
             jsonFile.writeText(current.toString())
             assertEquals(ExportFrameRate.DEFAULT,
                 ProjectStore(app,id).load()!!.exportMaxFrameRate)
+            assertNull(ProjectStore(app,id).load()!!.colorLutProfile)
 
             current.put("schema",7).put("exportMaxFrameRate",120)
             jsonFile.writeText(current.toString())
             assertEquals(ExportFrameRate.DEFAULT,
                 ProjectStore(app,id).load()!!.exportMaxFrameRate)
+            assertNull(ProjectStore(app,id).load()!!.colorLutProfile)
         } finally { store.delete() }
     }
 

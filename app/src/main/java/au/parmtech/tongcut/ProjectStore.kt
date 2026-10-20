@@ -32,7 +32,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..7) { "Unsupported project schema" }
+        require(schema in 1..8) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -61,6 +61,8 @@ class ProjectStore(context: Context, projectId: String? = null) {
                 .takeIf { it in 64_000..320_000 } ?: 128_000,
             exportMaxFrameRate = root.optInt("exportMaxFrameRate", ExportFrameRate.DEFAULT)
                 .takeIf { it in ExportFrameRate.choices } ?: ExportFrameRate.DEFAULT,
+            colorLutProfile = if (schema >= 8)
+                ColorLutProfileCodec.decode(root.optJSONObject("colorLut")) else null,
             canvas = CanvasRatio.entries.firstOrNull { it.name == root.optString("canvas") } ?: CanvasRatio.SOURCE,
             shortSidePixels = root.optInt("shortSide", 1080).takeIf {
                 it in listOf(720, 1080, 2160)
@@ -75,7 +77,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 7)
+            put("schema", 8)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -84,6 +86,7 @@ class ProjectStore(context: Context, projectId: String? = null) {
             put("exportVideoBitrateBps", project.exportVideoBitrateBps)
             put("exportAudioBitrateBps", project.exportAudioBitrateBps)
             put("exportMaxFrameRate", project.exportMaxFrameRate)
+            project.colorLutProfile?.let { put("colorLut", ColorLutProfileCodec.encode(it)) }
             put("canvas", project.canvas.name)
             put("shortSide", project.shortSidePixels)
             put("mute", project.muteOriginalAudio)

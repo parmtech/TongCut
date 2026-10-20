@@ -50,7 +50,8 @@ data class EditorDraft(
     // Secondary audio/video/text/image lanes; legacy primary clips stay unchanged.
     val layers: LayerTimeline = LayerTimeline(),
     val exportAudioBitrateBps: Int = 128_000,
-    val exportMaxFrameRate: Int = ExportFrameRate.DEFAULT
+    val exportMaxFrameRate: Int = ExportFrameRate.DEFAULT,
+    val colorLutProfile: ColorLutProfile? = null
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
@@ -120,7 +121,8 @@ data class EditorDraft(
         videoCodec = exportVideoCodec,
         videoBitrateBps = exportVideoBitrateBps,
         audioBitrateBps = exportAudioBitrateBps,
-        maxFrameRate = exportMaxFrameRate
+        maxFrameRate = exportMaxFrameRate,
+        colorLutProfile = colorLutProfile
     )
 }
 

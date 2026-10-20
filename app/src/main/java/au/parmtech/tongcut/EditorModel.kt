@@ -40,7 +40,9 @@ data class ExportOptions(
     val videoBitrateBps: Int = 8_000_000,
     val audioBitrateBps: Int = 128_000,
     /** Maximum output frame rate; never up-converts slower source video. */
-    val maxFrameRate: Int = ExportFrameRate.DEFAULT
+    val maxFrameRate: Int = ExportFrameRate.DEFAULT,
+    /** Optional imported SDR 3D LUT, shared by preview and primary-footage export. */
+    val colorLutProfile: ColorLutProfile? = null
 ) {
     init {
         require(videoBitrateBps in 1_000_000..50_000_000)
