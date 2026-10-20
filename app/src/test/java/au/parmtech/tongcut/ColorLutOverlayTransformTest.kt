@@ -29,7 +29,7 @@ class ColorLutOverlayTransformTest {
         """.trimIndent()).copy(strength = 0.5f)
         val output = ColorLutOverlayTransform.applyArgb(0x22336699, invert)
         assertEquals(0x22, (output ushr 24) and 0xff)
-        assertEquals(0x77, (output ushr 16) and 0xff)
+        assertEquals(0x80, (output ushr 16) and 0xff)
         assertEquals(0x80, (output ushr 8) and 0xff)
         assertEquals(0x80, output and 0xff)
     }
