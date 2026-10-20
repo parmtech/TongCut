@@ -1465,7 +1465,8 @@ internal fun VideoEditorScreen(
                                     previewDraft = active.copy(colorGrade = grade.copy(curves =
                                         grade.curves.withCurve(selectedCurveChannel, next)))
                                 }
-                            }
+                            },
+                            onChangeFinished = ::commitGradePreview
                         )
                         if (curve.points.size > 2) {
                             val pointIndex = selectedCurvePoint.coerceIn(1,
@@ -1498,6 +1499,7 @@ internal fun VideoEditorScreen(
                                     previewDraft = active.copy(colorGrade =
                                         grade.copy(curves = grade.curves.withCurve(
                                             selectedCurveChannel, next)))
+                                    commitGradePreview()
                                     selectedCurvePoint = (pointIndex - 1).coerceAtLeast(1)
                                 }
                             }
@@ -1509,6 +1511,7 @@ internal fun VideoEditorScreen(
                                 val next = curve.addMidpoint(after)
                                 previewDraft = active.copy(colorGrade = grade.copy(curves =
                                     grade.curves.withCurve(selectedCurveChannel, next)))
+                                commitGradePreview()
                                 selectedCurvePoint = after + 1
                             }
                         }

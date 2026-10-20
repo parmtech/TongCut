@@ -26,11 +26,13 @@ internal fun ToneCurveGraph(
     channel: Int,
     onSelectPoint: (Int) -> Unit,
     onMovePoint: (Int, Float, Float) -> Unit,
+    onChangeFinished: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val currentCurve = rememberUpdatedState(curve)
     val selectPoint = rememberUpdatedState(onSelectPoint)
     val movePoint = rememberUpdatedState(onMovePoint)
+    val changeFinished = rememberUpdatedState(onChangeFinished)
     val curveColor = when (channel) {
         1 -> Color(0xFFFF7777)
         2 -> Color(0xFF72E6A1)
@@ -43,6 +45,7 @@ internal fun ToneCurveGraph(
             .semantics { contentDescription = "Tone curve graph; drag an interior point to adjust" }
             .pointerInput(curve.points.size) {
                 var activePoint: Int? = null
+                var changed = false
                 detectDragGestures(
                     onDragStart = { position ->
                         val points = currentCurve.value.points
@@ -64,9 +67,18 @@ internal fun ToneCurveGraph(
                         val x = (change.position.x / size.width).coerceIn(0f, 1f)
                         val y = (1f - change.position.y / size.height).coerceIn(0f, 1f)
                         movePoint.value(index, x, y)
+                        changed = true
                     },
-                    onDragEnd = { activePoint = null },
-                    onDragCancel = { activePoint = null }
+                    onDragEnd = {
+                        activePoint = null
+                        if (changed) changeFinished.value()
+                        changed = false
+                    },
+                    onDragCancel = {
+                        activePoint = null
+                        if (changed) changeFinished.value()
+                        changed = false
+                    }
                 )
             }
     ) {
