@@ -641,8 +641,13 @@ internal fun VideoEditorScreen(
     DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
     DisposableEffect(reverseAudioPlayer) { onDispose { reverseAudioPlayer.release() } }
     val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
+    val reverseTarget = editTimeline.reverseTargetAt(playMs)
+    val reverseClipIndex = reverseTarget?.clipIndex
+    val reverseClip = reverseTarget?.clip
+    val reverseClipStartMs = reverseTarget?.startMs
 
-    LaunchedEffect(clip?.sourceUri, clip?.inMs, clip?.outMs, clip?.reverseVideo) {
+    LaunchedEffect(reverseClipIndex, reverseClip?.sourceUri, reverseClip?.inMs,
+        reverseClip?.outMs, reverseClip?.reverseVideo) {
         val previous = reversePreviewSession
         reversePreviewSession = null
         withContext(NonCancellable + Dispatchers.IO) { previous?.close() }
@@ -650,9 +655,9 @@ internal fun VideoEditorScreen(
         val priorFrame = reversePreviewFrame
         reversePreviewFrame = null
         priorFrame?.recycle()
-        if (clip?.reverseVideo != true) return@LaunchedEffect
+        if (reverseClip?.reverseVideo != true) return@LaunchedEffect
 
-        val selectedClip = clip ?: return@LaunchedEffect
+        val selectedClip = reverseClip
         var opened: ReversePreviewSession? = null
         try {
             opened = ReversePreviewSession.openCancellable(context, selectedClip)
@@ -680,8 +685,10 @@ internal fun VideoEditorScreen(
     }
 
     LaunchedEffect(
-        reversePreviewSession, clip?.sourceUri, clip?.inMs, clip?.outMs,
-        clip?.reverseVideo, clip?.sourceAudioMuted, active.muteOriginalAudio
+        reversePreviewSession, reverseClipIndex, reverseClip?.sourceUri,
+        reverseClip?.inMs, reverseClip?.outMs, reverseClip?.reverseVideo,
+        reverseClip?.editedDurationMs, reverseClip?.sourceAudioMuted,
+        reverseClipStartMs, active.muteOriginalAudio
     ) {
         val generation = reverseAudioGeneration.incrementAndGet()
         reverseAudioReady = false
@@ -689,7 +696,7 @@ internal fun VideoEditorScreen(
         var preparedAudio: File? = null
         try {
             val session = reversePreviewSession
-            val selectedClip = clip
+            val selectedClip = reverseClip
             if (session == null || selectedClip == null || !selectedClip.reverseVideo ||
                 selectedClip.sourceAudioMuted || active.muteOriginalAudio) return@LaunchedEffect
             val source = Uri.parse(selectedClip.sourceUri)
@@ -831,21 +838,21 @@ internal fun VideoEditorScreen(
     }
 
     LaunchedEffect(
-        reversePreviewSession, clip?.sourceUri, clip?.inMs, clip?.outMs,
-        clip?.reverseVideo, clip?.sourceAudioMuted, active.muteOriginalAudio,
-        active.selectedIndex, reverseAudioReady, playing
+        reversePreviewSession, reverseClipIndex, reverseClip?.sourceUri,
+        reverseClip?.inMs, reverseClip?.outMs, reverseClip?.reverseVideo,
+        reverseClip?.editedDurationMs, reverseClip?.sourceAudioMuted,
+        reverseClipStartMs, active.muteOriginalAudio,
+        reverseAudioReady, playing
     ) {
         val session = reversePreviewSession
         snapshotFlow { playMs }.collect { currentPlayMs ->
-            val selectedStartMs = active.clips.getOrNull(active.selectedIndex)?.let {
-                editTimeline.startOf(active.selectedIndex)
-            } ?: 0L
-            val selectedEndMs = selectedStartMs + (clip?.editedDurationMs ?: 0L)
-            val showingReverse = clip?.reverseVideo == true &&
+            val selectedStartMs = reverseClipStartMs ?: 0L
+            val selectedEndMs = selectedStartMs + (reverseClip?.editedDurationMs ?: 0L)
+            val showingReverse = reverseClip?.reverseVideo == true &&
                 currentPlayMs >= selectedStartMs && currentPlayMs < selectedEndMs
             val reverseLocalMs = (currentPlayMs - selectedStartMs).coerceAtLeast(0L)
             if (!showingReverse || !reverseAudioReady || active.muteOriginalAudio ||
-                clip?.sourceAudioMuted == true || session == null) {
+                reverseClip?.sourceAudioMuted == true || session == null) {
                 reverseAudioPlayer.pause()
             } else {
                 if (kotlin.math.abs(reverseAudioPlayer.currentPosition - reverseLocalMs) > 250L) {
@@ -857,8 +864,8 @@ internal fun VideoEditorScreen(
     }
 
     LaunchedEffect(
-        reversePreviewSession, clip?.sourceUri, clip?.inMs, clip?.outMs,
-        clip?.reverseVideo, active.selectedIndex
+        reversePreviewSession, reverseClipIndex, reverseClip?.sourceUri,
+        reverseClip?.inMs, reverseClip?.outMs, reverseClip?.reverseVideo
     ) {
         val session = reversePreviewSession
         snapshotFlow { playMs }.collect {
@@ -866,11 +873,9 @@ internal fun VideoEditorScreen(
             // Wait for the one in-flight worker, then honor the latest playhead value.
             while (reversePreviewDecodeBusy.get()) delay(16)
             val currentPlayMs = playMs
-            val selectedStartMs = active.clips.getOrNull(active.selectedIndex)?.let {
-                editTimeline.startOf(active.selectedIndex)
-            } ?: 0L
-            val selectedEndMs = selectedStartMs + (clip?.editedDurationMs ?: 0L)
-            val showingReverse = clip?.reverseVideo == true &&
+            val selectedStartMs = reverseClipStartMs ?: 0L
+            val selectedEndMs = selectedStartMs + (reverseClip?.editedDurationMs ?: 0L)
+            val showingReverse = reverseClip?.reverseVideo == true &&
                 currentPlayMs >= selectedStartMs && currentPlayMs < selectedEndMs
             if (!showingReverse || session == null) {
                 if (!showingReverse) {
@@ -1026,9 +1031,7 @@ internal fun VideoEditorScreen(
             ) {
             if (clip == null) {
                 Text("Add a video to begin editing", color = Color.LightGray)
-            } else if (clip.reverseVideo &&
-                playMs >= editTimeline.startOf(active.selectedIndex) &&
-                playMs < editTimeline.startOf(active.selectedIndex) + clip.editedDurationMs) {
+            } else if (reverseClip != null) {
                 val bitmap = reversePreviewFrame
                 if (bitmap != null) {
                     val quarterTurned = active.primaryQuarterTurns % 2 != 0

@@ -1,3 +1,5 @@
+Warning: fs was declared with const; use let for reassignable variables.
+Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import org.junit.Assert.*
@@ -50,6 +52,23 @@ class SequentialTimelineTest {
             assertEquals(index, point.clipIndex)
             assertEquals(clip.inMs + local, point.sourceMs)
         }
+    }
+
+    @Test fun reverseTargetFollowsPlayheadAcrossClipsAndUsesHalfOpenBoundaries() {
+        val forward = first
+        val reverse = second.copy(reverseVideo = true)
+        val timeline = SequentialTimeline(listOf(forward, reverse, third))
+
+        assertNull(timeline.reverseTargetAt(6_999))
+        val atReverseStart = timeline.reverseTargetAt(7_000)!!
+        assertEquals(1, atReverseStart.clipIndex)
+        assertEquals(7_000L, atReverseStart.startMs)
+        assertEquals(0L, atReverseStart.localMs)
+
+        val insideReverse = timeline.reverseTargetAt(10_999)!!
+        assertEquals(1, insideReverse.clipIndex)
+        assertEquals(3_999L, insideReverse.localMs)
+        assertNull(timeline.reverseTargetAt(11_000))
     }
 
     @Test(expected = IllegalArgumentException::class)

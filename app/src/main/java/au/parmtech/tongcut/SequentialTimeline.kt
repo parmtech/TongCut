@@ -1,3 +1,5 @@
+Warning: fs was declared with const; use let for reassignable variables.
+Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 /**
@@ -11,6 +13,13 @@ data class TimelinePosition(
     val offsetMs: Long,
     val sourceMs: Long,
     val timelineMs: Long
+)
+
+data class ReverseTimelineTarget(
+    val clipIndex: Int,
+    val clip: DraftClip,
+    val startMs: Long,
+    val localMs: Long
 )
 
 class SequentialTimeline(val clips: List<DraftClip>) {
@@ -52,6 +61,19 @@ class SequentialTimeline(val clips: List<DraftClip>) {
         val clip = clips[index]
         val local = (t - offsets[index]).coerceIn(0L, clip.editedDurationMs)
         return TimelinePosition(index, local, clip.inMs + local, t)
+    }
+
+    /** Reverse preview follows the playhead; clip selection remains an inspector concern. */
+    fun reverseTargetAt(timeMs: Long): ReverseTimelineTarget? {
+        val point = pointAt(timeMs) ?: return null
+        val clip = clips[point.clipIndex]
+        if (!clip.reverseVideo || point.offsetMs >= clip.editedDurationMs) return null
+        return ReverseTimelineTarget(
+            clipIndex = point.clipIndex,
+            clip = clip,
+            startMs = startOf(point.clipIndex),
+            localMs = point.offsetMs
+        )
     }
 
     fun timeOf(index: Int, localMs: Long): Long {
