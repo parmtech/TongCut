@@ -57,8 +57,22 @@ class ManualFaceRetouchTest {
         assertEquals(ManualFaceRetouch(), neutral.copy(centerX = 0.5f, centerY = 0.42f,
             radiusX = 0.23f, radiusY = 0.30f))
 
+        val expectedValues = mapOf(
+            ManualFaceRetouchPreset.NEUTRAL to listOf(0f, 0f, 0f, 0f, 0f),
+            ManualFaceRetouchPreset.NATURAL to listOf(0.05f, 0.035f, 0f, 0.04f, 0.12f),
+            ManualFaceRetouchPreset.SCULPT to listOf(0.13f, 0.10f, 0.025f, 0.08f, 0.10f),
+            ManualFaceRetouchPreset.SOFT_FOCUS to listOf(0f, 0f, 0f, 0f, 0.48f),
+            ManualFaceRetouchPreset.OPEN_EYES to listOf(0f, 0f, 0f, 0.16f, 0.08f),
+            ManualFaceRetouchPreset.FULLER to listOf(-0.12f, -0.05f, 0f, 0.03f, 0.08f)
+        )
         ManualFaceRetouchPreset.entries.forEach { preset ->
             val adjusted = preset.applyTo(region)
+            val expected = expectedValues.getValue(preset)
+            assertEquals(expected[0], adjusted.faceWidth, 0f)
+            assertEquals(expected[1], adjusted.jawWidth, 0f)
+            assertEquals(expected[2], adjusted.noseWidth, 0f)
+            assertEquals(expected[3], adjusted.eyeScale, 0f)
+            assertEquals(expected[4], adjusted.skinSoftening, 0f)
             assertEquals(region.centerX, adjusted.centerX, 0f)
             assertEquals(region.centerY, adjusted.centerY, 0f)
             assertEquals(region.radiusX, adjusted.radiusX, 0f)
