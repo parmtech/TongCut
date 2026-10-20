@@ -180,6 +180,15 @@ class ManualFaceRetouchTest {
         assertTrue(kotlin.math.abs(portrait.first.toFloat() / portrait.second - 9f / 16f) < 0.01f)
     }
 
+    @Test fun stillPhotoRetouchCanUseTheFullBoundedDecodeResolution() {
+        val cap = PhotoBitmapDecoder.MAX_SIDE * PhotoBitmapDecoder.MAX_SIDE
+        val square = ManualFaceRetouchBitmapPreview.previewSize(1024, 1024, cap)
+        assertEquals(1024, square.first)
+        assertEquals(1024, square.second)
+        val bounded = ManualFaceRetouchBitmapPreview.previewSize(4_000, 3_000, cap)
+        assertTrue(bounded.first.toLong() * bounded.second <= cap.toLong())
+    }
+
     @Test fun outOfRangeAndNonFiniteControlsAreRejected() {
         assertTrue(runCatching { ManualFaceRetouch(centerX = Float.NaN) }.isFailure)
         assertTrue(runCatching { ManualFaceRetouch(radiusY = 0f) }.isFailure)

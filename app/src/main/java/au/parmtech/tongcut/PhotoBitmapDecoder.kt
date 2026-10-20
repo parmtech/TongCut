@@ -66,11 +66,24 @@ internal object PhotoBitmapDecoder {
             }
             else -> false
         }
-        val bitmap = if (transform) {
+        var bitmap = if (transform) {
             Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
                 .also { if (it !== decoded) decoded.recycle() }
         } else decoded
-        if (effects == PhotoEffects()) return bitmap
+        if (effects.faceRetouch.isActive) {
+            val source = bitmap
+            bitmap = try {
+                ManualFaceRetouchBitmapPreview.render(
+                    source, effects.faceRetouch, maxPixels = MAX_SIDE * MAX_SIDE
+                )
+            } catch (failure: Throwable) {
+                if (!source.isRecycled) source.recycle()
+                throw failure
+            }
+            if (bitmap !== source && !source.isRecycled) source.recycle()
+        }
+        // Retouch is applied before alpha/matte work to avoid sampling across transparent edges.
+        if (effects.copy(faceRetouch = ManualFaceRetouch()) == PhotoEffects()) return bitmap
 
         val width = bitmap.width
         val height = bitmap.height

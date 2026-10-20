@@ -120,7 +120,7 @@ internal object ManualFaceRetouchCodec {
     }
 }
 
-/** Local primary-footage face reshape and whole-oval edge-aware softening for SDR video. */
+/** Local face reshape for primary SDR footage and manually edited secondary VIDEO/IMAGE layers. */
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class ManualFaceRetouchEffect(
     private val settings: ManualFaceRetouch

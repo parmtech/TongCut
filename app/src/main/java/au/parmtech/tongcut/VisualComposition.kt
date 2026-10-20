@@ -71,6 +71,9 @@ object VisualComposition {
                             // Each source input has its own GL matte before layering.
                             // Unsupported HDR fails explicitly; never drop the authored matte.
                             val videoEffects = buildList {
+                                if (effects.faceRetouch.isActive) {
+                                    add(ManualFaceRetouchEffect(effects.faceRetouch))
+                                }
                                 add(VideoMatteEffect(effects))
                                 if (effects.colorGrade.hslBands != DEFAULT_HSL_BANDS ||
                                     effects.colorGrade.curves != ColorCurves()) {

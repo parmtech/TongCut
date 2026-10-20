@@ -395,10 +395,113 @@ internal fun LayerTools(
                                 LayerEdits.setVideoEffects(draft, layer.id, next)
                             }
                         if (kind == LayerKind.VIDEO && layer.photoEffects != PhotoEffects()) {
-                            Text("Video matte uses SDR GPU preview/export; verify on your phone",
+                            Text("Video matte/retouch uses SDR GPU preview/export; verify on your phone",
                                 color = Color(0xFFFFC987), fontSize = 10.sp)
                         }
                         val fx = layer.photoEffects
+                        val face = fx.faceRetouch
+                        fun editFace(update: (ManualFaceRetouch) -> ManualFaceRetouch) {
+                            runCatching {
+                                applyMatte(fx.copy(faceRetouch = update(face)))
+                            }.onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Face retouch edit failed") }
+                        }
+                        Text("Offline face reshape · manual region · no detection",
+                            color = Color.LightGray, fontSize = 11.sp)
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                            ManualFaceRetouchPreset.entries.forEach { preset ->
+                                SmallLayerButton(preset.label) {
+                                    editFace { preset.applyTo(it) }
+                                }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                            SmallLayerButton("Region X −") {
+                                editFace { it.copy(centerX = (it.centerX - 0.02f).coerceAtLeast(
+                                    it.radiusX + ManualFaceRetouch.FRAME_GUARD)) }
+                            }
+                            SmallLayerButton("Region X +") {
+                                editFace { it.copy(centerX = (it.centerX + 0.02f).coerceAtMost(
+                                    1f - it.radiusX - ManualFaceRetouch.FRAME_GUARD)) }
+                            }
+                            SmallLayerButton("Region Y −") {
+                                editFace { it.copy(centerY = (it.centerY - 0.02f).coerceAtLeast(
+                                    it.radiusY + ManualFaceRetouch.FRAME_GUARD)) }
+                            }
+                            SmallLayerButton("Region Y +") {
+                                editFace { it.copy(centerY = (it.centerY + 0.02f).coerceAtMost(
+                                    1f - it.radiusY - ManualFaceRetouch.FRAME_GUARD)) }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                            SmallLayerButton("Region width −") {
+                                editFace { current ->
+                                    val radius = (current.radiusX - 0.02f).coerceAtLeast(0.08f)
+                                    current.copy(radiusX = radius, centerX = current.centerX.coerceIn(
+                                        radius + ManualFaceRetouch.FRAME_GUARD,
+                                        1f - radius - ManualFaceRetouch.FRAME_GUARD))
+                                }
+                            }
+                            SmallLayerButton("Region width +") {
+                                editFace { current ->
+                                    val radius = (current.radiusX + 0.02f).coerceAtMost(0.48f)
+                                    current.copy(radiusX = radius, centerX = current.centerX.coerceIn(
+                                        radius + ManualFaceRetouch.FRAME_GUARD,
+                                        1f - radius - ManualFaceRetouch.FRAME_GUARD))
+                                }
+                            }
+                            SmallLayerButton("Region height −") {
+                                editFace { current ->
+                                    val radius = (current.radiusY - 0.02f).coerceAtLeast(0.08f)
+                                    current.copy(radiusY = radius, centerY = current.centerY.coerceIn(
+                                        radius + ManualFaceRetouch.FRAME_GUARD,
+                                        1f - radius - ManualFaceRetouch.FRAME_GUARD))
+                                }
+                            }
+                            SmallLayerButton("Region height +") {
+                                editFace { current ->
+                                    val radius = (current.radiusY + 0.02f).coerceAtMost(0.48f)
+                                    current.copy(radiusY = radius, centerY = current.centerY.coerceIn(
+                                        radius + ManualFaceRetouch.FRAME_GUARD,
+                                        1f - radius - ManualFaceRetouch.FRAME_GUARD))
+                                }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                            SmallLayerButton("Face −") {
+                                editFace { it.copy(faceWidth = (it.faceWidth - 0.02f).coerceAtLeast(-0.25f)) }
+                            }
+                            SmallLayerButton("Face +") {
+                                editFace { it.copy(faceWidth = (it.faceWidth + 0.02f).coerceAtMost(0.25f)) }
+                            }
+                            SmallLayerButton("Jaw −") {
+                                editFace { it.copy(jawWidth = (it.jawWidth - 0.02f).coerceAtLeast(-0.25f)) }
+                            }
+                            SmallLayerButton("Jaw +") {
+                                editFace { it.copy(jawWidth = (it.jawWidth + 0.02f).coerceAtMost(0.25f)) }
+                            }
+                            SmallLayerButton("Nose −") {
+                                editFace { it.copy(noseWidth = (it.noseWidth - 0.01f).coerceAtLeast(-0.08f)) }
+                            }
+                            SmallLayerButton("Nose +") {
+                                editFace { it.copy(noseWidth = (it.noseWidth + 0.01f).coerceAtMost(0.08f)) }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                            SmallLayerButton("Eyes −") {
+                                editFace { it.copy(eyeScale = (it.eyeScale - 0.02f).coerceAtLeast(0f)) }
+                            }
+                            SmallLayerButton("Eyes +") {
+                                editFace { it.copy(eyeScale = (it.eyeScale + 0.02f).coerceAtMost(0.35f)) }
+                            }
+                            SmallLayerButton("Softening −") {
+                                editFace { it.copy(skinSoftening = (it.skinSoftening - 0.1f).coerceAtLeast(0f)) }
+                            }
+                            SmallLayerButton("Softening +") {
+                                editFace { it.copy(skinSoftening = (it.skinSoftening + 0.1f).coerceAtMost(1f)) }
+                            }
+                            SmallLayerButton("Reset retouch") { editFace { ManualFaceRetouch() } }
+                        }
                         var selectedColorLook by remember(layer.id) {
                             mutableStateOf<ColorGradePreset?>(null)
                         }

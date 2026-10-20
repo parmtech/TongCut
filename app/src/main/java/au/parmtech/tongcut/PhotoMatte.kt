@@ -63,7 +63,9 @@ data class PhotoEffects(
     /** Deterministic fine monochrome grain strength, 0..1. */
     val grain: Float = 0f,
     /** Bounded radial edge darkening, 0..1; zero is a pixel-identical no-op. */
-    val vignette: Float = 0f
+    val vignette: Float = 0f,
+    /** Manual, local non-generative face reshape shared across visual overlay types. */
+    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch()
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)

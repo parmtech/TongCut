@@ -197,11 +197,12 @@ internal object ManualFaceRetouchBitmapPreview {
         settings: ManualFaceRetouch,
         quarterTurns: Int = 0,
         flipHorizontal: Boolean = false,
+        maxPixels: Int = MAX_PREVIEW_PIXELS,
         isCancelled: () -> Boolean = { false }
     ): Bitmap {
         if (!settings.isActive) return source
         val turns = ManualFaceRetouchMath.normalizeQuarterTurns(quarterTurns)
-        val (width, height) = previewSize(source.width, source.height)
+        val (width, height) = previewSize(source.width, source.height, maxPixels)
         val orientedWidth = if (turns % 2 == 0) width else height
         val orientedHeight = if (turns % 2 == 0) height else width
         val working = if (width == source.width && height == source.height) source

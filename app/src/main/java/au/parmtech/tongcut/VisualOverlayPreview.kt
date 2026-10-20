@@ -111,6 +111,9 @@ internal fun VisualOverlayPreview(
             LaunchedEffect(player, layer.photoEffects) {
                 val videoEffects = if (layer.photoEffects == PhotoEffects()) emptyList()
                 else buildList {
+                    if (layer.photoEffects.faceRetouch.isActive) {
+                        add(ManualFaceRetouchEffect(layer.photoEffects.faceRetouch))
+                    }
                     add(VideoMatteEffect(layer.photoEffects))
                     if (layer.photoEffects.colorGrade.hslBands != DEFAULT_HSL_BANDS ||
                         layer.photoEffects.colorGrade.curves != ColorCurves()) {
