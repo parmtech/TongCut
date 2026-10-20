@@ -91,8 +91,13 @@ private class FaceReshapeVideoShader(
                 for (index in 0 until 7) {
                     val pin = geometry.pins[index]
                     program.setFloatsUniform("uPin$index", pin.coordinates())
-                    program.setFloatsUniform("uRadius$index", pin.radii())
                 }
+                // Share radii across the symmetric cheek/jaw and nose pairs.
+                // This keeps the GLES2 fragment uniform-vector count below
+                // the guaranteed 16 vec4 minimum on basic Android GPUs.
+                program.setFloatsUniform("uFaceRadius", geometry.pins[0].radii())
+                program.setFloatsUniform("uNoseRadius", geometry.pins[4].radii())
+                program.setFloatsUniform("uChinRadius", geometry.pins[6].radii())
                 for (index in 0 until 2) {
                     program.setFloatsUniform(
                         "uEye$index",
@@ -155,13 +160,9 @@ private class FaceReshapeVideoShader(
             uniform vec4 uPin4;
             uniform vec4 uPin5;
             uniform vec4 uPin6;
-            uniform vec2 uRadius0;
-            uniform vec2 uRadius1;
-            uniform vec2 uRadius2;
-            uniform vec2 uRadius3;
-            uniform vec2 uRadius4;
-            uniform vec2 uRadius5;
-            uniform vec2 uRadius6;
+            uniform vec2 uFaceRadius;
+            uniform vec2 uNoseRadius;
+            uniform vec2 uChinRadius;
 
             uniform vec4 uEye0;
             uniform vec4 uEye1;
@@ -199,13 +200,13 @@ private class FaceReshapeVideoShader(
                     vTexSamplingCoord.x, 1.0 - vTexSamplingCoord.y
                 );
                 vec2 sourcePoint = topLeft;
-                sourcePoint += shiftPin(topLeft, uPin0, uRadius0);
-                sourcePoint += shiftPin(topLeft, uPin1, uRadius1);
-                sourcePoint += shiftPin(topLeft, uPin2, uRadius2);
-                sourcePoint += shiftPin(topLeft, uPin3, uRadius3);
-                sourcePoint += shiftPin(topLeft, uPin4, uRadius4);
-                sourcePoint += shiftPin(topLeft, uPin5, uRadius5);
-                sourcePoint += shiftPin(topLeft, uPin6, uRadius6);
+                sourcePoint += shiftPin(topLeft, uPin0, uFaceRadius);
+                sourcePoint += shiftPin(topLeft, uPin1, uFaceRadius);
+                sourcePoint += shiftPin(topLeft, uPin2, uFaceRadius);
+                sourcePoint += shiftPin(topLeft, uPin3, uFaceRadius);
+                sourcePoint += shiftPin(topLeft, uPin4, uNoseRadius);
+                sourcePoint += shiftPin(topLeft, uPin5, uNoseRadius);
+                sourcePoint += shiftPin(topLeft, uPin6, uChinRadius);
                 if (uEyeStrength > 0.0) {
                     sourcePoint += shiftEye(topLeft, uEye0);
                     sourcePoint += shiftEye(topLeft, uEye1);
