@@ -3,6 +3,8 @@ package au.parmtech.tongcut
 import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.Layout
+import android.text.style.AlignmentSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
@@ -50,10 +52,16 @@ object TimedTextEffects {
                         TypefaceSpan(layer.captionStyle.font.androidFamily),
                         0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
+                    val alignment = when (layer.captionStyle.alignment) {
+                        CaptionAlignment.LEFT -> Layout.Alignment.ALIGN_NORMAL
+                        CaptionAlignment.CENTER -> Layout.Alignment.ALIGN_CENTER
+                        CaptionAlignment.RIGHT -> Layout.Alignment.ALIGN_OPPOSITE
+                    }
+                    setSpan(AlignmentSpan.Standard(alignment), 0, length,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
-                // Never return an empty string to TextOverlay: it can create a
-                // zero-width Bitmap and crash the GL export worker.
-                // Per-frame layout settings animate position, size, opacity and rotation.
+                // Per-frame settings animate its pose and align the intrinsic text block
+                // against a virtual 88%-frame caption box.
                 object : TextOverlay() {
                     override fun getText(presentationTimeUs: Long): SpannableString = styled
 
@@ -62,10 +70,22 @@ object TimedTextEffects {
                             layer.motion,
                             (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
                         )
+                        val alignmentOffset = when (layer.captionStyle.alignment) {
+                            CaptionAlignment.LEFT -> -CAPTION_BOX_HALF_WIDTH * pose.scale
+                            CaptionAlignment.CENTER -> 0f
+                            CaptionAlignment.RIGHT -> CAPTION_BOX_HALF_WIDTH * pose.scale
+                        }
+                        val overlayAnchorX = when (layer.captionStyle.alignment) {
+                            CaptionAlignment.LEFT -> -1f
+                            CaptionAlignment.CENTER -> 0f
+                            CaptionAlignment.RIGHT -> 1f
+                        }
                         return StaticOverlaySettings.Builder()
                             .setBackgroundFrameAnchor(
-                                pose.x.coerceIn(-1f, 1f), pose.y.coerceIn(-1f, 1f)
+                                (pose.x + alignmentOffset).coerceIn(-1f, 1f),
+                                pose.y.coerceIn(-1f, 1f)
                             )
+                            .setOverlayFrameAnchor(overlayAnchorX, 0f)
                             .setScale(
                                 pose.scale * layer.captionStyle.size,
                                 pose.scale * layer.captionStyle.size
@@ -86,4 +106,6 @@ object TimedTextEffects {
 
     fun create(timeline: LayerTimeline): OverlayEffect? =
         overlays(timeline).takeIf { it.isNotEmpty() }?.let { OverlayEffect(it) }
+
+    private const val CAPTION_BOX_HALF_WIDTH = 0.88f
 }

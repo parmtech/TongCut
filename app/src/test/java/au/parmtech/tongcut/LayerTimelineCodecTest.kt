@@ -33,11 +33,11 @@ class LayerTimelineCodecTest {
         val textLayer = timeline.layers.first { it.kind == LayerKind.TEXT }
         val styled = textLayer.copy(
             captionStyle = CaptionStyle(CaptionTone.CORAL, size = 1.8f, bold = false,
-                font = CaptionFont.SERIF)
+                font = CaptionFont.SERIF, alignment = CaptionAlignment.RIGHT)
         )
         val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
         val encoded = LayerTimelineCodec.encode(project)
-        assertEquals(12, encoded.getInt("schema"))
+        assertEquals(13, encoded.getInt("schema"))
         assertEquals(project, LayerTimelineCodec.decode(encoded))
         val legacy = LayerTimelineCodec.encode(timeline)
         legacy.put("schema", 7)
@@ -48,11 +48,15 @@ class LayerTimelineCodecTest {
         assertEquals(CaptionStyle(),
             migrated.layers.first { it.kind == LayerKind.TEXT }.captionStyle)
 
-        val oldCaptionStyle = LayerTimelineCodec.encode(project).put("schema", 11)
+        val oldCaptionStyle = LayerTimelineCodec.encode(project).put("schema", 12)
         oldCaptionStyle.getJSONArray("layers").getJSONObject(1)
             .getJSONObject("captionStyle").remove("font")
         assertEquals(CaptionFont.SANS,
             LayerTimelineCodec.decode(oldCaptionStyle).layers.last().captionStyle.font)
+        oldCaptionStyle.getJSONArray("layers").getJSONObject(1)
+            .getJSONObject("captionStyle").put("alignment", "INVALID")
+        assertEquals(CaptionAlignment.CENTER,
+            LayerTimelineCodec.decode(oldCaptionStyle).layers.last().captionStyle.alignment)
     }
 
     @Test fun emptyLayerTimelineRoundtrip() {
@@ -155,7 +159,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(12,json.getInt("schema"))
+        assertEquals(13,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
     }
 
@@ -191,7 +195,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(12,serialized.getInt("schema"))
+        assertEquals(13,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
@@ -219,7 +223,7 @@ class LayerTimelineCodecTest {
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(12, encoded.getInt("schema"))
+        assertEquals(13, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 10)

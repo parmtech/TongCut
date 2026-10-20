@@ -159,6 +159,12 @@ internal fun LayerTools(
                             val next = fonts[(fonts.indexOf(current.font) + 1) % fonts.size]
                             style(current.copy(font = next))
                         }
+                        SmallLayerButton("Align: ${current.alignment.title}") {
+                            val alignments = CaptionAlignment.entries
+                            val next = alignments[(alignments.indexOf(current.alignment) + 1) %
+                                alignments.size]
+                            style(current.copy(alignment = next))
+                        }
                     }
                     SmallLayerButton(
                         if (layer.id in validGroup) "✓ Group" else "+ Group"

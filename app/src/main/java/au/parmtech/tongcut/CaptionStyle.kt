@@ -18,11 +18,14 @@ enum class CaptionFont(val title: String, val androidFamily: String) {
     MONOSPACE("Mono", "monospace")
 }
 
+enum class CaptionAlignment(val title: String) { LEFT("Left"), CENTER("Center"), RIGHT("Right") }
+
 data class CaptionStyle(
     val tone: CaptionTone = CaptionTone.PEARL,
     val size: Float = 1f,
     val bold: Boolean = true,
-    val font: CaptionFont = CaptionFont.SANS
+    val font: CaptionFont = CaptionFont.SANS,
+    val alignment: CaptionAlignment = CaptionAlignment.CENTER
 ) {
     init {
         require(size.isFinite() && size in 0.5f..3f) {

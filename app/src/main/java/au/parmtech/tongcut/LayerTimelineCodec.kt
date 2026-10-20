@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 12)
+        put("schema", 13)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -44,6 +44,7 @@ object LayerTimelineCodec {
                         put("size", item.captionStyle.size.toDouble())
                         put("bold", item.captionStyle.bold)
                         put("font", item.captionStyle.font.name)
+                        put("alignment", item.captionStyle.alignment.name)
                     })
                     put("playbackSpeed", item.playbackSpeed.toDouble())
                     put("visualSlot", item.visualSlot ?: JSONObject.NULL)
@@ -109,7 +110,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..12) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..13) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -153,7 +154,10 @@ object LayerTimelineCodec {
                         bold = style.optBoolean("bold", true),
                         font = CaptionFont.entries.firstOrNull {
                             it.name == style.optString("font")
-                        } ?: CaptionFont.SANS
+                        } ?: CaptionFont.SANS,
+                        alignment = CaptionAlignment.entries.firstOrNull {
+                            it.name == style.optString("alignment")
+                        } ?: CaptionAlignment.CENTER
                     )
                 } ?: CaptionStyle(),
                 fade = item.optJSONObject("fade")?.let { fx ->

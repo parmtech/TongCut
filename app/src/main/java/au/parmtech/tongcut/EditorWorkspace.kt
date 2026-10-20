@@ -1107,7 +1107,13 @@ internal fun VideoEditorScreen(
                                 CaptionFont.MONOSPACE -> FontFamily.Monospace
                             },
                             fontSize = (21f * layer.captionStyle.size).sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            textAlign = when (layer.captionStyle.alignment) {
+                                CaptionAlignment.LEFT -> androidx.compose.ui.text.style.TextAlign.Start
+                                CaptionAlignment.CENTER -> androidx.compose.ui.text.style.TextAlign.Center
+                                CaptionAlignment.RIGHT -> androidx.compose.ui.text.style.TextAlign.End
+                            },
+                            maxLines = 20,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.align(Alignment.Center)
                                 .fillMaxWidth(0.88f)
                                 .graphicsLayer {
