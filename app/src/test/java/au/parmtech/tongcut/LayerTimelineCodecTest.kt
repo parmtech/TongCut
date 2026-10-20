@@ -38,7 +38,7 @@ class LayerTimelineCodecTest {
         )
         val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
         val encoded = LayerTimelineCodec.encode(project)
-        assertEquals(25, encoded.getInt("schema"))
+        assertEquals(26, encoded.getInt("schema"))
         assertEquals(project, LayerTimelineCodec.decode(encoded))
         val legacy = LayerTimelineCodec.encode(timeline)
         legacy.put("schema", 7)
@@ -186,7 +186,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(25,json.getInt("schema"))
+        assertEquals(26,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
 
         val beforeVignette = JSONObject(json.toString()).put("schema", 20)
@@ -234,7 +234,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(25,serialized.getInt("schema"))
+        assertEquals(26,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
@@ -262,7 +262,7 @@ class LayerTimelineCodecTest {
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(25, encoded.getInt("schema"))
+        assertEquals(26, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 10)
@@ -280,7 +280,7 @@ class LayerTimelineCodecTest {
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(25, encoded.getInt("schema"))
+        assertEquals(26, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 24)
@@ -295,5 +295,44 @@ class LayerTimelineCodecTest {
         assertEquals(0f, restored.stereoBalance)
         assertEquals(false, restored.monoFoldDown)
         assertEquals(false, restored.rumbleReduction)
+    }
+
+    @Test fun imageLutStateRoundTripsAndLegacySchemaDefaultsOff() {
+        val photo = TimelineTrack("lut-photo", "Photo", LayerKind.IMAGE, 0)
+        val effect = PhotoEffects(applyColorLut = true, colorLutStrength = 0.35f)
+        val graph = LayerTimeline(tracks = listOf(photo), layers = listOf(
+            TimelineLayer("still", photo.id, LayerKind.IMAGE, 0, 2_000_000,
+                sourceUri = "content://image", photoEffects = effect)
+        ))
+
+        val encoded = LayerTimelineCodec.encode(graph)
+        assertEquals(26, encoded.getInt("schema"))
+        assertEquals(graph, LayerTimelineCodec.decode(encoded))
+
+        val legacy = JSONObject(encoded.toString()).put("schema", 25)
+        legacy.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx").apply {
+            remove("applyColorLut")
+            remove("colorLutStrength")
+        }
+        val restored = LayerTimelineCodec.decode(legacy).layers.single().photoEffects
+        assertFalse(restored.applyColorLut)
+        assertEquals(1f, restored.colorLutStrength, 0f)
+    }
+
+    @Test fun malformedImageLutStateFallsBackToNeutralDefaults() {
+        val photo = TimelineTrack("lut-photo", "Photo", LayerKind.IMAGE, 0)
+        val graph = LayerTimeline(tracks = listOf(photo), layers = listOf(
+            TimelineLayer("still", photo.id, LayerKind.IMAGE, 0, 2_000_000,
+                sourceUri = "content://image")
+        ))
+        val encoded = LayerTimelineCodec.encode(graph)
+        encoded.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx").apply {
+            put("applyColorLut", "enabled")
+            put("colorLutStrength", 1.5)
+        }
+
+        val restored = LayerTimelineCodec.decode(encoded).layers.single().photoEffects
+        assertFalse(restored.applyColorLut)
+        assertEquals(1f, restored.colorLutStrength, 0f)
     }
 }
