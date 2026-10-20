@@ -113,8 +113,12 @@ internal class ManualFaceRetouchEffect(
 private class ManualFaceRetouchShader(
     settings: ManualFaceRetouch
 ) : BaseGlShaderProgram(false, 1) {
+    private val precisionQualifier = fragmentFloatPrecision()
     private val program = try {
-        GlProgram(VERTEX_SHADER, FRAGMENT_SHADER)
+        GlProgram(
+            VERTEX_SHADER.replace("PRECISION_QUALIFIER", precisionQualifier),
+            FRAGMENT_SHADER.replace("PRECISION_QUALIFIER", precisionQualifier)
+        )
     } catch (error: GlUtil.GlException) {
         throw VideoFrameProcessingException(error)
     }
@@ -133,6 +137,20 @@ private class ManualFaceRetouchShader(
         program.setFloatUniform("uEyeScale", settings.eyeScale)
         program.setFloatUniform("uSkinSoftening", settings.skinSoftening)
     }
+
+    private fun fragmentFloatPrecision(): String = runCatching {
+        val range = IntArray(2)
+        val precision = IntArray(1)
+        GLES20.glGetShaderPrecisionFormat(
+            GLES20.GL_FRAGMENT_SHADER,
+            GLES20.GL_HIGH_FLOAT,
+            range,
+            0,
+            precision,
+            0
+        )
+        if (precision[0] > 0) "highp" else "mediump"
+    }.getOrDefault("mediump")
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
         require(inputWidth > 0 && inputHeight > 0)
@@ -170,8 +188,9 @@ private class ManualFaceRetouchShader(
     private companion object {
         const val VERTEX_SHADER = """
             #version 100
+            precision highp float;
             attribute vec4 aFramePosition;
-            varying vec2 vTexSamplingCoord;
+            varying PRECISION_QUALIFIER vec2 vTexSamplingCoord;
             void main() {
                 gl_Position = aFramePosition;
                 vTexSamplingCoord = aFramePosition.xy * 0.5 + 0.5;
@@ -180,11 +199,7 @@ private class ManualFaceRetouchShader(
 
         const val FRAGMENT_SHADER = """
             #version 100
-            #ifdef GL_FRAGMENT_PRECISION_HIGH
-            precision highp float;
-            #else
-            precision mediump float;
-            #endif
+            precision PRECISION_QUALIFIER float;
             uniform sampler2D uTexSampler;
             uniform vec2 uCenter;
             uniform vec2 uRadius;
@@ -195,7 +210,7 @@ private class ManualFaceRetouchShader(
             uniform float uNoseWidth;
             uniform float uEyeScale;
             uniform float uSkinSoftening;
-            varying vec2 vTexSamplingCoord;
+            varying PRECISION_QUALIFIER vec2 vTexSamplingCoord;
 
             float faceRegionFalloff(vec2 local) {
                 return 1.0 - smoothstep(0.68, 1.0, length(local));
