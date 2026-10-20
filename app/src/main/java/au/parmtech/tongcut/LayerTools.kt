@@ -442,7 +442,7 @@ internal fun LayerTools(
                             }
                             Text(
                                 "Layer strength ${(fx.colorLutStrength * 100).toInt()}% · " +
-                                    "saved; preview/export integration pending",
+                                    "IMAGE/VIDEO render wired; device verification pending",
                                 color = Color(0xFFFFC987),
                                 fontSize = 10.sp
                             )
