@@ -38,17 +38,49 @@ object FaceReshapeFramePlan {
         }) { "Observations must have unique increasing source timestamps" }
     }
 
+    /**
+     * A prepared immutable observation track is validated ONCE. Use this in a
+     * video frame loop; validating thousands of observations per frame is slow.
+     */
+    fun prepare(samples: List<FaceReshapeObservation>): Prepared {
+        validate(samples)
+        return Prepared(samples.toList())
+    }
+
+    class Prepared internal constructor(
+        private val samples: List<FaceReshapeObservation>
+    ) {
+        fun at(
+            sourceTimeUs: Long,
+            maxGapUs: Long = DEFAULT_MAX_GAP_US,
+            minConfidence: Float = DEFAULT_MIN_CONFIDENCE
+        ): FaceReshapeLandmarks? = lookup(
+            samples, sourceTimeUs, maxGapUs, minConfidence, true
+        )
+    }
+
+    /** One-shot checked lookup, suitable for callers with only a few samples. */
     fun at(
         samples: List<FaceReshapeObservation>,
         sourceTimeUs: Long,
         maxGapUs: Long = DEFAULT_MAX_GAP_US,
         minConfidence: Float = DEFAULT_MIN_CONFIDENCE
+    ): FaceReshapeLandmarks? = lookup(
+        samples, sourceTimeUs, maxGapUs, minConfidence, false
+    )
+
+    private fun lookup(
+        samples: List<FaceReshapeObservation>,
+        sourceTimeUs: Long,
+        maxGapUs: Long,
+        minConfidence: Float,
+        alreadyValidated: Boolean
     ): FaceReshapeLandmarks? {
         require(sourceTimeUs >= 0)
         require(maxGapUs in 1L..1_000_000L)
         require(minConfidence.isFinite() && minConfidence in 0f..1f)
         if (samples.isEmpty()) return null
-        validate(samples)
+        if (!alreadyValidated) validate(samples)
         if (sourceTimeUs < samples.first().presentationTimeUs ||
             sourceTimeUs > samples.last().presentationTimeUs) return null
 
