@@ -94,6 +94,15 @@ class PhotoMatteTest {
         assertEquals(pixels[4], PhotoMatte.sharpenPixel(pixels, pixels[4], 1, 1, 3, 3, 0f))
     }
 
+    @Test fun grainIsDeterministicBoundedAndPreservesAlpha() {
+        val pixel = 0x80404040.toInt()
+        val first = PhotoMatte.grainPixel(pixel, 7, 11, 1f)
+        assertEquals(first, PhotoMatte.grainPixel(pixel, 7, 11, 1f))
+        assertEquals(0x80, first ushr 24)
+        assertEquals(pixel, PhotoMatte.grainPixel(pixel, 7, 11, 0f))
+        assertEquals(0x00000000, PhotoMatte.grainPixel(0, 7, 11, 1f))
+    }
+
     @Test(expected=IllegalArgumentException::class)
     fun invalidFeatherRejected() { PhotoEffects(feather=Float.NaN) }
 

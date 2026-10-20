@@ -48,7 +48,9 @@ data class PhotoEffects(
     /** Gaussian-like 3x3 blur radius as a fraction of the image's short side. */
     val blur: Float = 0f,
     /** Bounded unsharp detail recovery applied after blur and before matte/grade. */
-    val sharpen: Float = 0f
+    val sharpen: Float = 0f,
+    /** Deterministic fine monochrome grain strength, 0..1. */
+    val grain: Float = 0f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -59,6 +61,7 @@ data class PhotoEffects(
         require(maskRotationDegrees.isFinite() && maskRotationDegrees in -180f..180f)
         require(blur.isFinite() && blur in 0f..0.08f)
         require(sharpen.isFinite() && sharpen in 0f..1f)
+        require(grain.isFinite() && grain in 0f..1f)
     }
 }
 
@@ -263,6 +266,18 @@ object PhotoMatte {
             return (base + (c - average) * amount).roundToInt().coerceIn(0, 255)
         }
         return (baseArgb and 0xFF000000.toInt()) or
+            (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+    }
+
+    /** Adds stable monochrome noise from source pixel coordinates; alpha is untouched. */
+    fun grainPixel(argb: Int, x: Int, y: Int, amount: Float): Int {
+        require(amount.isFinite() && amount in 0f..1f)
+        if (amount == 0f || argb ushr 24 == 0) return argb
+        val raw = sin(x * 12.9898 + y * 78.233) * 43_758.5453
+        val unit = (raw - kotlin.math.floor(raw)).toFloat()
+        val delta = ((unit - 0.5f) * amount * 51f).roundToInt()
+        fun channel(shift: Int) = (((argb ushr shift) and 255) + delta).coerceIn(0, 255)
+        return (argb and 0xFF000000.toInt()) or
             (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 }

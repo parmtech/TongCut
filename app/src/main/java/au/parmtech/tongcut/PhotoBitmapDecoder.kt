@@ -94,6 +94,9 @@ internal object PhotoBitmapDecoder {
                         blurSource, pixels[idx], x, y, width, height, effects.sharpen
                     )
                 }
+                if (effects.grain > 0f) {
+                    pixels[idx] = PhotoMatte.grainPixel(pixels[idx], x, y, effects.grain)
+                }
                 pixels[idx] = PhotoMatte.applyAlpha(
                     pixels[idx], x, y, width, height, effects
                 )

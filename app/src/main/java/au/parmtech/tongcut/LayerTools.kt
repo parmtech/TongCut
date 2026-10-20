@@ -376,6 +376,18 @@ internal fun LayerTools(
                                 .onSuccess(onChange)
                                 .onFailure { onError(it.message ?: "Sharpen change failed") }
                         }
+                        SmallLayerButton("Grain −") {
+                            runCatching { applyMatte(fx.copy(grain =
+                                (fx.grain - 0.1f).coerceAtLeast(0f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Grain change failed") }
+                        }
+                        SmallLayerButton("Grain +") {
+                            runCatching { applyMatte(fx.copy(grain =
+                                (fx.grain + 0.1f).coerceAtMost(1f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Grain change failed") }
+                        }
                         if (fx.colorGrade != ColorGrade()) {
                             SmallLayerButton("Reset colour") { grade(ColorGrade()) }
                         }
@@ -391,6 +403,13 @@ internal fun LayerTools(
                                 runCatching { applyMatte(fx.copy(sharpen = 0f)) }
                                     .onSuccess(onChange)
                                     .onFailure { onError(it.message ?: "Sharpen reset failed") }
+                            }
+                        }
+                        if (fx.grain > 0f) {
+                            SmallLayerButton("Reset grain") {
+                                runCatching { applyMatte(fx.copy(grain = 0f)) }
+                                    .onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Grain reset failed") }
                             }
                         }
                         SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {

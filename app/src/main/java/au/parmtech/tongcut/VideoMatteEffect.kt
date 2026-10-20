@@ -80,6 +80,7 @@ private class MatteShader(
         program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
         program.setFloatUniform("uBlurAmount", settings.blur)
         program.setFloatUniform("uSharpenAmount", settings.sharpen)
+        program.setFloatUniform("uGrainAmount", settings.grain)
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -116,7 +117,7 @@ private class MatteShader(
         const val VERTEX_SHADER = """
             #version 100
             attribute vec4 aFramePosition;
-            varying vec2 vTexSamplingCoord;
+            varying highp vec2 vTexSamplingCoord;
             void main() {
                 gl_Position = aFramePosition;
                 vTexSamplingCoord = aFramePosition.xy * 0.5 + 0.5;
@@ -127,7 +128,7 @@ private class MatteShader(
             #version 100
             precision mediump float;
             uniform sampler2D uTexSampler;
-            uniform vec2 uFrameSize;
+            uniform highp vec2 uFrameSize;
             uniform float uMaskMode;
             uniform float uMaskFeather;
             uniform float uInvertMask;
@@ -146,7 +147,8 @@ private class MatteShader(
             uniform float uTemperature;
             uniform float uBlurAmount;
             uniform float uSharpenAmount;
-            varying vec2 vTexSamplingCoord;
+            uniform float uGrainAmount;
+            varying highp vec2 vTexSamplingCoord;
 
             float edge(float lo, float hi, float value) {
                 return smoothstep(lo, max(lo + 0.00001, hi), value);
@@ -218,6 +220,14 @@ private class MatteShader(
                     pixel.rgb = clamp(pixel.rgb + (centre.rgb - neighbors) *
                         uSharpenAmount, 0.0, 1.0);
                     if (centre.a <= 0.00001) pixel.rgb = vec3(0.0);
+                }
+                if (uGrainAmount > 0.00001 && pixel.a > 0.00001) {
+                    highp vec2 pixelCoord = floor(vTexSamplingCoord * uFrameSize);
+                    highp vec2 hashCoefficients = vec2(12.9898, 78.233);
+                    highp float noise = fract(sin(dot(pixelCoord,
+                        hashCoefficients)) * 43758.5453) - 0.5;
+                    pixel.rgb = clamp(pixel.rgb + vec3(noise * uGrainAmount * 0.2),
+                        0.0, 1.0);
                 }
                 vec2 point = (vTexSamplingCoord - vec2(0.5)) * uFrameSize;
                 float shortSide = min(uFrameSize.x, uFrameSize.y);
