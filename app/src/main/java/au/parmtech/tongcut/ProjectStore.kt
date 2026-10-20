@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
+import au.parmtech.tongcut.effects.presets.EffectPresetCodec
 import java.io.File
 
 private fun projectStoreFile(context: Context, projectId: String?): AtomicFile {
@@ -47,7 +48,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..14) { "Unsupported project schema" }
+        require(schema in 1..15) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -88,6 +89,11 @@ class ProjectStore private constructor(private val file: AtomicFile) {
             primaryVignette = if (schema >= 14)
                 root.optDouble("primaryVignette", 0.0).toFloat()
                     .takeIf { it.isFinite() && it in 0f..1f } ?: 0f else 0f,
+            primaryOfflineEffectPreset = if (schema >= 15) {
+                root.optJSONObject("primaryOfflineEffectPreset")?.let {
+                    EffectPresetCodec.decode(it.toString())
+                }
+            } else null,
             primaryQuarterTurns = if (schema >= 11)
                 root.optInt("primaryQuarterTurns", 0).takeIf { it in 0..3 } ?: 0 else 0,
             primaryFlipHorizontal = schema >= 11 &&
@@ -106,7 +112,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 14)
+            put("schema", 15)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -120,6 +126,9 @@ class ProjectStore private constructor(private val file: AtomicFile) {
             put("primarySharpen", project.primarySharpen.toDouble())
             put("primaryGrain", project.primaryGrain.toDouble())
             put("primaryVignette", project.primaryVignette.toDouble())
+            project.primaryOfflineEffectPreset?.let {
+                put("primaryOfflineEffectPreset", JSONObject(EffectPresetCodec.encode(it)))
+            }
             put("primaryQuarterTurns", project.primaryQuarterTurns)
             put("primaryFlipHorizontal", project.primaryFlipHorizontal)
             put("canvas", project.canvas.name)

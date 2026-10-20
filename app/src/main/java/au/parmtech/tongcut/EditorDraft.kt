@@ -1,5 +1,8 @@
 package au.parmtech.tongcut
 
+import au.parmtech.tongcut.effects.presets.EffectPresetState
+import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
+
 /** Serializable, immutable editor state. A source URI is stored, not copied to app storage. */
 data class DraftClip(
     val sourceUri: String,
@@ -58,6 +61,8 @@ data class EditorDraft(
     val primarySharpen: Float = 0f,
     val primaryGrain: Float = 0f,
     val primaryVignette: Float = 0f,
+    /** Original A15 look for primary footage; null preserves the legacy identity path. */
+    val primaryOfflineEffectPreset: EffectPresetState? = null,
     /** Quarter-turn rotation and horizontal mirror for primary footage. */
     val primaryQuarterTurns: Int = 0,
     val primaryFlipHorizontal: Boolean = false
@@ -72,6 +77,10 @@ data class EditorDraft(
         require(primarySharpen.isFinite() && primarySharpen in 0f..1f)
         require(primaryGrain.isFinite() && primaryGrain in 0f..1f)
         require(primaryVignette.isFinite() && primaryVignette in 0f..1f)
+        require(primaryOfflineEffectPreset == null ||
+            OfflineEffectPresets.validate(primaryOfflineEffectPreset)) {
+            "Unsupported primary offline effect preset"
+        }
         require(primaryQuarterTurns in 0..3)
     }
 
@@ -141,6 +150,7 @@ data class EditorDraft(
         primarySharpen = primarySharpen,
         primaryGrain = primaryGrain,
         primaryVignette = primaryVignette,
+        primaryOfflineEffectPreset = primaryOfflineEffectPreset,
         primaryQuarterTurns = primaryQuarterTurns,
         primaryFlipHorizontal = primaryFlipHorizontal
     )

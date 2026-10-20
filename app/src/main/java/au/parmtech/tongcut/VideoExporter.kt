@@ -533,4 +533,5 @@ internal fun primaryClipVideoEffects(options: ExportOptions): List<androidx.medi
             )))
         }
         if (options.primaryVignette > 0f) add(VideoVignetteEffect(options.primaryVignette))
+        options.primaryOfflineEffectPreset?.let { add(VideoOfflineEffectPreset(it)) }
     }

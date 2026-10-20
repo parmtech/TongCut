@@ -1,5 +1,8 @@
 package au.parmtech.tongcut
 
+import au.parmtech.tongcut.effects.presets.EffectPresetState
+import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
+
 import android.net.Uri
 
 /** All times are source-media milliseconds; end is exclusive. */
@@ -49,6 +52,7 @@ data class ExportOptions(
     val primarySharpen: Float = 0f,
     val primaryGrain: Float = 0f,
     val primaryVignette: Float = 0f,
+    val primaryOfflineEffectPreset: EffectPresetState? = null,
     val primaryQuarterTurns: Int = 0,
     val primaryFlipHorizontal: Boolean = false
 ) {
@@ -60,6 +64,10 @@ data class ExportOptions(
         require(primarySharpen.isFinite() && primarySharpen in 0f..1f)
         require(primaryGrain.isFinite() && primaryGrain in 0f..1f)
         require(primaryVignette.isFinite() && primaryVignette in 0f..1f)
+        require(primaryOfflineEffectPreset == null ||
+            OfflineEffectPresets.validate(primaryOfflineEffectPreset)) {
+            "Unsupported primary offline effect preset"
+        }
         require(primaryQuarterTurns in 0..3)
     }
 }
