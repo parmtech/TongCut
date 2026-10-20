@@ -105,7 +105,7 @@ data class PrimaryTransitionSample(
  * ordinary clip body and every later project timestamp stay fixed, so project duration delta is
  * exactly zero. This plan does not decode, composite, persist, or render media.
  */
-data class PrimaryTransitionPlan private constructor(
+class PrimaryTransitionPlan private constructor(
     val config: PrimaryTransitionConfig,
     val cutTimeMs: Long,
     val transitionStartMs: Long,
