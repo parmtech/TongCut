@@ -1,6 +1,5 @@
 package au.parmtech.tongcut.beauty
 
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 
