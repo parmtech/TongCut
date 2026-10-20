@@ -14,7 +14,10 @@ import android.net.Uri
 internal object PhotoBitmapDecoder {
     const val MAX_SIDE = 1024
 
-    fun decode(context: Context, uri: Uri, effects: PhotoEffects): Bitmap {
+    fun decode(
+        context: Context, uri: Uri, effects: PhotoEffects,
+        colorLutProfile: ColorLutProfile? = null
+    ): Bitmap {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         // BitmapFactory.decodeStream RETURNS NULL intentionally when
         // inJustDecodeBounds=true. Only a missing input stream is an error.
@@ -83,7 +86,13 @@ internal object PhotoBitmapDecoder {
             if (bitmap !== source && !source.isRecycled) source.recycle()
         }
         // Retouch is applied before alpha/matte work to avoid sampling across transparent edges.
-        if (effects.copy(faceRetouch = ManualFaceRetouch()) == PhotoEffects()) return bitmap
+        val lut = if (effects.applyColorLut) {
+            requireNotNull(colorLutProfile) {
+                "This layer uses a LUT that is no longer available in the project"
+            }.copy(strength = effects.colorLutStrength)
+        } else null
+        if (effects.copy(faceRetouch = ManualFaceRetouch(), applyColorLut = false,
+                colorLutStrength = 1f) == PhotoEffects() && lut == null) return bitmap
 
         val width = bitmap.width
         val height = bitmap.height
@@ -92,6 +101,12 @@ internal object PhotoBitmapDecoder {
         }
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        // Apply the LUT before spatial effects and matte, preserving source alpha.
+        lut?.let { profile ->
+            pixels.indices.forEach { index ->
+                pixels[index] = ColorLutOverlayTransform.applyArgb(pixels[index], profile)
+            }
+        }
         val blurSource = if (effects.blur > 0f || effects.sharpen > 0f) pixels.copyOf() else pixels
         for (y in 0 until height) {
             val row = y * width

@@ -761,7 +761,7 @@ internal fun LayerTools(
                             )
                         } else {
                             Text(
-                                "Project LUT: ${draft.colorLutProfile.name} · overlay render pending",
+                                "Project LUT: ${draft.colorLutProfile.name} · preview on, export pending",
                                 color = Color(0xFFFFC987), fontSize = 10.sp
                             )
                             SmallLayerButton(
@@ -795,7 +795,7 @@ internal fun LayerTools(
                                     }
                                 }
                             }
-                            Text("Saved and undoable; preview/export effect is not connected yet.",
+                            Text("Saved and undoable; preview works, export is not connected yet.",
                                 color = Color.LightGray, fontSize = 10.sp)
                         }
                         if (fx.colorGrade != ColorGrade()) {

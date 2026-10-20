@@ -35,6 +35,7 @@ internal fun VisualOverlayPreview(
     layer: TimelineLayer,
     timelineMs: Long,
     playing: Boolean,
+    colorLutProfile: ColorLutProfile?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -61,7 +62,7 @@ internal fun VisualOverlayPreview(
         if (layer.kind == LayerKind.IMAGE) {
             // Bitmap preview and exported Media3 BitmapOverlay consume identical matte pixels.
             val bitmap by produceState<android.graphics.Bitmap?>(
-                initialValue = null, layer.sourceUri, layer.photoEffects
+                initialValue = null, layer.sourceUri, layer.photoEffects, colorLutProfile
             ) {
                 var created: android.graphics.Bitmap? = null
                 var transferredToState = false
@@ -70,7 +71,7 @@ internal fun VisualOverlayPreview(
                         runCatching {
                             PhotoBitmapDecoder.decode(
                                 context, Uri.parse(requireNotNull(layer.sourceUri)),
-                                layer.photoEffects
+                                layer.photoEffects, colorLutProfile
                             ).also { created = it }
                         }.getOrNull()
                     }
@@ -83,6 +84,10 @@ internal fun VisualOverlayPreview(
                 }
             }
             val image = bitmap
+            if (layer.photoEffects.applyColorLut && colorLutProfile == null) {
+                Text("Overlay LUT unavailable: import a project LUT again.",
+                    color = Color(0xFFFFC987), fontSize = 11.sp)
+            }
             if (image != null) {
                 // The displayed state owns each decoded bitmap until it is replaced or removed.
                 DisposableEffect(image) {
@@ -124,7 +129,14 @@ internal fun VisualOverlayPreview(
             }
             // The SAME per-source GPU key/mask as the exported Media3 MP4.
             // Reconfigure only on actual effect changes; don't reset source time.
-            LaunchedEffect(player, layer.photoEffects) {
+            LaunchedEffect(player, layer.photoEffects, colorLutProfile) {
+                val lutEffect = if (layer.photoEffects.applyColorLut) {
+                    colorLutProfile?.copy(strength = layer.photoEffects.colorLutStrength)
+                        ?.toMedia3Effect()
+                } else null
+                videoError = if (layer.photoEffects.applyColorLut && lutEffect == null) {
+                    "Overlay LUT unavailable: import a project LUT again."
+                } else null
                 val videoEffects = if (layer.photoEffects == PhotoEffects()) emptyList()
                 else buildList {
                     if (layer.photoEffects.faceRetouch.isActive) {
@@ -139,6 +151,7 @@ internal fun VisualOverlayPreview(
                             premultipliedInput = true
                         ))
                     }
+                    lutEffect?.let { add(it) }
                     if (layer.photoEffects.vignette > 0f) {
                         add(VideoVignetteEffect(layer.photoEffects.vignette))
                     }
