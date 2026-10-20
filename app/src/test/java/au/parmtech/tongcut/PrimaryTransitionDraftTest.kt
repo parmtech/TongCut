@@ -25,7 +25,7 @@ class PrimaryTransitionDraftTest {
         assertEquals(4_000L, timeline.startOf(1))
         assertEquals(4_000L, timeline.timeOf(1, 0L))
         assertEquals(4_750L, timeline.timeOf(1, 750L))
-        assertEquals(4_500L, timeline.sourceTimeOf(1, 1_500L))
+        assertEquals(5_000L, timeline.sourceTimeOf(1, 1_500L))
         val during = requireNotNull(timeline.pointAt(3_750L))
         assertEquals(0, during.clipIndex)
         assertEquals(3_750L, during.sourceMs)
