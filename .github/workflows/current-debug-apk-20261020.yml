@@ -1,0 +1,56 @@
+name: TongCut CURRENT Development APK (Temporary QA)
+on:
+  push:
+    branches:
+      - build/current-debug-apk-20261020
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  debug-apk:
+    name: Compile current development / test APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install Android SDK 36
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER" || { echo "sdkmanager not found"; exit 1; }
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Build installable DEBUG APK from development source
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify and package TEST APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/TongCut-CURRENT-development-TEST.apk
+          sha256sum dist/TongCut-CURRENT-development-TEST.apk > dist/SHA256SUMS.txt
+          git rev-parse HEAD > dist/SOURCE_COMMIT.txt
+          cat > dist/READ_ME_FIRST.txt <<'EOF'
+          TongCut CURRENT development debug TEST APK. Unverified experimental code.
+          Installs separately using applicationId au.parmtech.tongcut.test.
+          Not signed for production; Android debug-signed test application only.
+          Not a completed CapCut replacement; features can be missing or broken.
+          This artifact is from development/capcut-parity source plus this build-only workflow.
+          Agent A09 face-reshape prototype is NOT included because it is not integrated.
+          Do not share personal test media or keys. Check SHA256SUMS.txt.
+          EOF
+      - name: Upload signed-by-Android-debug-key TEST APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-CURRENT-development-TEST-APK
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
