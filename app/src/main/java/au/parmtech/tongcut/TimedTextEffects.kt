@@ -71,9 +71,11 @@ object TimedTextEffects {
                             (presentationTimeUs - layer.startUs).coerceIn(0L, layer.durationUs)
                         )
                         val alignmentOffset = when (layer.captionStyle.alignment) {
-                            CaptionAlignment.LEFT -> -CAPTION_BOX_HALF_WIDTH * pose.scale
+                            CaptionAlignment.LEFT ->
+                                -CAPTION_ALIGNMENT_BOX_HALF_WIDTH * pose.scale
                             CaptionAlignment.CENTER -> 0f
-                            CaptionAlignment.RIGHT -> CAPTION_BOX_HALF_WIDTH * pose.scale
+                            CaptionAlignment.RIGHT ->
+                                CAPTION_ALIGNMENT_BOX_HALF_WIDTH * pose.scale
                         }
                         val overlayAnchorX = when (layer.captionStyle.alignment) {
                             CaptionAlignment.LEFT -> -1f
@@ -107,5 +109,4 @@ object TimedTextEffects {
     fun create(timeline: LayerTimeline): OverlayEffect? =
         overlays(timeline).takeIf { it.isNotEmpty() }?.let { OverlayEffect(it) }
 
-    private const val CAPTION_BOX_HALF_WIDTH = 0.88f
 }

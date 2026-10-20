@@ -1096,6 +1096,17 @@ internal fun VideoEditorScreen(
                             layer.motion,
                             (playMs * 1_000L - layer.startUs).coerceIn(0L, layer.durationUs)
                         )
+                        val alignedMotionX = when (layer.captionStyle.alignment) {
+                            CaptionAlignment.LEFT -> maxOf(
+                                motion.x,
+                                -1f + CAPTION_ALIGNMENT_BOX_HALF_WIDTH * motion.scale
+                            )
+                            CaptionAlignment.CENTER -> motion.x
+                            CaptionAlignment.RIGHT -> minOf(
+                                motion.x,
+                                1f - CAPTION_ALIGNMENT_BOX_HALF_WIDTH * motion.scale
+                            )
+                        }
                         Text(
                             text = layer.text.orEmpty(),
                             color = Color(layer.captionStyle.tone.argb),
@@ -1117,7 +1128,7 @@ internal fun VideoEditorScreen(
                             modifier = Modifier.align(Alignment.Center)
                                 .fillMaxWidth(0.88f)
                                 .graphicsLayer {
-                                    translationX = motion.x * viewportWidthPx / 2f
+                                    translationX = alignedMotionX * viewportWidthPx / 2f
                                     translationY = -motion.y * viewportHeightPx / 2f
                                     scaleX = motion.scale
                                     scaleY = motion.scale

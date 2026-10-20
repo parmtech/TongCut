@@ -20,6 +20,8 @@ enum class CaptionFont(val title: String, val androidFamily: String) {
 
 enum class CaptionAlignment(val title: String) { LEFT("Left"), CENTER("Center"), RIGHT("Right") }
 
+internal const val CAPTION_ALIGNMENT_BOX_HALF_WIDTH = 0.88f
+
 data class CaptionStyle(
     val tone: CaptionTone = CaptionTone.PEARL,
     val size: Float = 1f,
