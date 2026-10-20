@@ -339,6 +339,28 @@ internal fun VideoEditorScreen(
         }
     }
 
+    fun addSoundEffect(effect: TongCutSoundEffect) {
+        val startAtMs = playMs
+        scope.launch {
+            try {
+                val asset = withContext(Dispatchers.IO) {
+                    TongCutSoundEffectGenerator.writeTo(context.applicationContext.filesDir, effect)
+                }
+                val latest = currentDraft.value
+                val edited = LayerEdits.addAudio(
+                    latest, startAtMs, Uri.fromFile(asset.file).toString(), asset.durationMs
+                )
+                onChange(edited)
+                panel = "Audio"
+                onInfo("${effect.title} generated offline and added as an editable audio clip.")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                onInfo("Could not add ${effect.title}: ${failure.message ?: "audio edit failed"}")
+            }
+        }
+    }
+
     fun startVoiceover() {
         try {
             val lengthMs = SequentialTimeline(currentDraft.value.clips).totalMs
@@ -1671,6 +1693,7 @@ internal fun VideoEditorScreen(
                         LayerTools(
                             active, playMs, LayerKind.AUDIO, onChange,
                             onAddAudio = { audioPicker.launch(arrayOf("audio/*")) },
+                            onAddSoundEffect = ::addSoundEffect,
                             onError = onInfo,
                             focusedLayerId = selectedLayerId,
                             selectedGroupIds = groupIds,
