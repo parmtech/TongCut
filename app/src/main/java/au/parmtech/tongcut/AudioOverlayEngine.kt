@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import kotlin.math.abs
 
@@ -35,6 +36,7 @@ class AudioOverlayEngine(private val context: Context) {
     private val duckingEnvelopes = HashMap<String, List<AudioGainKeyframe>>()
 
     /** Called on Android's main thread with the main video playhead. */
+    @OptIn(UnstableApi::class)
     fun sync(graph: LayerTimeline, globalPositionMs: Long, playing: Boolean): String? {
         check(Looper.myLooper() == Looper.getMainLooper())
         val timeUs = Math.multiplyExact(globalPositionMs.coerceAtLeast(0L), 1_000L)

@@ -18,6 +18,7 @@ on:
       - 'app/src/main/AndroidManifest.xml'
       - 'app/src/main/java/au/parmtech/tongcut/ExportService.kt'
       - 'app/src/main/java/au/parmtech/tongcut/EditorWorkspace.kt'
+      - 'app/src/main/java/au/parmtech/tongcut/AudioOverlayEngine.kt'
   workflow_dispatch:
 
 permissions:
