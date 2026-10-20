@@ -1,5 +1,7 @@
 package au.parmtech.tongcut
 
+import java.util.UUID
+
 /** Serializable, immutable editor state. A source URI is stored, not copied to app storage. */
 data class DraftClip(
     val sourceUri: String,
@@ -8,10 +10,13 @@ data class DraftClip(
     val inMs: Long = 0,
     val outMs: Long = durationMs,
     val sourceAudioMuted: Boolean = false,
-    val reverseVideo: Boolean = false
+    val reverseVideo: Boolean = false,
+    /** Stable identity used by cut-attached transitions and persistence. */
+    val id: String = UUID.randomUUID().toString()
 ) {
     init {
         require(sourceUri.isNotBlank()) { "Missing source" }
+        require(id.isNotBlank() && id.length <= 100) { "Invalid clip identifier" }
         require(durationMs >= 100) { "Source is too short" }
         require(inMs >= 0 && outMs <= durationMs && outMs - inMs >= 100) { "Invalid trim" }
     }
@@ -27,13 +32,16 @@ data class DraftClip(
         require(replacementDurationMs >= 100) { "Replacement video is too short" }
         val safeStart = inMs.coerceIn(0L, replacementDurationMs - 100)
         val safeEnd = outMs.coerceIn(safeStart + 100, replacementDurationMs)
-        return DraftClip(uri, name, replacementDurationMs, safeStart, safeEnd, sourceAudioMuted, reverseVideo)
+        return copy(sourceUri = uri, label = name, durationMs = replacementDurationMs,
+            inMs = safeStart, outMs = safeEnd)
     }
 
     /** Splits on the SOURCE timeline. Each result must keep at least 100 ms. */
     fun split(sourcePositionMs: Long): Pair<DraftClip, DraftClip>? {
         if (sourcePositionMs < inMs + 100 || sourcePositionMs > outMs - 100) return null
-        return copy(outMs = sourcePositionMs) to copy(inMs = sourcePositionMs)
+        return copy(outMs = sourcePositionMs) to copy(
+            id = UUID.randomUUID().toString(), inMs = sourcePositionMs
+        )
     }
 }
 
@@ -61,7 +69,9 @@ data class EditorDraft(
     /** Quarter-turn rotation and horizontal mirror for primary footage. */
     val primaryQuarterTurns: Int = 0,
     val primaryFlipHorizontal: Boolean = false,
-    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch()
+    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch(),
+    /** Stable clip-pair transitions; legacy project schemas load this empty. */
+    val primaryTransitions: List<PrimaryTransitionSpec> = emptyList()
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
@@ -74,6 +84,9 @@ data class EditorDraft(
         require(primaryGrain.isFinite() && primaryGrain in 0f..1f)
         require(primaryVignette.isFinite() && primaryVignette in 0f..1f)
         require(primaryQuarterTurns in 0..3)
+        require(clips.map { it.id }.toSet().size == clips.size) { "Duplicate clip identifier" }
+        require(primaryTransitions.map { it.afterClipIndex }.toSet().size == primaryTransitions.size)
+        require(primaryTransitions.all { it.afterClipIndex in 0 until clips.lastIndex })
     }
 
     fun normalized(): EditorDraft =
@@ -82,7 +95,7 @@ data class EditorDraft(
     fun withReplacedClip(index: Int, updated: DraftClip): EditorDraft {
         require(index in clips.indices)
         val mutable = clips.toMutableList()
-        mutable[index] = updated
+        mutable[index] = updated.copy(id = clips[index].id)
         return copy(clips = mutable)
     }
 
@@ -91,12 +104,21 @@ data class EditorDraft(
         val mutable = clips.toMutableList()
         val moved = mutable.removeAt(from)
         mutable.add(to, moved)
-        return copy(clips = mutable, selectedIndex = to)
+        val transitions = primaryTransitions.filter { it.afterClipIndex !in minOf(from, to)..maxOf(from, to) }
+        return copy(clips = mutable, selectedIndex = to, primaryTransitions = transitions)
     }
 
     fun withRemovedClip(index: Int): EditorDraft {
         require(index in clips.indices)
-        return copy(clips = clips.filterIndexed { i, _ -> i != index }).normalized()
+        val remaining = clips.filterIndexed { i, _ -> i != index }
+        val transitions = primaryTransitions.mapNotNull { transition ->
+            when {
+                transition.afterClipIndex == index || transition.afterClipIndex + 1 == index -> null
+                transition.afterClipIndex > index -> transition.copy(afterClipIndex = transition.afterClipIndex - 1)
+                else -> transition
+            }
+        }
+        return copy(clips = remaining, primaryTransitions = transitions).normalized()
     }
 
     fun splitSelected(sourcePositionMs: Long): EditorDraft? {
@@ -106,14 +128,18 @@ data class EditorDraft(
         items.removeAt(selectedIndex)
         items.add(selectedIndex, halves.second)
         items.add(selectedIndex, halves.first)
-        return copy(clips = items)
+        val transitions = primaryTransitions.map { transition ->
+            if (transition.afterClipIndex == selectedIndex) transition.copy(afterClipIndex = selectedIndex + 1)
+            else transition
+        }
+        return copy(clips = items, primaryTransitions = transitions)
     }
 
     /** Prevent silent omission of layered content by the older sequential renderer. */
     val canExportWithLegacyRenderer: Boolean get() =
         layers.layers.none { it.kind == LayerKind.STICKER } &&
             runCatching {
-                val totalUs = SequentialTimeline(clips).totalMs * 1_000L
+                val totalUs = SequentialTimeline(clips, primaryTransitions).totalMs * 1_000L
                 require(totalUs > 0)
                 AudioMixPlan.from(layers, totalUs)
                 val visual = VisualMixPlan.from(layers, totalUs)
