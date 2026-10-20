@@ -230,7 +230,7 @@ class VideoExporter(private val context: Context) {
                 videoLanes, baseVideoDurationUs, overlayLayers, options.maxFrameRate
             ))
             primaryPlan?.let {
-                allSequences += PrimaryTransitionComposition.sequence(original, it, options.maxFrameRate)
+                allSequences += PrimaryTransitionComposition.sequence(original, it, options.maxFrameRate, clipEffects)
             }
             reverseVideoSequence?.let(allSequences::add)
             allSequences += sequence
