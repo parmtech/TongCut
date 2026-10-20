@@ -45,6 +45,7 @@ class VideoExporter(private val context: Context) {
     private var saving = false
     @Volatile private var runGeneration = 0L
     private var activeReverseCleanup: (() -> Unit)? = null
+    private var primaryLookPreflightApproved = false
 
     fun start(
         clips: List<Clip>,
@@ -61,21 +62,50 @@ class VideoExporter(private val context: Context) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
-        if (options.primaryOfflineEffectPreset != null) {
-            val colorStatus = PrimaryVideoColorPreflight.aggregate(clips.map { clip ->
-                PrimaryVideoColorPreflight.inspect(context, clip.uri)
-            })
-            val rejection = when (colorStatus) {
-                PrimaryVideoColorStatus.CONFIRMED_SDR -> null
-                PrimaryVideoColorStatus.HDR ->
-                    "Primary offline looks need confirmed SDR footage; HDR clips are unsupported. Convert all primary clips to SDR or remove the look, then retry."
-                PrimaryVideoColorStatus.UNKNOWN ->
-                    "Could not confirm SDR color-transfer metadata for every primary clip. Remove the look or use explicitly SDR-tagged footage, then retry."
+        if (primaryLookPreflightApproved) {
+            primaryLookPreflightApproved = false
+        } else if (options.primaryOfflineEffectPreset != null) {
+            // MediaExtractor can block on slow document providers. Keep it off the
+            // UI thread, but do not construct the composition until every source
+            // has passed this conservative SDR-only preflight.
+            active = true
+            val preflightGeneration =
+                Math.addExact(runGeneration, 1L).also { runGeneration = it }
+            try {
+                Thread({
+                    val colorStatus = runCatching {
+                        PrimaryVideoColorPreflight.aggregate(clips.map { clip ->
+                            PrimaryVideoColorPreflight.inspect(context, clip.uri)
+                        })
+                    }.getOrDefault(PrimaryVideoColorStatus.UNKNOWN)
+                    main.post {
+                        if (preflightGeneration != runGeneration) return@post
+                        val rejection = when (colorStatus) {
+                            PrimaryVideoColorStatus.CONFIRMED_SDR -> null
+                            PrimaryVideoColorStatus.HDR ->
+                                "Primary offline looks need confirmed SDR footage; HDR clips are unsupported. Convert all primary clips to SDR or remove the look, then retry."
+                            PrimaryVideoColorStatus.UNKNOWN ->
+                                "Could not confirm SDR color-transfer metadata for every primary clip. Remove the look or use explicitly SDR-tagged footage, then retry."
+                        }
+                        if (rejection != null) {
+                            active = false
+                            onError(rejection)
+                        } else {
+                            active = false
+                            primaryLookPreflightApproved = true
+                            start(
+                                clips, options, onProgress, onSuccess, onError,
+                                overlayLayers, onWarning, exportJobId,
+                                reverseSequences, reverseAudioFiles
+                            )
+                        }
+                    }
+                }, "TongCut-primary-color-preflight").start()
+            } catch (failure: Exception) {
+                active = false
+                onError("Unable to check primary video color metadata: ${failure.message ?: "unknown error"}")
             }
-            if (rejection != null) {
-                onError(rejection)
-                return
-            }
+            return
         }
         require(reverseAudioFiles.keys.all { index ->
             index in clips.indices && index in reverseSequences.keys &&
