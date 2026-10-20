@@ -378,7 +378,7 @@ internal fun VideoEditorScreen(
 
     fun startVoiceover() {
         try {
-            val lengthMs = SequentialTimeline(currentDraft.value.clips).totalMs
+            val lengthMs = SequentialTimeline(currentDraft.value.clips, currentDraft.value.primaryTransitions).totalMs
             require(playMs + 100L < lengthMs) {
                 "Place playhead at least 100ms before the end of the project"
             }
@@ -908,6 +908,11 @@ internal fun VideoEditorScreen(
                 if (kotlin.math.abs(primaryTransitionPlayer.currentPosition - localMs) > 90L) {
                     primaryTransitionPlayer.seekTo(localMs.coerceAtLeast(0L))
                 }
+                val incoming = active.clips.firstOrNull { it.id == window.incomingClipId }
+                val incomingGain = window.audioGainsAt(nowUs).second
+                primaryTransitionPlayer.volume = if (
+                    active.muteOriginalAudio || incoming?.sourceAudioMuted == true
+                ) 0f else incomingGain
                 if (playing && !primaryTransitionPlayer.isPlaying) primaryTransitionPlayer.play()
                 if (!playing && primaryTransitionPlayer.isPlaying) primaryTransitionPlayer.pause()
             }
@@ -923,7 +928,10 @@ internal fun VideoEditorScreen(
                     editTimeline.clips[index].sourceAudioMuted ||
                     editTimeline.clips[index].reverseVideo
                 val sourceVolume = if (sourceMuted) 0f else 1f
-                if (player.volume != sourceVolume) player.volume = sourceVolume
+                val transition = editTimeline.transitionPlan?.transitionAt(playMs * 1_000L)
+                val outgoingGain = transition?.audioGainsAt(playMs * 1_000L)?.first ?: 1f
+                val targetVolume = sourceVolume * outgoingGain
+                if (player.volume != targetVolume) player.volume = targetVolume
             }
             playing = player.isPlaying
             val warning = runCatching {
