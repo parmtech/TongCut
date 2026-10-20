@@ -17,7 +17,8 @@ import androidx.media3.effect.TextureOverlay
 object PhotoOverlayEffects {
     fun overlays(
         context: Context, timeline: LayerTimeline,
-        outputWidthPx: Int, canvasAspect: Float
+        outputWidthPx: Int, canvasAspect: Float,
+        colorLutProfile: ColorLutProfile? = null
     ): List<TextureOverlay> {
         require(outputWidthPx > 0)
         require(canvasAspect.isFinite() && canvasAspect in 0.1f..10f)
@@ -47,7 +48,10 @@ object PhotoOverlayEffects {
                 override fun getBitmap(presentationTimeUs: Long): Bitmap {
                     image?.let { return it }
                     val uri = Uri.parse(requireNotNull(layer.sourceUri))
-                    return PhotoBitmapDecoder.decode(context, uri, layer.photoEffects)
+                    // Missing/malformed project LUTs decode as null and remain a neutral no-op.
+                    return PhotoBitmapDecoder.decode(
+                        context, uri, layer.photoEffects, colorLutProfile
+                    )
                         .also { image = it }
                 }
 
