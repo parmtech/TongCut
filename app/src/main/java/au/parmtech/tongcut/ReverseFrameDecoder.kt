@@ -144,6 +144,17 @@ object ApproximateReverseFrameMaterializer {
                     bitmap.recycle()
                 }
             }
+            // A smaller caller-configured cache may evict frames written earlier in this
+            // generation. Validate point-in-time completeness before publishing the handle;
+            // callers must still handle a later cache miss because the cache may be cleared.
+            for (outputIndex in 0 until plan.frameCount) {
+                checkCancelled(isCancelled)
+                val lease = cache.openFrame(key, outputIndex.toLong())
+                    ?: throw IllegalStateException(
+                        "Reverse preview cache could not retain a complete segment"
+                    )
+                lease.close()
+            }
             checkCancelled(isCancelled)
             return CachedReversePreviewSegment(
                 cacheKey = key,
