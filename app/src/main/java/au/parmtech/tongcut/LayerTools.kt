@@ -398,6 +398,52 @@ internal fun LayerTools(
                                 color = Color(0xFFFFC987), fontSize = 10.sp)
                         }
                         val fx = layer.photoEffects
+                        if (kind == LayerKind.IMAGE) {
+                            Text(
+                                draft.colorLutProfile?.let { "Project LUT: ${it.name}" }
+                                    ?: "No project LUT selected",
+                                color = Color.LightGray,
+                                fontSize = 10.sp
+                            )
+                            SmallLayerButton(
+                                "Project LUT: ${if (fx.applyColorLut) "On" else "Off"}"
+                            ) {
+                                runCatching {
+                                    applyMatte(fx.copy(applyColorLut = !fx.applyColorLut))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "LUT toggle failed") }
+                            }
+                            SmallLayerButton("LUT strength −") {
+                                runCatching {
+                                    applyMatte(fx.copy(colorLutStrength =
+                                        (fx.colorLutStrength - 0.1f).coerceAtLeast(0f)))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "LUT strength change failed") }
+                            }
+                            SmallLayerButton("LUT strength +") {
+                                runCatching {
+                                    applyMatte(fx.copy(colorLutStrength =
+                                        (fx.colorLutStrength + 0.1f).coerceAtMost(1f)))
+                                }.onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "LUT strength change failed") }
+                            }
+                            Text(
+                                "Layer strength ${(fx.colorLutStrength * 100).toInt()}% · " +
+                                    "saved; preview/export integration pending",
+                                color = Color(0xFFFFC987),
+                                fontSize = 10.sp
+                            )
+                            if (fx.applyColorLut || fx.colorLutStrength != 1f) {
+                                SmallLayerButton("Reset layer LUT") {
+                                    runCatching {
+                                        applyMatte(fx.copy(
+                                            applyColorLut = false, colorLutStrength = 1f
+                                        ))
+                                    }.onSuccess(onChange)
+                                        .onFailure { onError(it.message ?: "LUT reset failed") }
+                                }
+                            }
+                        }
                         var selectedPolygonVertex by remember(layer.id) { mutableIntStateOf(0) }
                         var selectedHslBand by remember(layer.id) { mutableIntStateOf(0) }
                         var selectedCurveChannel by remember(layer.id) { mutableIntStateOf(0) }
