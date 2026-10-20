@@ -110,7 +110,7 @@ internal fun VisualOverlayPreview(
             }
             // The SAME per-source GPU key/mask as the exported Media3 MP4.
             // Reconfigure only on actual effect changes; don't reset source time.
-            LaunchedEffect(player, layer.photoEffects) {
+            LaunchedEffect(player, layer.photoEffects, colorLutProfile) {
                 val videoEffects = if (layer.photoEffects == PhotoEffects()) emptyList()
                 else buildList {
                     add(VideoMatteEffect(layer.photoEffects))
@@ -122,6 +122,9 @@ internal fun VisualOverlayPreview(
                             premultipliedInput = true
                         ))
                     }
+                    addAll(VideoOverlayLutEffects.forLayer(
+                        colorLutProfile, layer.photoEffects
+                    ))
                     if (layer.photoEffects.vignette > 0f) {
                         add(VideoVignetteEffect(layer.photoEffects.vignette))
                     }
