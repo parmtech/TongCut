@@ -24,6 +24,7 @@ class ProjectRecoveryDeviceTest {
             primaryBlur=0.03f,
             primarySharpen=0.4f,
             primaryGrain=0.6f,
+            primaryVignette=0.7f,
             primaryQuarterTurns=1,
             primaryFlipHorizontal=true,
             colorLutProfile=ColorLutProfile("Recovery LUT",2,List(8) { 0xff808080.toInt() },0.6f)
@@ -61,7 +62,7 @@ class ProjectRecoveryDeviceTest {
         } finally { store.delete() }
     }
 
-    @Test fun projectSchemaThirteenPersistsPrimaryAdjustmentsAndLegacyDefaultsSafely() {
+    @Test fun projectSchemaFourteenPersistsPrimaryAdjustmentsAndLegacyDefaultsSafely() {
         val id="p7-frame-rate-migration"
         val store=ProjectStore(app,id)
         store.delete()
@@ -69,7 +70,7 @@ class ProjectRecoveryDeviceTest {
         try {
             store.save(layeredProject())
             val current=JSONObject(jsonFile.readText())
-            assertEquals(13,current.getInt("schema"))
+            assertEquals(14,current.getInt("schema"))
             assertEquals(60,current.getInt("exportMaxFrameRate"))
             val loaded=ProjectStore(app,id).load()!!
             assertEquals(60,loaded.exportMaxFrameRate)
@@ -77,8 +78,18 @@ class ProjectRecoveryDeviceTest {
             assertEquals(0.03f,loaded.primaryBlur,0f)
             assertEquals(0.4f,loaded.primarySharpen,0f)
             assertEquals(0.6f,loaded.primaryGrain,0f)
+            assertEquals(0.7f,loaded.primaryVignette,0f)
             assertEquals(1,loaded.primaryQuarterTurns)
             assertTrue(loaded.primaryFlipHorizontal)
+
+            val schemaThirteen=JSONObject(current.toString()).apply {
+                put("schema",13)
+                remove("primaryVignette")
+            }
+            jsonFile.writeText(schemaThirteen.toString())
+            val schemaThirteenDraft=ProjectStore(app,id).load()!!
+            assertEquals(0.6f,schemaThirteenDraft.primaryGrain,0f)
+            assertEquals(0f,schemaThirteenDraft.primaryVignette,0f)
 
             val schemaTwelve=JSONObject(current.toString()).apply {
                 put("schema",12)
@@ -89,6 +100,7 @@ class ProjectRecoveryDeviceTest {
             assertEquals(0.03f,schemaTwelveDraft.primaryBlur,0f)
             assertEquals(0.4f,schemaTwelveDraft.primarySharpen,0f)
             assertEquals(0f,schemaTwelveDraft.primaryGrain,0f)
+            assertEquals(0f,schemaTwelveDraft.primaryVignette,0f)
 
             current.put("schema",6).remove("exportMaxFrameRate")
             jsonFile.writeText(current.toString())
@@ -97,6 +109,7 @@ class ProjectRecoveryDeviceTest {
             assertEquals(0f,ProjectStore(app,id).load()!!.primaryBlur,0f)
             assertEquals(0f,ProjectStore(app,id).load()!!.primarySharpen,0f)
             assertEquals(0f,ProjectStore(app,id).load()!!.primaryGrain,0f)
+            assertEquals(0f,ProjectStore(app,id).load()!!.primaryVignette,0f)
             assertNull(ProjectStore(app,id).load()!!.colorLutProfile)
 
             current.put("schema",7).put("exportMaxFrameRate",120)

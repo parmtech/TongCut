@@ -47,7 +47,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..13) { "Unsupported project schema" }
+        require(schema in 1..14) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -85,6 +85,9 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                 .takeIf { it.isFinite() && it in 0f..1f } ?: 0f else 0f,
             primaryGrain = if (schema >= 13) root.optDouble("primaryGrain", 0.0).toFloat()
                 .takeIf { it.isFinite() && it in 0f..1f } ?: 0f else 0f,
+            primaryVignette = if (schema >= 14)
+                root.optDouble("primaryVignette", 0.0).toFloat()
+                    .takeIf { it.isFinite() && it in 0f..1f } ?: 0f else 0f,
             primaryQuarterTurns = if (schema >= 11)
                 root.optInt("primaryQuarterTurns", 0).takeIf { it in 0..3 } ?: 0 else 0,
             primaryFlipHorizontal = schema >= 11 &&
@@ -103,7 +106,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 13)
+            put("schema", 14)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -116,6 +119,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
             put("primaryBlur", project.primaryBlur.toDouble())
             put("primarySharpen", project.primarySharpen.toDouble())
             put("primaryGrain", project.primaryGrain.toDouble())
+            put("primaryVignette", project.primaryVignette.toDouble())
             put("primaryQuarterTurns", project.primaryQuarterTurns)
             put("primaryFlipHorizontal", project.primaryFlipHorizontal)
             put("canvas", project.canvas.name)

@@ -559,6 +559,20 @@ internal fun LayerTools(
                                 .onSuccess(onChange)
                                 .onFailure { onError(it.message ?: "Grain change failed") }
                         }
+                        SmallLayerButton("Vignette −") {
+                            runCatching { applyMatte(fx.copy(vignette =
+                                (fx.vignette - 0.1f).coerceAtLeast(0f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Vignette change failed") }
+                        }
+                        SmallLayerButton("Vignette +") {
+                            runCatching { applyMatte(fx.copy(vignette =
+                                (fx.vignette + 0.1f).coerceAtMost(1f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Vignette change failed") }
+                        }
+                        Text("Vignette ${(fx.vignette * 100).toInt()}%",
+                            color = Color.LightGray, fontSize = 10.sp)
                         if (fx.colorGrade != ColorGrade()) {
                             SmallLayerButton("Reset colour") { grade(ColorGrade()) }
                         }
@@ -581,6 +595,13 @@ internal fun LayerTools(
                                 runCatching { applyMatte(fx.copy(grain = 0f)) }
                                     .onSuccess(onChange)
                                     .onFailure { onError(it.message ?: "Grain reset failed") }
+                            }
+                        }
+                        if (fx.vignette > 0f) {
+                            SmallLayerButton("Reset vignette") {
+                                runCatching { applyMatte(fx.copy(vignette = 0f)) }
+                                    .onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Vignette reset failed") }
                             }
                         }
                         SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {

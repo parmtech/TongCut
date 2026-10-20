@@ -48,6 +48,7 @@ data class ExportOptions(
     val primaryBlur: Float = 0f,
     val primarySharpen: Float = 0f,
     val primaryGrain: Float = 0f,
+    val primaryVignette: Float = 0f,
     val primaryQuarterTurns: Int = 0,
     val primaryFlipHorizontal: Boolean = false
 ) {
@@ -58,6 +59,7 @@ data class ExportOptions(
         require(primaryBlur.isFinite() && primaryBlur in 0f..0.08f)
         require(primarySharpen.isFinite() && primarySharpen in 0f..1f)
         require(primaryGrain.isFinite() && primaryGrain in 0f..1f)
+        require(primaryVignette.isFinite() && primaryVignette in 0f..1f)
         require(primaryQuarterTurns in 0..3)
     }
 }

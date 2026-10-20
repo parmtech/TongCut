@@ -80,6 +80,9 @@ object VisualComposition {
                                         premultipliedInput = true
                                     ))
                                 }
+                                if (effects.vignette > 0f) {
+                                    add(VideoVignetteEffect(effects.vignette))
+                                }
                             }
                             edited.setEffects(Effects(emptyList(), videoEffects))
                         }

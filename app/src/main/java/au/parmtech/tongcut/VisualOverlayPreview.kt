@@ -120,6 +120,9 @@ internal fun VisualOverlayPreview(
                             premultipliedInput = true
                         ))
                     }
+                    if (layer.photoEffects.vignette > 0f) {
+                        add(VideoVignetteEffect(layer.photoEffects.vignette))
+                    }
                 }
                 player.setVideoEffects(videoEffects)
             }

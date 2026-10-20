@@ -61,7 +61,9 @@ data class PhotoEffects(
     /** Bounded unsharp detail recovery applied after blur and before matte/grade. */
     val sharpen: Float = 0f,
     /** Deterministic fine monochrome grain strength, 0..1. */
-    val grain: Float = 0f
+    val grain: Float = 0f,
+    /** Bounded radial edge darkening, 0..1; zero is a pixel-identical no-op. */
+    val vignette: Float = 0f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -86,6 +88,7 @@ data class PhotoEffects(
         require(blur.isFinite() && blur in 0f..0.08f)
         require(sharpen.isFinite() && sharpen in 0f..1f)
         require(grain.isFinite() && grain in 0f..1f)
+        require(vignette.isFinite() && vignette in 0f..1f)
     }
 }
 
@@ -271,8 +274,26 @@ object PhotoMatte {
             1f - mask else mask
         val next = (current * shaped * chroma + 0.5f).toInt().coerceIn(0, 255)
         val corrected = settings.chroma?.let { despill(pixelArgb, it) } ?: pixelArgb
-        val graded = settings.colorGrade.apply(corrected)
+        val graded = vignettePixel(settings.colorGrade.apply(corrected),
+            x, y, width, height, settings.vignette)
         return (graded and 0x00FFFFFF) or (next shl 24)
+    }
+
+    /** Darken toward the frame corners while preserving alpha and neutral identity. */
+    fun vignettePixel(argb: Int, x: Int, y: Int, width: Int, height: Int,
+                      amount: Float): Int {
+        require(width > 0 && height > 0 && x in 0 until width && y in 0 until height)
+        require(amount.isFinite() && amount in 0f..1f)
+        if (amount == 0f || argb ushr 24 == 0) return argb
+        val nx = ((x + 0.5f) / width - 0.5f) * 2f
+        val ny = ((y + 0.5f) / height - 0.5f) * 2f
+        val radius = sqrt(nx * nx + ny * ny) / sqrt(2f)
+        val darken = smooth(0.25f, 1f, radius) * amount * 0.65f
+        val scale = 1f - darken
+        fun channel(shift: Int) = ((((argb ushr shift) and 255) * scale) + 0.5f)
+            .toInt().coerceIn(0, 255)
+        return (argb and 0xFF000000.toInt()) or
+            (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 
     /** Fixed 3x3 premultiplied-alpha kernel for halo-safe IMAGE blur. */

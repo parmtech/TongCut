@@ -514,10 +514,12 @@ internal fun primaryClipVideoEffects(options: ExportOptions): List<androidx.medi
         }
         if (options.colorGrade != ColorGrade()) add(ColorGradeEffect(options.colorGrade))
         options.colorLutProfile?.let { add(it.toMedia3Effect()) }
-        if (options.primaryBlur > 0f || options.primarySharpen > 0f || options.primaryGrain > 0f) {
+        if (options.primaryBlur > 0f || options.primarySharpen > 0f ||
+            options.primaryGrain > 0f || options.primaryVignette > 0f) {
             add(VideoMatteEffect(PhotoEffects(
                 blur = options.primaryBlur, sharpen = options.primarySharpen,
                 grain = options.primaryGrain
             )))
         }
+        if (options.primaryVignette > 0f) add(VideoVignetteEffect(options.primaryVignette))
     }

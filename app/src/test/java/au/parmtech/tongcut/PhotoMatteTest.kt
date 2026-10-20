@@ -103,6 +103,16 @@ class PhotoMatteTest {
         assertEquals(0x00000000, PhotoMatte.grainPixel(0, 7, 11, 1f))
     }
 
+    @Test fun vignetteDarkensCornersOnlyAndPreservesAlphaAndNeutralIdentity() {
+        val white = 0x80606060.toInt()
+        assertEquals(white, PhotoMatte.vignettePixel(white, 50, 50, 100, 100, 1f))
+        val corner = PhotoMatte.vignettePixel(white, 0, 0, 100, 100, 1f)
+        assertTrue(((corner ushr 16) and 255) < ((white ushr 16) and 255))
+        assertEquals(0x80, corner ushr 24)
+        assertEquals(white, PhotoMatte.vignettePixel(white, 0, 0, 100, 100, 0f))
+        assertEquals(0x00606060, PhotoMatte.vignettePixel(0x00606060, 0, 0, 100, 100, 1f))
+    }
+
     @Test(expected=IllegalArgumentException::class)
     fun invalidFeatherRejected() { PhotoEffects(feather=Float.NaN) }
 
