@@ -24,6 +24,7 @@ object LayerTimelineCodec {
                     put("muted", track.muted)
                     put("gain", track.gain.toDouble())
                     put("duckingSource", track.duckingSource)
+                    put("duckingGain", track.duckingGain.toDouble())
                 })
             }
         })
@@ -145,7 +146,8 @@ object LayerTimelineCodec {
                 hidden = track.optBoolean("hidden", false),
                 muted = track.optBoolean("muted", false),
                 gain = track.optDouble("gain", 1.0).toFloat(),
-                duckingSource = track.optBoolean("duckingSource", false)
+                duckingSource = track.optBoolean("duckingSource", false),
+                duckingGain = track.optDouble("duckingGain", 0.25).toFloat()
             )
         }
         val clips = (0 until itemsJson.length()).map { i ->

@@ -65,13 +65,18 @@ data class TimelineTrack(
     val muted: Boolean = false,
     val gain: Float = 1f,
     /** When enabled, clips on this AUDIO lane trigger ducking on other audio lanes. */
-    val duckingSource: Boolean = false
+    val duckingSource: Boolean = false,
+    /** Target gain for other lanes while this dialogue/priority track is active. */
+    val duckingGain: Float = 0.25f
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
         require(name.isNotBlank() && name.length <= 120)
         require(order >= 0)
         require(gain.isFinite() && gain in 0f..1f) { "Audio gain must be 0–100%" }
+        require(duckingGain.isFinite() && duckingGain in 0.05f..1f) {
+            "Dialogue duck level must be 5–100%"
+        }
         require(!duckingSource || kind == LayerKind.AUDIO) {
             "Only audio tracks can be dialogue ducking sources"
         }

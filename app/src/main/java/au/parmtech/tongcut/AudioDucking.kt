@@ -9,17 +9,24 @@ object AudioDucking {
     const val ATTACK_US = 120_000L
     const val RELEASE_US = 260_000L
 
-    data class Window(val startUs: Long, val endUs: Long) {
-        init { require(startUs >= 0L && endUs > startUs) }
+    data class Window(
+        val startUs: Long,
+        val endUs: Long,
+        val gain: Float = DUCK_GAIN
+    ) {
+        init {
+            require(startUs >= 0L && endUs > startUs)
+            require(gain.isFinite() && gain in 0.05f..1f)
+        }
     }
 
     fun sourceWindows(timeline: LayerTimeline): List<Window> {
         val activeSourceTracks = timeline.tracks.asSequence()
             .filter { it.kind == LayerKind.AUDIO && it.duckingSource && !it.muted }
-            .map { it.id }.toSet()
+            .associate { it.id to it.duckingGain }
         val ordered = timeline.layers.asSequence()
             .filter { it.kind == LayerKind.AUDIO && it.trackId in activeSourceTracks }
-            .map { Window(it.startUs, it.endUs) }
+            .map { Window(it.startUs, it.endUs, activeSourceTracks.getValue(it.trackId)) }
             .sortedBy { it.startUs }
             .toList()
         if (ordered.isEmpty()) return emptyList()
@@ -29,17 +36,21 @@ object AudioDucking {
         val merged = ArrayList<Window>()
         var start = ordered.first().startUs
         var end = ordered.first().endUs
+        var gain = ordered.first().gain
         for (next in ordered.drop(1)) {
             val joinBefore = if (end > Long.MAX_VALUE - ATTACK_US - RELEASE_US)
                 Long.MAX_VALUE else end + ATTACK_US + RELEASE_US
-            if (next.startUs <= joinBefore) end = maxOf(end, next.endUs)
+            if (next.gain == gain && next.startUs <= joinBefore) {
+                end = maxOf(end, next.endUs)
+            }
             else {
-                merged += Window(start, end)
+                merged += Window(start, end, gain)
                 start = next.startUs
                 end = next.endUs
+                gain = next.gain
             }
         }
-        merged += Window(start, end)
+        merged += Window(start, end, gain)
         return merged
     }
 
@@ -47,28 +58,32 @@ object AudioDucking {
     fun gainAt(projectUs: Long, windows: List<Window>): Float {
         if (windows.isEmpty()) return 1f
         val time = projectUs.coerceAtLeast(0L)
-        for (window in windows) {
-            val attackStart = (window.startUs - ATTACK_US).coerceAtLeast(0L)
-            val releaseEnd = if (window.endUs > Long.MAX_VALUE - RELEASE_US)
-                Long.MAX_VALUE else window.endUs + RELEASE_US
-            when {
-                time < attackStart -> return 1f
-                time < window.startUs -> {
-                    val span = window.startUs - attackStart
-                    if (span <= 0L) return DUCK_GAIN
+        return windows.minOf { window -> gainForWindow(time, window) }
+    }
+
+    private fun gainForWindow(time: Long, window: Window): Float {
+        val attackStart = (window.startUs - ATTACK_US).coerceAtLeast(0L)
+        val releaseEnd = if (window.endUs > Long.MAX_VALUE - RELEASE_US)
+            Long.MAX_VALUE else window.endUs + RELEASE_US
+        return when {
+            time < attackStart -> 1f
+            time < window.startUs -> {
+                val span = window.startUs - attackStart
+                if (span <= 0L) window.gain else {
                     val progress = (time - attackStart).toFloat() / span
-                    return 1f + (DUCK_GAIN - 1f) * progress
-                }
-                time < window.endUs -> return DUCK_GAIN
-                time < releaseEnd -> {
-                    val span = releaseEnd - window.endUs
-                    if (span <= 0L) return 1f
-                    val progress = (time - window.endUs).toFloat() / span
-                    return DUCK_GAIN + (1f - DUCK_GAIN) * progress
+                    1f + (window.gain - 1f) * progress
                 }
             }
+            time < window.endUs -> window.gain
+            time < releaseEnd -> {
+                val span = releaseEnd - window.endUs
+                if (span <= 0L) 1f else {
+                    val progress = (time - window.endUs).toFloat() / span
+                    window.gain + (1f - window.gain) * progress
+                }
+            }
+            else -> 1f
         }
-        return 1f
     }
 
     /**

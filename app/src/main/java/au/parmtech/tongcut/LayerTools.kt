@@ -915,9 +915,29 @@ internal fun LayerTools(
                                 onError(it.message ?: "Dialogue ducking setting failed")
                             }
                         }
+                        if (track.duckingSource) {
+                            SmallLayerButton("Duck more −5%") {
+                                runCatching {
+                                    LayerEdits.setAudioDuckingGain(draft, track.id,
+                                        (track.duckingGain - 0.05f).coerceAtLeast(0.05f))
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "Dialogue duck level failed")
+                                }
+                            }
+                            SmallLayerButton("Duck less +5%") {
+                                runCatching {
+                                    LayerEdits.setAudioDuckingGain(draft, track.id,
+                                        (track.duckingGain + 0.05f).coerceAtMost(1f))
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "Dialogue duck level failed")
+                                }
+                            }
+                        }
                         Text(
-                            if (track.duckingSource) "Other audio dips to 25% around this lane"
-                            else "Set voice/dialogue lane to lower other tracks",
+                            if (track.duckingSource) "Other audio targets " +
+                                "${(track.duckingGain * 100).toInt()}% around this lane"
+                            else "Set voice/dialogue lane to lower other tracks; " +
+                                "default duck level ${(track.duckingGain * 100).toInt()}%",
                             color = Color.LightGray, fontSize = 10.sp
                         )
                         SmallLayerButton("Fade in 0.5s") {

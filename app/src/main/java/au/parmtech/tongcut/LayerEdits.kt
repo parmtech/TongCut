@@ -534,6 +534,20 @@ object LayerEdits {
         }))
     }
 
+    fun setAudioDuckingGain(draft: EditorDraft, trackId: String, gain: Float): EditorDraft {
+        require(gain.isFinite() && gain in 0.05f..1f) {
+            "Dialogue duck level must be 5–100%"
+        }
+        val lane = draft.layers.tracks.firstOrNull { it.id == trackId }
+            ?: throw IllegalArgumentException("Audio track not found")
+        require(lane.kind == LayerKind.AUDIO && !lane.locked) {
+            "Unlock the audio track first"
+        }
+        return draft.copy(layers = draft.layers.copy(tracks = draft.layers.tracks.map {
+            if (it.id == trackId) it.copy(duckingGain = gain) else it
+        }))
+    }
+
     /** Adds or replaces one clip-local envelope point at the current project playhead. */
     fun setAudioEnvelopeAt(
         draft: EditorDraft, id: String, playheadMs: Long, gain: Float

@@ -93,6 +93,32 @@ class AudioDuckingTest {
             AudioDucking.gainAt(2_000_000L, windows), 0.001f)
     }
 
+    @Test fun configuredDuckDepthControlsPreviewAndExportEnvelope() {
+        val configuredVoice = voice.copy(duckingGain = 0.4f)
+        val graph = LayerTimeline(tracks = listOf(music, configuredVoice), layers = listOf(
+            audio("music", "music", 0L, 6_000_000L),
+            audio("dialogue", "voice", 2_000_000L, 1_000_000L)
+        ))
+        val windows = AudioDucking.sourceWindows(graph)
+        assertEquals(0.7f, AudioDucking.gainAt(1_940_000L, windows), 0.01f)
+        assertEquals(0.4f, AudioDucking.gainAt(2_500_000L, windows), 0.001f)
+        val musicEnvelope = AudioMixPlan.from(graph, 6_000_000L)
+            .first { it.trackId == "music" }
+            .parts.filterIsInstance<AudioPart.Source>().single().envelope
+        assertEquals(0.4f, AudioEnvelope.gainAt(2_500_000L, 6_000_000L,
+            musicEnvelope), 0.001f)
+    }
+
+    @Test fun overlappingSourceTracksUseTheStrongestConfiguredDuck() {
+        val stronger = TimelineTrack("strong", "Strong", LayerKind.AUDIO, 2,
+            duckingSource = true, duckingGain = 0.15f)
+        val graph = LayerTimeline(tracks = listOf(voice.copy(duckingGain = 0.4f), stronger),
+            layers = listOf(audio("voice", "voice", 1_000_000L, 2_000_000L),
+                audio("strong", "strong", 1_500_000L, 1_000_000L)))
+        val windows = AudioDucking.sourceWindows(graph)
+        assertEquals(0.15f, AudioDucking.gainAt(1_750_000L, windows), 0.001f)
+    }
+
     @Test fun denseSeparatedDialogueFailsWithAnActionableAutomationLimit() {
         val musicClip = audio("music", "music", 0L, 10_000_000L)
         val dialogue = (0 until 14).map { index ->
@@ -147,6 +173,31 @@ class AudioDuckingTest {
         try {
             LayerEdits.setAudioDuckingSource(locked, "music", false)
             fail("Locked audio tracks must not accept edits")
+        } catch (_: IllegalArgumentException) { }
+    }
+
+    @Test fun duckLevelPersistsAndLegacyTracksKeepTwentyFivePercentDefault() {
+        val graph = LayerTimeline(tracks = listOf(voice.copy(duckingGain = 0.45f)))
+        val encoded = LayerTimelineCodec.encode(graph)
+        assertEquals(0.45f, LayerTimelineCodec.decode(encoded).tracks.single().duckingGain,
+            0.001f)
+        encoded.getJSONArray("tracks").getJSONObject(0).remove("duckingGain")
+        assertEquals(AudioDucking.DUCK_GAIN,
+            LayerTimelineCodec.decode(encoded).tracks.single().duckingGain, 0.001f)
+    }
+
+    @Test fun duckLevelSetterIsBoundedAndRespectsTrackLock() {
+        val draft = EditorDraft(layers = LayerTimeline(tracks = listOf(voice)))
+        val changed = LayerEdits.setAudioDuckingGain(draft, "voice", 0.35f)
+        assertEquals(0.35f, changed.layers.tracks.single().duckingGain, 0.001f)
+        try {
+            LayerEdits.setAudioDuckingGain(draft, "voice", 0f)
+            fail("Duck level must remain audible and bounded")
+        } catch (_: IllegalArgumentException) { }
+        val locked = draft.copy(layers = draft.layers.setTrackLocked("voice", true))
+        try {
+            LayerEdits.setAudioDuckingGain(locked, "voice", 0.5f)
+            fail("Locked audio tracks must not accept duck-level edits")
         } catch (_: IllegalArgumentException) { }
     }
 }
