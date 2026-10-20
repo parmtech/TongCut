@@ -78,6 +78,7 @@ private class MatteShader(
         program.setFloatUniform("uContrast", settings.colorGrade.contrast)
         program.setFloatUniform("uSaturation", settings.colorGrade.saturation)
         program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
+        program.setFloatUniform("uTint", settings.colorGrade.tint)
         program.setFloatUniform("uBlurAmount", settings.blur)
         program.setFloatUniform("uSharpenAmount", settings.sharpen)
         program.setFloatUniform("uGrainAmount", settings.grain)
@@ -145,6 +146,7 @@ private class MatteShader(
             uniform float uContrast;
             uniform float uSaturation;
             uniform float uTemperature;
+            uniform float uTint;
             uniform float uBlurAmount;
             uniform float uSharpenAmount;
             uniform float uGrainAmount;
@@ -296,6 +298,9 @@ private class MatteShader(
                 grade = mix(vec3(luminance), grade, uSaturation);
                 grade.r += uTemperature * 0.10;
                 grade.b -= uTemperature * 0.10;
+                grade.r += uTint * 0.05;
+                grade.g -= uTint * 0.10;
+                grade.b += uTint * 0.05;
                 gl_FragColor = vec4(clamp(grade, 0.0, 1.0) * keyedAlpha, keyedAlpha);
             }
         """

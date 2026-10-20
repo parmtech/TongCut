@@ -39,6 +39,7 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
         program.setFloatUniform("uContrast", grade.contrast)
         program.setFloatUniform("uSaturation", grade.saturation)
         program.setFloatUniform("uTemperature", grade.temperature)
+        program.setFloatUniform("uTint", grade.tint)
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -86,6 +87,7 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
             uniform float uContrast;
             uniform float uSaturation;
             uniform float uTemperature;
+            uniform float uTint;
             varying vec2 vTexSamplingCoord;
             void main() {
                 vec4 source = texture2D(uTexSampler, vTexSamplingCoord);
@@ -95,9 +97,11 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
                 color = mix(vec3(luminance), color, uSaturation);
                 color.r += uTemperature * 0.10;
                 color.b -= uTemperature * 0.10;
+                color.r += uTint * 0.05;
+                color.g -= uTint * 0.10;
+                color.b += uTint * 0.05;
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), source.a);
             }
         """
     }
 }
-

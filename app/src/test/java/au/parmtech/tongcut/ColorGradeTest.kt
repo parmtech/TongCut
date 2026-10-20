@@ -37,14 +37,36 @@ class ColorGradeTest {
         assertTrue((warm and 255) < (cool and 255))
     }
 
+    @Test fun tintMovesNeutralPixelsBetweenGreenAndMagenta() {
+        val source = 0xFF808080.toInt()
+        val neutral = ColorGrade().apply(source)
+        val magenta = ColorGrade(tint = 1f).apply(source)
+        val green = ColorGrade(tint = -1f).apply(source)
+        assertTrue(((magenta ushr 16) and 255) > ((neutral ushr 16) and 255))
+        assertTrue(((magenta ushr 8) and 255) < ((neutral ushr 8) and 255))
+        assertTrue((magenta and 255) > (neutral and 255))
+        assertTrue(((green ushr 8) and 255) > ((neutral ushr 8) and 255))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedExposure() { ColorGrade(exposure = 2.01f) }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsUnboundedTint() { ColorGrade(tint = -1.01f) }
+
     @Test fun gradeCodecRoundTripsAndDefaultsLegacyProjects() {
         val grade = ColorGrade(exposure = 0.75f, contrast = 1.2f,
-            saturation = 0.8f, temperature = -0.3f)
+            saturation = 0.8f, temperature = -0.3f, tint = 0.45f)
         assertEquals(grade, ColorGradeCodec.decode(ColorGradeCodec.encode(grade)))
         assertEquals(ColorGrade(), ColorGradeCodec.decode(null))
+    }
+
+    @Test fun missingLegacyTintDefaultsToNeutralWithoutResettingOtherAdjustments() {
+        val decoded = ColorGradeCodec.decode(JSONObject()
+            .put("exposure", 0.5).put("temperature", -0.25))
+        assertEquals(0.5f, decoded.exposure)
+        assertEquals(-0.25f, decoded.temperature)
+        assertEquals(0f, decoded.tint)
     }
 
     @Test fun gradeCodecRejectsMalformedRangesToNeutralDefaults() {
@@ -52,4 +74,3 @@ class ColorGradeTest {
         assertEquals(ColorGrade(), ColorGradeCodec.decode(malformed))
     }
 }
-
