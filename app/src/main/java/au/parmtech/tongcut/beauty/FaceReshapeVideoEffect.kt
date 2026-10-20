@@ -67,6 +67,17 @@ private class FaceReshapeVideoShader(
         )
         program.setFloatUniform("uEnabled", 0f)
         program.setFloatUniform("uEyeStrength", params.eyeEnlarge)
+        // Every active shader uniform must have an initialized value even
+        // when the first frames have no trusted face observations.
+        for (index in 0 until 7) {
+            program.setFloatsUniform("uPin$index", floatArrayOf(0f, 0f, 0f, 0f))
+        }
+        program.setFloatsUniform("uFaceRadius", floatArrayOf(0.025f, 0.025f))
+        program.setFloatsUniform("uNoseRadius", floatArrayOf(0.025f, 0.025f))
+        program.setFloatsUniform("uChinRadius", floatArrayOf(0.025f, 0.025f))
+        for (index in 0 until 2) {
+            program.setFloatsUniform("uEye$index", floatArrayOf(0f, 0f, 0.03f, 0.025f))
+        }
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
