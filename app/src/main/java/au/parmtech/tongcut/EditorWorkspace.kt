@@ -659,6 +659,7 @@ internal fun VideoEditorScreen(
     var reverseAudioReady by remember { mutableStateOf(false) }
     val reverseAudioGeneration = remember { AtomicInteger(0) }
     val reverseAudioPlayer = remember(context) { ExoPlayer.Builder(context).build() }
+    val primaryTransitionPlayer = remember(context) { ExoPlayer.Builder(context).build() }
     val reversePreviewWorker = remember {
         Executors.newSingleThreadExecutor { task ->
             Thread(task, "TongCut-reverse-preview").apply { isDaemon = true }
@@ -680,7 +681,10 @@ internal fun VideoEditorScreen(
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
     DisposableEffect(reverseAudioPlayer) { onDispose { reverseAudioPlayer.release() } }
-    val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
+    DisposableEffect(primaryTransitionPlayer) { onDispose { primaryTransitionPlayer.release() } }
+    val editTimeline = remember(active.clips, active.primaryTransitions) {
+        SequentialTimeline(active.clips, active.primaryTransitions)
+    }
     val reverseTarget = editTimeline.reverseTargetAt(playMs)
     val reverseClipIndex = reverseTarget?.clipIndex
     val reverseClip = reverseTarget?.clip
@@ -835,16 +839,21 @@ internal fun VideoEditorScreen(
             effects += VideoVignetteEffect(active.primaryVignette)
         }
         player.setVideoEffects(effects)
+        primaryTransitionPlayer.setVideoEffects(effects)
     }
-    LaunchedEffect(active.clips, active.selectedIndex) {
+    LaunchedEffect(active.clips, active.primaryTransitions, active.selectedIndex) {
         val resume = player.isPlaying
         player.pause()
         playing = false
+        val transitionPlan = editTimeline.transitionPlan
+        val incomingOverlapMs = transitionPlan?.transitions
+            ?.associate { it.incomingClipId to it.durationUs / 1_000L }.orEmpty()
         val mediaItems = active.clips.map { item ->
+            val sourceStartMs = item.inMs + (incomingOverlapMs[item.id] ?: 0L)
             MediaItem.Builder().setUri(item.sourceUri.toUri())
                 .setClippingConfiguration(
                     MediaItem.ClippingConfiguration.Builder()
-                        .setStartPositionMs(item.inMs)
+                        .setStartPositionMs(sourceStartMs)
                         .setEndPositionMs(item.outMs)
                         .build()
                 ).build()
@@ -862,6 +871,47 @@ internal fun VideoEditorScreen(
                 active.clips[selected].sourceAudioMuted ||
                 active.clips[selected].reverseVideo) 0f else 1f
             if (resume) player.play()
+        }
+    }
+    val primaryTransitionWindow = editTimeline.transitionPlan
+        ?.transitionAt(playMs * 1_000L)
+    val primaryTransitionClip = primaryTransitionWindow?.let { window ->
+        active.clips.firstOrNull { it.id == window.incomingClipId }
+    }
+    LaunchedEffect(primaryTransitionWindow?.incomingClipId, primaryTransitionClip?.sourceUri) {
+        val window = primaryTransitionWindow
+        val incoming = primaryTransitionClip
+        if (window == null || incoming == null) {
+            primaryTransitionPlayer.pause()
+            primaryTransitionPlayer.clearMediaItems()
+        } else {
+            val durationMs = window.durationUs / 1_000L
+            val item = MediaItem.Builder().setUri(incoming.sourceUri.toUri())
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(incoming.inMs)
+                        .setEndPositionMs(incoming.inMs + durationMs)
+                        .build()
+                ).build()
+            primaryTransitionPlayer.setMediaItem(item)
+            primaryTransitionPlayer.prepare()
+        }
+    }
+    LaunchedEffect(primaryTransitionPlayer, editTimeline) {
+        while (true) {
+            val nowUs = playMs * 1_000L
+            val window = editTimeline.transitionPlan?.transitionAt(nowUs)
+            if (window == null) {
+                if (primaryTransitionPlayer.isPlaying) primaryTransitionPlayer.pause()
+            } else {
+                val localMs = (nowUs - window.startUs) / 1_000L
+                if (kotlin.math.abs(primaryTransitionPlayer.currentPosition - localMs) > 90L) {
+                    primaryTransitionPlayer.seekTo(localMs.coerceAtLeast(0L))
+                }
+                if (playing && !primaryTransitionPlayer.isPlaying) primaryTransitionPlayer.play()
+                if (!playing && primaryTransitionPlayer.isPlaying) primaryTransitionPlayer.pause()
+            }
+            delay(50)
         }
     }
     LaunchedEffect(player, editTimeline, active.layers) {
@@ -1132,6 +1182,25 @@ internal fun VideoEditorScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            if (primaryTransitionWindow != null && primaryTransitionClip != null) {
+                val alpha = primaryTransitionWindow.alphaAt(playMs * 1_000L).second
+                AndroidView(
+                    factory = { viewContext ->
+                        PlayerView(viewContext).apply {
+                            useController = false
+                            resizeMode = if (active.canvas == CanvasRatio.SOURCE)
+                                AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            else AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            setShutterBackgroundColor(android.graphics.Color.BLACK)
+                        }
+                    },
+                    update = { view ->
+                        view.player = primaryTransitionPlayer
+                        view.alpha = alpha
+                    },
+                    modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }
+                )
+            }
             // PiP previews are independent video decoders; Media3 export uses the
             // same saved layer timing and compositor layout. Hardware parity pending.
             val overlays = VisualLayerOrder.forPreview(active.layers, playMs * 1_000L)
@@ -1144,6 +1213,7 @@ internal fun VideoEditorScreen(
                     }
                     VisualOverlayPreview(
                         layer = layer, timelineMs = playMs, playing = playing,
+                        colorLutProfile = active.colorLutProfile,
                         modifier = Modifier.align(position).fillMaxWidth(0.42f)
                             .aspectRatio(16f / 9f)
                     )
@@ -1361,6 +1431,26 @@ internal fun VideoEditorScreen(
                             ToolPill("→") {
                                 if (active.selectedIndex < active.clips.lastIndex)
                                     onChange(active.withMovedClip(active.selectedIndex, active.selectedIndex + 1))
+                            }
+                            if (active.selectedIndex < active.clips.lastIndex) {
+                                val currentTransition = active.primaryTransitions.firstOrNull {
+                                    it.afterClipIndex == active.selectedIndex
+                                }
+                                ToolPill(
+                                    if (currentTransition == null) "Dissolve 0.5s"
+                                    else "Dissolve on"
+                                ) {
+                                    val next = runCatching {
+                                        active.withPrimaryTransitionAfter(
+                                            active.selectedIndex,
+                                            if (currentTransition == null) 500L else null
+                                        )
+                                    }.getOrElse {
+                                        onInfo(it.message ?: "Transition cannot be applied.")
+                                        null
+                                    }
+                                    if (next != null) onChange(next)
+                                }
                             }
                             ToolPill("Delete") {
                                 if (active.selectedClip != null) onChange(active.withRemovedClip(active.selectedIndex))
