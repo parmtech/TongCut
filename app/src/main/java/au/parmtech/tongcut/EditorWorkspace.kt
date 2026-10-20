@@ -57,7 +57,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collect
 import androidx.compose.runtime.snapshotFlow
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -589,7 +591,11 @@ internal fun VideoEditorScreen(
     val clip = active.selectedClip
     var reversePreviewSession by remember { mutableStateOf<ReversePreviewSession?>(null) }
     var reversePreviewIssue by remember { mutableStateOf<String?>(null) }
+    var reverseAudioIssue by remember { mutableStateOf<String?>(null) }
     var reversePreviewFrame by remember { mutableStateOf<Bitmap?>(null) }
+    var reverseAudioReady by remember { mutableStateOf(false) }
+    val reverseAudioGeneration = remember { AtomicInteger(0) }
+    val reverseAudioPlayer = remember(context) { ExoPlayer.Builder(context).build() }
     val reversePreviewWorker = remember {
         Executors.newSingleThreadExecutor { task ->
             Thread(task, "TongCut-reverse-preview").apply { isDaemon = true }
@@ -608,6 +614,7 @@ internal fun VideoEditorScreen(
     }
     DisposableEffect(player) { onDispose { player.release() } }
     DisposableEffect(audioMonitor) { onDispose { audioMonitor.release() } }
+    DisposableEffect(reverseAudioPlayer) { onDispose { reverseAudioPlayer.release() } }
     val editTimeline = remember(active.clips) { SequentialTimeline(active.clips) }
 
     LaunchedEffect(clip?.sourceUri, clip?.inMs, clip?.outMs, clip?.reverseVideo) {
@@ -645,6 +652,57 @@ internal fun VideoEditorScreen(
     }
     DisposableEffect(reversePreviewWorker) {
         onDispose { reversePreviewWorker.shutdownNow() }
+    }
+
+    LaunchedEffect(
+        reversePreviewSession, clip?.sourceUri, clip?.inMs, clip?.outMs,
+        clip?.reverseVideo, clip?.sourceAudioMuted, active.muteOriginalAudio
+    ) {
+        val generation = reverseAudioGeneration.incrementAndGet()
+        reverseAudioReady = false
+        reverseAudioIssue = null
+        var preparedAudio: File? = null
+        try {
+            val session = reversePreviewSession
+            val selectedClip = clip
+            if (session == null || selectedClip == null || !selectedClip.reverseVideo ||
+                selectedClip.sourceAudioMuted || active.muteOriginalAudio) return@LaunchedEffect
+            val source = Uri.parse(selectedClip.sourceUri)
+            preparedAudio = ReverseAudioMaterializer.materializeCancellable(
+                context = context,
+                source = source,
+                sourceInUs = Math.multiplyExact(selectedClip.inMs, 1_000L),
+                sourceOutUs = Math.multiplyExact(selectedClip.outMs, 1_000L),
+                targetDurationUs = Math.multiplyExact(selectedClip.editedDurationMs, 1_000L)
+            )
+            val audioFile = preparedAudio
+            if (audioFile == null) {
+                reverseAudioIssue = "This video has no audio track to preview in reverse."
+                return@LaunchedEffect
+            }
+            reverseAudioPlayer.setMediaItem(MediaItem.fromUri(Uri.fromFile(audioFile)))
+            reverseAudioPlayer.prepare()
+            if (reverseAudioGeneration.get() == generation) reverseAudioReady = true
+            awaitCancellation()
+        } catch (cancelledError: CancellationException) {
+            throw cancelledError
+        } catch (error: Exception) {
+            if (reverseAudioGeneration.get() == generation) {
+                reverseAudioIssue = error.message ?: "Reverse audio preview is unavailable"
+                onInfo("Reverse audio preview unavailable: ${reverseAudioIssue}")
+            }
+        } finally {
+            if (reverseAudioGeneration.get() == generation) reverseAudioReady = false
+            val audioUri = preparedAudio?.let { Uri.fromFile(it) }
+            val playerOwnsThisFile = audioUri != null && runCatching {
+                reverseAudioPlayer.currentMediaItem?.localConfiguration?.uri == audioUri
+            }.getOrDefault(false)
+            if (playerOwnsThisFile) runCatching {
+                reverseAudioPlayer.pause()
+                reverseAudioPlayer.clearMediaItems()
+            }
+            withContext(NonCancellable + Dispatchers.IO) { preparedAudio?.delete() }
+        }
     }
 
     // Read once per primary source, on an IO dispatcher; never block Compose
@@ -730,6 +788,32 @@ internal fun VideoEditorScreen(
             }.getOrElse { "Audio preview unavailable: ${it.message ?: "decoder failed"}" }
             audioWarning = warning
             delay(90)
+        }
+    }
+
+    LaunchedEffect(
+        reversePreviewSession, clip?.sourceUri, clip?.inMs, clip?.outMs,
+        clip?.reverseVideo, clip?.sourceAudioMuted, active.muteOriginalAudio,
+        active.selectedIndex, reverseAudioReady, playing
+    ) {
+        val session = reversePreviewSession
+        snapshotFlow { playMs }.collect { currentPlayMs ->
+            val selectedStartMs = active.clips.getOrNull(active.selectedIndex)?.let {
+                editTimeline.startOf(active.selectedIndex)
+            } ?: 0L
+            val selectedEndMs = selectedStartMs + (clip?.editedDurationMs ?: 0L)
+            val showingReverse = clip?.reverseVideo == true &&
+                currentPlayMs >= selectedStartMs && currentPlayMs < selectedEndMs
+            val reverseLocalMs = (currentPlayMs - selectedStartMs).coerceAtLeast(0L)
+            if (!showingReverse || !reverseAudioReady || active.muteOriginalAudio ||
+                clip?.sourceAudioMuted == true || session == null) {
+                reverseAudioPlayer.pause()
+            } else {
+                if (kotlin.math.abs(reverseAudioPlayer.currentPosition - reverseLocalMs) > 250L) {
+                    reverseAudioPlayer.seekTo(reverseLocalMs)
+                }
+                if (playing) reverseAudioPlayer.play() else reverseAudioPlayer.pause()
+            }
         }
     }
 
@@ -915,7 +999,7 @@ internal fun VideoEditorScreen(
                     )
                 } else {
                     Text(
-                        reversePreviewIssue ?: "Preparing reverse preview…",
+                        reverseAudioIssue ?: reversePreviewIssue ?: "Preparing reverse preview…",
                         color = Color.LightGray
                     )
                 }

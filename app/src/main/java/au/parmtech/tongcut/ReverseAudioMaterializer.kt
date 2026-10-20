@@ -13,8 +13,12 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
 import java.util.BitSet
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** Decodes one source trim to bounded PCM16 WAV, reversing interleaved sample frames. */
 internal object ReverseAudioMaterializer {
@@ -26,6 +30,38 @@ internal object ReverseAudioMaterializer {
     private const val MAX_IDLE_POLLS = 6_000
     private const val WAV_HEADER_BYTES = 44
     private const val STALE_CACHE_AGE_MS = 7L * 24 * 60 * 60 * 1_000
+
+    /** Worker-thread variant that deletes a completed cache file if its caller was cancelled. */
+    suspend fun materializeCancellable(
+        context: Context,
+        source: Uri,
+        sourceInUs: Long,
+        sourceOutUs: Long,
+        targetDurationUs: Long
+    ): File? {
+        return suspendCancellableCoroutine { continuation ->
+            val cancelled = AtomicBoolean(false)
+            val worker = Thread({
+                try {
+                    val file = materialize(
+                        context, source, sourceInUs, sourceOutUs, targetDurationUs
+                    ) { cancelled.get() || Thread.currentThread().isInterrupted }
+                    if (cancelled.get() || !continuation.isActive) {
+                        file?.delete()
+                    } else {
+                        continuation.resume(file) { _, value, _ -> value?.delete() }
+                    }
+                } catch (failure: Throwable) {
+                    if (continuation.isActive) continuation.resumeWithException(failure)
+                }
+            }, "TongCut-reverse-audio-preview").apply { isDaemon = true }
+            continuation.invokeOnCancellation {
+                cancelled.set(true)
+                worker.interrupt()
+            }
+            worker.start()
+        }
+    }
 
     fun materialize(
         context: Context,
