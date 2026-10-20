@@ -99,26 +99,30 @@ data class EditorDraft(
         return copy(clips = mutable)
     }
 
+    private fun reattachAdjacentTransitions(newClips: List<DraftClip>): List<PrimaryTransitionSpec> =
+        primaryTransitions.mapNotNull { transition ->
+            val outgoingId = clips[transition.afterClipIndex].id
+            val incomingId = clips[transition.afterClipIndex + 1].id
+            val newIndex = newClips.indexOfFirst { it.id == outgoingId }
+            if (newIndex >= 0 && newClips.getOrNull(newIndex + 1)?.id == incomingId) {
+                transition.copy(afterClipIndex = newIndex)
+            } else null
+        }
+
     fun withMovedClip(from: Int, to: Int): EditorDraft {
         require(from in clips.indices && to in clips.indices)
         val mutable = clips.toMutableList()
         val moved = mutable.removeAt(from)
         mutable.add(to, moved)
-        val transitions = primaryTransitions.filter { it.afterClipIndex !in minOf(from, to)..maxOf(from, to) }
-        return copy(clips = mutable, selectedIndex = to, primaryTransitions = transitions)
+        return copy(clips = mutable, selectedIndex = to,
+            primaryTransitions = reattachAdjacentTransitions(mutable))
     }
 
     fun withRemovedClip(index: Int): EditorDraft {
         require(index in clips.indices)
         val remaining = clips.filterIndexed { i, _ -> i != index }
-        val transitions = primaryTransitions.mapNotNull { transition ->
-            when {
-                transition.afterClipIndex == index || transition.afterClipIndex + 1 == index -> null
-                transition.afterClipIndex > index -> transition.copy(afterClipIndex = transition.afterClipIndex - 1)
-                else -> transition
-            }
-        }
-        return copy(clips = remaining, primaryTransitions = transitions).normalized()
+        return copy(clips = remaining,
+            primaryTransitions = reattachAdjacentTransitions(remaining)).normalized()
     }
 
     fun splitSelected(sourcePositionMs: Long): EditorDraft? {
