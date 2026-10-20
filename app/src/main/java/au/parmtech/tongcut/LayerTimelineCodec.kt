@@ -69,6 +69,13 @@ object LayerTimelineCodec {
                         put("scaleY", item.photoEffects.maskScaleY.toDouble())
                         put("invert", item.photoEffects.invertMask)
                         put("rotation", item.photoEffects.maskRotationDegrees.toDouble())
+                        if (item.photoEffects.mask == PhotoMask.POLYGON) {
+                            put("maskPoints", JSONArray().apply {
+                                item.photoEffects.maskPoints.forEach { point ->
+                                    put(JSONArray().put(point.x.toDouble()).put(point.y.toDouble()))
+                                }
+                            })
+                        }
                         put("blur", item.photoEffects.blur.toDouble())
                         put("sharpen", item.photoEffects.sharpen.toDouble())
                         put("grain", item.photoEffects.grain.toDouble())
@@ -194,6 +201,14 @@ object LayerTimelineCodec {
                         maskScaleY = fx.optDouble("scaleY",1.0).toFloat(),
                         invertMask = fx.optBoolean("invert",false),
                         maskRotationDegrees = fx.optDouble("rotation",0.0).toFloat(),
+                        maskPoints = fx.optJSONArray("maskPoints")?.let { points ->
+                            require(points.length() in 3..8) { "Invalid polygon mask point count" }
+                            (0 until points.length()).map { index ->
+                                val point = points.getJSONArray(index)
+                                require(point.length() == 2) { "Invalid polygon mask point" }
+                                MaskPoint(point.getDouble(0).toFloat(), point.getDouble(1).toFloat())
+                            }
+                        } ?: DEFAULT_MASK_POLYGON_POINTS,
                         colorGrade = ColorGradeCodec.decode(fx.optJSONObject("colorGrade")),
                         blur = fx.optDouble("blur",0.0).toFloat(),
                         sharpen = fx.optDouble("sharpen",0.0).toFloat(),

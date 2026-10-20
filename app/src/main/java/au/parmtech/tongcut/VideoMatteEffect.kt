@@ -1,5 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
-Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import android.content.Context
@@ -62,6 +60,14 @@ private class MatteShader(
         program.setFloatsUniform(
             "uMaskScale", floatArrayOf(settings.maskScaleX, settings.maskScaleY)
         )
+        program.setFloatUniform("uMaskPolygonCount", settings.maskPoints.size.toFloat())
+        settings.maskPoints.forEachIndexed { index, point ->
+            program.setFloatsUniform("uMaskPolygon$index", floatArrayOf(point.x, point.y))
+        }
+        for (index in settings.maskPoints.size until PhotoMatte.MAX_POLYGON_POINTS) {
+            val point = settings.maskPoints.last()
+            program.setFloatsUniform("uMaskPolygon$index", floatArrayOf(point.x, point.y))
+        }
         program.setFloatUniform("uUseChroma", if (chroma == null) 0f else 1f)
         program.setFloatsUniform("uKeyColor", floatArrayOf(
             ((key ushr 16) and 255) / 255f,
@@ -141,6 +147,15 @@ private class MatteShader(
             uniform float uMaskRotation;
             uniform vec2 uMaskCenter;
             uniform vec2 uMaskScale;
+            uniform float uMaskPolygonCount;
+            uniform vec2 uMaskPolygon0;
+            uniform vec2 uMaskPolygon1;
+            uniform vec2 uMaskPolygon2;
+            uniform vec2 uMaskPolygon3;
+            uniform vec2 uMaskPolygon4;
+            uniform vec2 uMaskPolygon5;
+            uniform vec2 uMaskPolygon6;
+            uniform vec2 uMaskPolygon7;
             uniform float uUseChroma;
             uniform vec3 uKeyColor;
             uniform float uTolerance;
@@ -162,6 +177,53 @@ private class MatteShader(
 
             float edge(float lo, float hi, float value) {
                 return smoothstep(lo, max(lo + 0.00001, hi), value);
+            }
+            vec2 polygonVertex(float index) {
+                if (index < 0.5) return uMaskPolygon0;
+                if (index < 1.5) return uMaskPolygon1;
+                if (index < 2.5) return uMaskPolygon2;
+                if (index < 3.5) return uMaskPolygon3;
+                if (index < 4.5) return uMaskPolygon4;
+                if (index < 5.5) return uMaskPolygon5;
+                if (index < 6.5) return uMaskPolygon6;
+                return uMaskPolygon7;
+            }
+            float polygonMatte(vec2 point) {
+                vec2 radii = uFrameSize * 0.48 * uMaskScale;
+                vec2 centered = point - uMaskCenter * uFrameSize * 0.5;
+                float angle = radians(uMaskRotation);
+                float c = cos(angle);
+                float s = sin(angle);
+                vec2 rotated = vec2(c * centered.x + s * centered.y,
+                    -s * centered.x + c * centered.y);
+                vec2 p = rotated / radii;
+                bool inside = false;
+                float minDistanceSquared = 1.0e20;
+                for (int i = 0; i < 8; i++) {
+                    if (float(i) < uMaskPolygonCount) {
+                        vec2 a = polygonVertex(float(i));
+                        float nextIndex = mod(float(i + 1), uMaskPolygonCount);
+                        vec2 b = polygonVertex(nextIndex);
+                        if ((a.y > p.y) != (b.y > p.y) &&
+                            p.x < (b.x - a.x) * (p.y - a.y) /
+                                (b.y - a.y) + a.x) inside = !inside;
+                        vec2 physicalPoint = p * radii;
+                        vec2 physicalA = a * radii;
+                        vec2 physicalB = b * radii;
+                        vec2 segment = physicalB - physicalA;
+                        float segmentLengthSquared = max(dot(segment, segment), 0.000001);
+                        float t = clamp(dot(physicalPoint - physicalA, segment) /
+                            segmentLengthSquared, 0.0, 1.0);
+                        vec2 delta = physicalPoint - (physicalA + t * segment);
+                        minDistanceSquared = min(minDistanceSquared, dot(delta, delta));
+                    }
+                }
+                float signedDistance = sqrt(minDistanceSquared);
+                if (!inside) signedDistance = -signedDistance;
+                if (uMaskFeather <= 0.0)
+                    return signedDistance >= 0.0 ? 1.0 : 0.0;
+                return edge(-uMaskFeather * min(uFrameSize.x, uFrameSize.y) * 0.5,
+                    uMaskFeather * min(uFrameSize.x, uFrameSize.y) * 0.5, signedDistance);
             }
             vec3 adjustHsl(vec3 color, float degrees, float saturationShift,
                 float lightnessShift) {
@@ -273,7 +335,8 @@ private class MatteShader(
                 float shortSide = min(uFrameSize.x, uFrameSize.y);
                 float blur = shortSide * uMaskFeather;
                 float matte = 1.0;
-                // PhotoMask: NONE=0, CIRCLE=1, ROUNDED_RECT=2, LINEAR_WIPE=3.
+                // PhotoMask: NONE=0, CIRCLE=1, ROUNDED_RECT=2, WIPE=3,
+                // ELLIPSE=4, DIAMOND=5, POLYGON=6.
                 if (uMaskMode > 0.5 && uMaskMode < 1.5) {
                     float inside = shortSide * 0.48 - length(point);
                     matte = edge(-blur * 0.5, blur * 0.5, inside);
@@ -303,6 +366,8 @@ private class MatteShader(
                         : abs(normalized.x) + abs(normalized.y);
                     float inside = (1.0 - distance) * min(radii.x, radii.y);
                     matte = edge(-blur * 0.5, blur * 0.5, inside);
+                } else if (uMaskMode > 5.5 && uMaskMode < 6.5) {
+                    matte = polygonMatte(point);
                 }
                 if (uInvertMask > 0.5 && uMaskMode > 0.5) {
                     matte = 1.0 - matte;

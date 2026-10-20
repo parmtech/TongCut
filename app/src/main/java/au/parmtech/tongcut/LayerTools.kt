@@ -1,5 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
-Warning: s was declared with const; use let for reassignable variables.
 package au.parmtech.tongcut
 
 import androidx.compose.foundation.*
@@ -350,6 +348,7 @@ internal fun LayerTools(
                                 color = Color(0xFFFFC987), fontSize = 10.sp)
                         }
                         val fx = layer.photoEffects
+                        var selectedPolygonVertex by remember(layer.id) { mutableIntStateOf(0) }
                         fun grade(next: ColorGrade) {
                             runCatching { applyMatte(fx.copy(colorGrade = next)) }
                                 .onSuccess(onChange)
@@ -486,6 +485,12 @@ internal fun LayerTools(
                                 applyMatte(fx.copy(mask=next))
                             }.onSuccess(onChange).onFailure { onError(it.message ?: "Mask failed") }
                         }
+                        fun changeShape(next: PhotoEffects) {
+                            runCatching { applyMatte(next) }.onSuccess(onChange)
+                                .onFailure {
+                                    onError(it.message ?: "Mask geometry change failed")
+                                }
+                        }
                         if (fx.mask != PhotoMask.NONE) {
                             SmallLayerButton(
                                 if (fx.invertMask) "Mask: inside" else "Mask: invert"
@@ -494,6 +499,65 @@ internal fun LayerTools(
                                     applyMatte(fx.copy(invertMask = !fx.invertMask))
                                 }.onSuccess(onChange)
                                     .onFailure { onError(it.message ?: "Mask inversion failed") }
+                            }
+                        }
+                        if (fx.mask == PhotoMask.POLYGON) {
+                            val selectedVertex = selectedPolygonVertex.coerceIn(
+                                0, fx.maskPoints.lastIndex
+                            )
+                            val selectedPoint = fx.maskPoints[selectedVertex]
+                            Text(
+                                "Freeform point ${selectedVertex + 1}/${fx.maskPoints.size} " +
+                                    "(${(selectedPoint.x * 100).toInt()}%, " +
+                                    "${(selectedPoint.y * 100).toInt()}%)",
+                                color = Color.LightGray, fontSize = 10.sp
+                            )
+                            fun movePolygonPoint(dx: Float, dy: Float) {
+                                val points = fx.maskPoints.toMutableList()
+                                points[selectedVertex] = selectedPoint.copy(
+                                    x = (selectedPoint.x + dx).coerceIn(-1f, 1f),
+                                    y = (selectedPoint.y + dy).coerceIn(-1f, 1f)
+                                )
+                                changeShape(fx.copy(maskPoints = points))
+                            }
+                            SmallLayerButton("Point ◀") {
+                                selectedPolygonVertex =
+                                    (selectedPolygonVertex - 1 + fx.maskPoints.size) %
+                                        fx.maskPoints.size
+                            }
+                            SmallLayerButton("Point ▶") {
+                                selectedPolygonVertex =
+                                    (selectedPolygonVertex + 1) % fx.maskPoints.size
+                            }
+                            SmallLayerButton("Point X−") { movePolygonPoint(-0.1f, 0f) }
+                            SmallLayerButton("Point X+") { movePolygonPoint(0.1f, 0f) }
+                            SmallLayerButton("Point Y−") { movePolygonPoint(0f, -0.1f) }
+                            SmallLayerButton("Point Y+") { movePolygonPoint(0f, 0.1f) }
+                            SmallLayerButton("Add vertex") {
+                                if (fx.maskPoints.size < PhotoMatte.MAX_POLYGON_POINTS) {
+                                    val next = (selectedVertex + 1) % fx.maskPoints.size
+                                    val nextPoint = fx.maskPoints[next]
+                                    val midpoint = MaskPoint(
+                                        (selectedPoint.x + nextPoint.x) * 0.5f,
+                                        (selectedPoint.y + nextPoint.y) * 0.5f
+                                    )
+                                    val points = fx.maskPoints.toMutableList().apply {
+                                        add(next, midpoint)
+                                    }
+                                    changeShape(fx.copy(maskPoints = points))
+                                    selectedPolygonVertex = next
+                                }
+                            }
+                            SmallLayerButton("Remove vertex") {
+                                if (fx.maskPoints.size > 3) {
+                                    val points = fx.maskPoints.toMutableList().apply {
+                                        removeAt(selectedVertex)
+                                    }
+                                    changeShape(fx.copy(maskPoints = points))
+                                    selectedPolygonVertex = selectedPolygonVertex.coerceAtMost(
+                                        points.lastIndex
+                                    )
+                                }
                             }
                         }
                         if (fx.mask == PhotoMask.LINEAR_WIPE) {
@@ -513,13 +577,8 @@ internal fun LayerTools(
                             }
                         }
                         if (fx.mask == PhotoMask.ELLIPSE ||
-                            fx.mask == PhotoMask.DIAMOND) {
-                            fun changeShape(next: PhotoEffects) {
-                                runCatching { applyMatte(next) }.onSuccess(onChange)
-                                    .onFailure {
-                                        onError(it.message ?: "Mask geometry change failed")
-                                    }
-                            }
+                            fx.mask == PhotoMask.DIAMOND ||
+                            fx.mask == PhotoMask.POLYGON) {
                             SmallLayerButton("Mask ←") {
                                 changeShape(fx.copy(maskCenterX =
                                     (fx.maskCenterX - 0.1f).coerceAtLeast(-1f)))

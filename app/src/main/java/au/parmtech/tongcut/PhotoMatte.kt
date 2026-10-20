@@ -13,7 +13,16 @@ import kotlin.math.roundToInt
  * photo preview uses the same alpha model; VIDEO GPU export needs separate pixel
  * and real-time preview validation before it can be called fully accepted.
  */
-enum class PhotoMask { NONE, CIRCLE, ROUNDED_RECT, LINEAR_WIPE, ELLIPSE, DIAMOND }
+enum class PhotoMask { NONE, CIRCLE, ROUNDED_RECT, LINEAR_WIPE, ELLIPSE, DIAMOND, POLYGON }
+
+data class MaskPoint(val x: Float, val y: Float) {
+    init { require(x.isFinite() && x in -1f..1f && y.isFinite() && y in -1f..1f) }
+}
+
+internal val DEFAULT_MASK_POLYGON_POINTS = listOf(
+    MaskPoint(-0.72f, -0.72f), MaskPoint(0.72f, -0.72f),
+    MaskPoint(0.72f, 0.72f), MaskPoint(-0.72f, 0.72f)
+)
 
 data class PhotoChroma(
     val keyArgb: Int = 0xFF00FF00.toInt(),
@@ -44,6 +53,8 @@ data class PhotoEffects(
     val invertMask: Boolean = false,
     /** Degrees around the geometric center, for adjustable ellipse/diamond masks. */
     val maskRotationDegrees: Float = 0f,
+    /** Up to eight normalized vertices used only when mask == POLYGON. */
+    val maskPoints: List<MaskPoint> = DEFAULT_MASK_POLYGON_POINTS,
     val colorGrade: ColorGrade = ColorGrade(),
     /** Gaussian-like 3x3 blur radius as a fraction of the image's short side. */
     val blur: Float = 0f,
@@ -59,6 +70,19 @@ data class PhotoEffects(
         require(maskScaleX.isFinite() && maskScaleX in 0.1f..1f)
         require(maskScaleY.isFinite() && maskScaleY in 0.1f..1f)
         require(maskRotationDegrees.isFinite() && maskRotationDegrees in -180f..180f)
+        require(maskPoints.size in 3..8)
+        if (mask == PhotoMask.POLYGON) {
+            var twiceArea = 0f
+            maskPoints.indices.forEach { index ->
+                val current = maskPoints[index]
+                val next = maskPoints[(index + 1) % maskPoints.size]
+                require(current != next) { "Polygon mask cannot contain duplicate adjacent points" }
+                twiceArea += current.x * next.y - next.x * current.y
+            }
+            require(kotlin.math.abs(twiceArea) > 0.0001f) {
+                "Polygon mask vertices must enclose an area"
+            }
+        }
         require(blur.isFinite() && blur in 0f..0.08f)
         require(sharpen.isFinite() && sharpen in 0f..1f)
         require(grain.isFinite() && grain in 0f..1f)
@@ -84,7 +108,8 @@ object PhotoMatte {
         mask: PhotoMask, feather: Float,
         centerX: Float = 0f, centerY: Float = 0f,
         scaleX: Float = 1f, scaleY: Float = 1f,
-        rotationDegrees: Float = 0f
+        rotationDegrees: Float = 0f,
+        polygonPoints: List<MaskPoint> = DEFAULT_MASK_POLYGON_POINTS
     ): Float {
         require(width > 0 && height > 0)
         require(x in 0 until width && y in 0 until height)
@@ -130,6 +155,51 @@ object PhotoMatte {
                 } else abs(nx) + abs(ny)
                 val inside = (1f - distance) * min(radiusX, radiusY)
                 smooth(-blur / 2f, blur / 2f, inside)
+            }
+            PhotoMask.POLYGON -> {
+                require(polygonPoints.size in 3..8 && polygonPoints.indices.all { index ->
+                    polygonPoints[index] != polygonPoints[(index + 1) % polygonPoints.size]
+                })
+                val dx = px - centerX * width * 0.5f
+                val dy = py - centerY * height * 0.5f
+                val radiusX = width * 0.48f * scaleX
+                val radiusY = height * 0.48f * scaleY
+                val angle = Math.toRadians(rotationDegrees.toDouble()).toFloat()
+                val c = cos(angle)
+                val s = sin(angle)
+                val nx = (c * dx + s * dy) / radiusX
+                val ny = (-s * dx + c * dy) / radiusY
+                var inside = false
+                var minDistanceSquared = Float.POSITIVE_INFINITY
+                polygonPoints.indices.forEach { index ->
+                    val a = polygonPoints[index]
+                    val b = polygonPoints[(index + 1) % polygonPoints.size]
+                    if ((a.y > ny) != (b.y > ny) &&
+                        nx < (b.x - a.x) * (ny - a.y) / (b.y - a.y) + a.x) {
+                        inside = !inside
+                    }
+                    // Feather is measured in frame pixels so its width is
+                    // independent of polygon edge direction on non-square media.
+                    val pointX = nx * radiusX
+                    val pointY = ny * radiusY
+                    val ax = a.x * radiusX
+                    val ay = a.y * radiusY
+                    val bx = b.x * radiusX
+                    val by = b.y * radiusY
+                    val edgeX = bx - ax
+                    val edgeY = by - ay
+                    val lengthSquared = edgeX * edgeX + edgeY * edgeY
+                    val t = (((pointX - ax) * edgeX + (pointY - ay) * edgeY) /
+                        lengthSquared).coerceIn(0f, 1f)
+                    val nearestX = ax + t * edgeX
+                    val nearestY = ay + t * edgeY
+                    val distanceX = pointX - nearestX
+                    val distanceY = pointY - nearestY
+                    minDistanceSquared = min(minDistanceSquared,
+                        distanceX * distanceX + distanceY * distanceY)
+                }
+                val signedDistance = sqrt(minDistanceSquared) * if (inside) 1f else -1f
+                smooth(-blur / 2f, blur / 2f, signedDistance)
             }
         }
     }
@@ -194,7 +264,7 @@ object PhotoMatte {
             x, y, width, height, settings.mask, settings.feather,
             settings.maskCenterX, settings.maskCenterY,
             settings.maskScaleX, settings.maskScaleY,
-            settings.maskRotationDegrees
+            settings.maskRotationDegrees, settings.maskPoints
         )
         val chroma = settings.chroma?.let { chromaAlpha(pixelArgb, it) } ?: 1f
         val shaped = if (settings.invertMask && settings.mask != PhotoMask.NONE)

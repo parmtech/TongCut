@@ -5,6 +5,53 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PhotoMatteGeometryTest {
+    @Test fun editablePolygonMaskKeepsCustomFootprintAndRoundTrips() {
+        val points = listOf(
+            MaskPoint(-0.7f, -0.7f), MaskPoint(0.7f, -0.7f), MaskPoint(0f, 0.7f)
+        )
+        val polygon = PhotoEffects(mask = PhotoMask.POLYGON, feather = 0f,
+            maskPoints = points)
+        assertEquals(1f, PhotoMatte.maskAlpha(
+            50, 50, 100, 100, polygon.mask, polygon.feather,
+            polygonPoints = polygon.maskPoints
+        ), 0f)
+        assertEquals(0f, PhotoMatte.maskAlpha(
+            20, 40, 100, 100, polygon.mask, polygon.feather,
+            polygonPoints = polygon.maskPoints
+        ), 0f)
+
+        val timeline = LayerTimeline(
+            tracks = listOf(TimelineTrack("video", "Video", LayerKind.VIDEO, 0)),
+            layers = listOf(TimelineLayer(
+                id = "polygon", trackId = "video", kind = LayerKind.VIDEO,
+                startUs = 0, durationUs = 1_000_000,
+                sourceUri = "content://synthetic/video", sourceDurationUs = 2_000_000,
+                photoEffects = polygon
+            ))
+        )
+        assertEquals(timeline, LayerTimelineCodec.decode(LayerTimelineCodec.encode(timeline)))
+    }
+
+    @Test fun polygonFeatherUsesPhysicalDistanceAcrossFrameAspectRatios() {
+        val points = listOf(
+            MaskPoint(-0.5f, -0.5f), MaskPoint(0.5f, -0.5f),
+            MaskPoint(0.5f, 0.5f), MaskPoint(-0.5f, 0.5f)
+        )
+        // Both samples sit 5.5 physical pixels beyond the polygon, despite
+        // the frame's 2:1 aspect ratio and the differently oriented edges.
+        val beyondVerticalEdge = PhotoMatte.maskAlpha(
+            153, 50, 200, 100, PhotoMask.POLYGON, 0.2f,
+            polygonPoints = points
+        )
+        val beyondHorizontalEdge = PhotoMatte.maskAlpha(
+            100, 79, 200, 100, PhotoMask.POLYGON, 0.2f,
+            polygonPoints = points
+        )
+
+        assertEquals(beyondVerticalEdge, beyondHorizontalEdge, 0.0001f)
+        assertTrue(beyondVerticalEdge > 0f && beyondVerticalEdge < 1f)
+    }
+
     @Test fun ellipseAndDiamondKeepDistinctRotatedGeometry() {
         val ellipse = PhotoMatte.maskAlpha(78, 78, 100, 100,
             PhotoMask.ELLIPSE, 0f)
@@ -92,4 +139,3 @@ class PhotoMatteGeometryTest {
         assertEquals(0f, restored.maskRotationDegrees, 0f)
     }
 }
-
