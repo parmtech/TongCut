@@ -1467,6 +1467,7 @@ internal fun VideoEditorScreen(
                         ToneCurveGraph(
                             curve = curve,
                             channel = selectedCurveChannel,
+                            selectedPoint = selectedCurvePoint,
                             onSelectPoint = { selectedCurvePoint = it },
                             onMovePoint = { index, x, y ->
                                 val points = grade.curves.curve(selectedCurveChannel)

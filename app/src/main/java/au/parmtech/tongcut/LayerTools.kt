@@ -490,6 +490,7 @@ internal fun LayerTools(
                         ToneCurveGraph(
                             curve = activeCurve,
                             channel = selectedCurveChannel,
+                            selectedPoint = selectedCurvePoint,
                             onSelectPoint = { selectedCurvePoint = it },
                             onMovePoint = { index, x, y ->
                                 val latest = fx.colorGrade.curves.curve(selectedCurveChannel)
