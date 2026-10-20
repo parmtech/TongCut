@@ -20,21 +20,29 @@ data class ReverseTimelineTarget(
     val localMs: Long
 )
 
-class SequentialTimeline(val clips: List<DraftClip>) {
+class SequentialTimeline(
+    val clips: List<DraftClip>,
+    transitions: List<PrimaryTransitionSpec> = emptyList()
+) {
     private val offsets: List<Long>
     val totalMs: Long
 
+    val transitionPlan: PrimaryTransitionPlan? = if (clips.isEmpty()) null else
+        PrimaryTransitionPlan.build(
+            clips.map { clip ->
+                PrimaryTransitionClip(
+                    id = clip.id,
+                    sourceDurationUs = clip.durationMs * 1_000L,
+                    sourceInUs = clip.inMs * 1_000L,
+                    sourceOutUs = clip.outMs * 1_000L
+                )
+            },
+            transitions
+        )
+
     init {
-        var cursor = 0L
-        val start = ArrayList<Long>(clips.size)
-        clips.forEach { clip ->
-            start += cursor
-            // Reject overflow instead of creating negative playhead positions.
-            require(cursor <= Long.MAX_VALUE - clip.editedDurationMs) { "Timeline too long" }
-            cursor += clip.editedDurationMs
-        }
-        offsets = start
-        totalMs = cursor
+        offsets = transitionPlan?.clips?.map { it.timelineStartUs / 1_000L } ?: emptyList()
+        totalMs = (transitionPlan?.durationUs ?: 0L) / 1_000L
     }
 
     fun startOf(index: Int): Long = offsets[index]
