@@ -48,15 +48,27 @@ class ColorGradeTest {
         assertTrue(((green ushr 8) and 255) > ((neutral ushr 8) and 255))
     }
 
+    @Test fun hueRotationMovesRedTowardYellowAndLeavesNeutralGrayUntinted() {
+        val yellow = ColorGrade(hueDegrees = 60f).apply(0xFFFF0000.toInt())
+        assertTrue(((yellow ushr 16) and 255) > 240)
+        assertTrue(((yellow ushr 8) and 255) > 240)
+        assertTrue((yellow and 255) < 10)
+        assertEquals(0xFF808080.toInt(),
+            ColorGrade(hueDegrees = -150f).apply(0xFF808080.toInt()))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedExposure() { ColorGrade(exposure = 2.01f) }
 
     @Test(expected = IllegalArgumentException::class)
     fun rejectsUnboundedTint() { ColorGrade(tint = -1.01f) }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsUnboundedHueRotation() { ColorGrade(hueDegrees = 180.01f) }
+
     @Test fun gradeCodecRoundTripsAndDefaultsLegacyProjects() {
         val grade = ColorGrade(exposure = 0.75f, contrast = 1.2f,
-            saturation = 0.8f, temperature = -0.3f, tint = 0.45f)
+            saturation = 0.8f, temperature = -0.3f, tint = 0.45f, hueDegrees = 72f)
         assertEquals(grade, ColorGradeCodec.decode(ColorGradeCodec.encode(grade)))
         assertEquals(ColorGrade(), ColorGradeCodec.decode(null))
     }
@@ -67,6 +79,7 @@ class ColorGradeTest {
         assertEquals(0.5f, decoded.exposure)
         assertEquals(-0.25f, decoded.temperature)
         assertEquals(0f, decoded.tint)
+        assertEquals(0f, decoded.hueDegrees)
     }
 
     @Test fun gradeCodecRejectsMalformedRangesToNeutralDefaults() {

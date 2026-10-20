@@ -40,6 +40,7 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
         program.setFloatUniform("uSaturation", grade.saturation)
         program.setFloatUniform("uTemperature", grade.temperature)
         program.setFloatUniform("uTint", grade.tint)
+        program.setFloatUniform("uHueDegrees", grade.hueDegrees)
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -88,7 +89,27 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
             uniform float uSaturation;
             uniform float uTemperature;
             uniform float uTint;
+            uniform float uHueDegrees;
             varying vec2 vTexSamplingCoord;
+            vec3 shiftHue(vec3 color, float degrees) {
+                float high = max(color.r, max(color.g, color.b));
+                float low = min(color.r, min(color.g, color.b));
+                float chroma = high - low;
+                if (chroma <= 0.000001 || degrees == 0.0) return color;
+                float hue;
+                if (high == color.r) hue = mod((color.g - color.b) / chroma, 6.0);
+                else if (high == color.g) hue = (color.b - color.r) / chroma + 2.0;
+                else hue = (color.r - color.g) / chroma + 4.0;
+                hue = mod(hue + degrees / 60.0, 6.0);
+                float secondary = chroma * (1.0 - abs(mod(hue, 2.0) - 1.0));
+                float offset = high - chroma;
+                if (hue < 1.0) return vec3(high, secondary + offset, offset);
+                if (hue < 2.0) return vec3(secondary + offset, high, offset);
+                if (hue < 3.0) return vec3(offset, high, secondary + offset);
+                if (hue < 4.0) return vec3(offset, secondary + offset, high);
+                if (hue < 5.0) return vec3(secondary + offset, offset, high);
+                return vec3(high, offset, secondary + offset);
+            }
             void main() {
                 vec4 source = texture2D(uTexSampler, vTexSamplingCoord);
                 vec3 color = source.rgb * exp2(uExposure);
@@ -100,6 +121,7 @@ private class ColorGradeShader(grade: ColorGrade) : BaseGlShaderProgram(false, 1
                 color.r += uTint * 0.05;
                 color.g -= uTint * 0.10;
                 color.b += uTint * 0.05;
+                color = shiftHue(color, uHueDegrees);
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), source.a);
             }
         """

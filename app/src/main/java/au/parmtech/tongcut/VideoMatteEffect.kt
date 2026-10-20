@@ -79,6 +79,7 @@ private class MatteShader(
         program.setFloatUniform("uSaturation", settings.colorGrade.saturation)
         program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
         program.setFloatUniform("uTint", settings.colorGrade.tint)
+        program.setFloatUniform("uHueDegrees", settings.colorGrade.hueDegrees)
         program.setFloatUniform("uBlurAmount", settings.blur)
         program.setFloatUniform("uSharpenAmount", settings.sharpen)
         program.setFloatUniform("uGrainAmount", settings.grain)
@@ -147,6 +148,7 @@ private class MatteShader(
             uniform float uSaturation;
             uniform float uTemperature;
             uniform float uTint;
+            uniform float uHueDegrees;
             uniform float uBlurAmount;
             uniform float uSharpenAmount;
             uniform float uGrainAmount;
@@ -154,6 +156,25 @@ private class MatteShader(
 
             float edge(float lo, float hi, float value) {
                 return smoothstep(lo, max(lo + 0.00001, hi), value);
+            }
+            vec3 shiftHue(vec3 color, float degrees) {
+                float high = max(color.r, max(color.g, color.b));
+                float low = min(color.r, min(color.g, color.b));
+                float chroma = high - low;
+                if (chroma <= 0.000001 || degrees == 0.0) return color;
+                float hue;
+                if (high == color.r) hue = mod((color.g - color.b) / chroma, 6.0);
+                else if (high == color.g) hue = (color.b - color.r) / chroma + 2.0;
+                else hue = (color.r - color.g) / chroma + 4.0;
+                hue = mod(hue + degrees / 60.0, 6.0);
+                float secondary = chroma * (1.0 - abs(mod(hue, 2.0) - 1.0));
+                float offset = high - chroma;
+                if (hue < 1.0) return vec3(high, secondary + offset, offset);
+                if (hue < 2.0) return vec3(secondary + offset, high, offset);
+                if (hue < 3.0) return vec3(offset, high, secondary + offset);
+                if (hue < 4.0) return vec3(offset, secondary + offset, high);
+                if (hue < 5.0) return vec3(secondary + offset, offset, high);
+                return vec3(high, offset, secondary + offset);
             }
             void accumulateBlurSample(vec4 sampleColor, float weight,
                 inout vec3 premultiplied, inout float alphaWeight) {
@@ -301,6 +322,7 @@ private class MatteShader(
                 grade.r += uTint * 0.05;
                 grade.g -= uTint * 0.10;
                 grade.b += uTint * 0.05;
+                grade = shiftHue(grade, uHueDegrees);
                 gl_FragColor = vec4(clamp(grade, 0.0, 1.0) * keyedAlpha, keyedAlpha);
             }
         """

@@ -13,7 +13,9 @@ data class ColorGrade(
     /** Warm (+) to cool (-), a restrained red/blue channel balance. */
     val temperature: Float = 0f,
     /** Magenta (+) to green (-) white-balance tint. */
-    val tint: Float = 0f
+    val tint: Float = 0f,
+    /** Global hue rotation in degrees. */
+    val hueDegrees: Float = 0f
 ) {
     init {
         require(exposure.isFinite() && exposure in -2f..2f)
@@ -21,6 +23,7 @@ data class ColorGrade(
         require(saturation.isFinite() && saturation in 0f..2f)
         require(temperature.isFinite() && temperature in -1f..1f)
         require(tint.isFinite() && tint in -1f..1f)
+        require(hueDegrees.isFinite() && hueDegrees in -180f..180f)
     }
 
     fun apply(argb: Int): Int {
@@ -39,6 +42,35 @@ data class ColorGrade(
         red += tint * 0.05f
         green -= tint * 0.10f
         blue += tint * 0.05f
+        if (hueDegrees != 0f) {
+            val maximum = maxOf(red, green, blue)
+            val minimum = minOf(red, green, blue)
+            val delta = maximum - minimum
+            if (delta > 0f) {
+                val baseHue = when (maximum) {
+                    red -> ((green - blue) / delta).let { if (it < 0f) it + 6f else it }
+                    green -> (blue - red) / delta + 2f
+                    else -> (red - green) / delta + 4f
+                } / 6f
+                val hue = (((baseHue + hueDegrees / 360f) % 1f) + 1f) % 1f
+                val sector = (hue * 6f).toInt().coerceIn(0, 5)
+                val hueSector = hue * 6f
+                val secondary = delta *
+                    (1f - kotlin.math.abs((hueSector % 2f) - 1f))
+                val offset = maximum - delta
+                val (r, g, b) = when (sector) {
+                    0 -> Triple(maximum, secondary + offset, offset)
+                    1 -> Triple(secondary + offset, maximum, offset)
+                    2 -> Triple(offset, maximum, secondary + offset)
+                    3 -> Triple(offset, secondary + offset, maximum)
+                    4 -> Triple(secondary + offset, offset, maximum)
+                    else -> Triple(maximum, offset, secondary + offset)
+                }
+                red = r
+                green = g
+                blue = b
+            }
+        }
         fun channel(value: Float) = (value.coerceIn(0f, 1f) * 255f).toInt()
         return (argb and -0x1000000) or (channel(red) shl 16) or
             (channel(green) shl 8) or channel(blue)
@@ -52,6 +84,7 @@ object ColorGradeCodec {
         put("saturation", grade.saturation.toDouble())
         put("temperature", grade.temperature.toDouble())
         put("tint", grade.tint.toDouble())
+        put("hueDegrees", grade.hueDegrees.toDouble())
     }
 
     /** Missing/invalid adjustment data safely restores neutral colour. */
@@ -63,7 +96,8 @@ object ColorGradeCodec {
                 contrast = value.optDouble("contrast", 1.0).toFloat(),
                 saturation = value.optDouble("saturation", 1.0).toFloat(),
                 temperature = value.optDouble("temperature", 0.0).toFloat(),
-                tint = value.optDouble("tint", 0.0).toFloat()
+                tint = value.optDouble("tint", 0.0).toFloat(),
+                hueDegrees = value.optDouble("hueDegrees", 0.0).toFloat()
             )
         }.getOrDefault(ColorGrade())
     }
