@@ -21,6 +21,11 @@ class ProjectRecoveryDeviceTest {
             clips=listOf(DraftClip("content://synthetic/main","Main",10_000)),
             exportAudioBitrateBps=192_000,
             exportMaxFrameRate=60,
+            primaryBlur=0.03f,
+            primarySharpen=0.4f,
+            primaryGrain=0.6f,
+            primaryQuarterTurns=1,
+            primaryFlipHorizontal=true,
             colorLutProfile=ColorLutProfile("Recovery LUT",2,List(8) { 0xff808080.toInt() },0.6f)
         )
         draft = LayerEdits.addText(draft, 1_000L, "Offline title")
@@ -56,7 +61,7 @@ class ProjectRecoveryDeviceTest {
         } finally { store.delete() }
     }
 
-    @Test fun projectSchemaEightPersistsFrameRateAndLutAndLegacyDefaultsSafely() {
+    @Test fun projectSchemaThirteenPersistsPrimaryAdjustmentsAndLegacyDefaultsSafely() {
         val id="p7-frame-rate-migration"
         val store=ProjectStore(app,id)
         store.delete()
@@ -64,16 +69,34 @@ class ProjectRecoveryDeviceTest {
         try {
             store.save(layeredProject())
             val current=JSONObject(jsonFile.readText())
-            assertEquals(8,current.getInt("schema"))
+            assertEquals(13,current.getInt("schema"))
             assertEquals(60,current.getInt("exportMaxFrameRate"))
             val loaded=ProjectStore(app,id).load()!!
             assertEquals(60,loaded.exportMaxFrameRate)
             assertEquals(layeredProject().colorLutProfile,loaded.colorLutProfile)
+            assertEquals(0.03f,loaded.primaryBlur,0f)
+            assertEquals(0.4f,loaded.primarySharpen,0f)
+            assertEquals(0.6f,loaded.primaryGrain,0f)
+            assertEquals(1,loaded.primaryQuarterTurns)
+            assertTrue(loaded.primaryFlipHorizontal)
+
+            val schemaTwelve=JSONObject(current.toString()).apply {
+                put("schema",12)
+                remove("primaryGrain")
+            }
+            jsonFile.writeText(schemaTwelve.toString())
+            val schemaTwelveDraft=ProjectStore(app,id).load()!!
+            assertEquals(0.03f,schemaTwelveDraft.primaryBlur,0f)
+            assertEquals(0.4f,schemaTwelveDraft.primarySharpen,0f)
+            assertEquals(0f,schemaTwelveDraft.primaryGrain,0f)
 
             current.put("schema",6).remove("exportMaxFrameRate")
             jsonFile.writeText(current.toString())
             assertEquals(ExportFrameRate.DEFAULT,
                 ProjectStore(app,id).load()!!.exportMaxFrameRate)
+            assertEquals(0f,ProjectStore(app,id).load()!!.primaryBlur,0f)
+            assertEquals(0f,ProjectStore(app,id).load()!!.primarySharpen,0f)
+            assertEquals(0f,ProjectStore(app,id).load()!!.primaryGrain,0f)
             assertNull(ProjectStore(app,id).load()!!.colorLutProfile)
 
             current.put("schema",7).put("exportMaxFrameRate",120)

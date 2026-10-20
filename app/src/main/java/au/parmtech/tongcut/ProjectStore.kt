@@ -79,14 +79,16 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                 .takeIf { it in ExportFrameRate.choices } ?: ExportFrameRate.DEFAULT,
             colorLutProfile = if (schema >= 8)
                 ColorLutProfileCodec.decode(root.optJSONObject("colorLut")) else null,
-            primaryBlur = root.optDouble("primaryBlur", 0.0).toFloat()
-                .takeIf { it.isFinite() && it in 0f..0.08f } ?: 0f,
-            primarySharpen = root.optDouble("primarySharpen", 0.0).toFloat()
-                .takeIf { it.isFinite() && it in 0f..1f } ?: 0f,
-            primaryGrain = root.optDouble("primaryGrain", 0.0).toFloat()
-                .takeIf { it.isFinite() && it in 0f..1f } ?: 0f,
-            primaryQuarterTurns = root.optInt("primaryQuarterTurns", 0).takeIf { it in 0..3 } ?: 0,
-            primaryFlipHorizontal = root.optBoolean("primaryFlipHorizontal", false),
+            primaryBlur = if (schema >= 10) root.optDouble("primaryBlur", 0.0).toFloat()
+                .takeIf { it.isFinite() && it in 0f..0.08f } ?: 0f else 0f,
+            primarySharpen = if (schema >= 12) root.optDouble("primarySharpen", 0.0).toFloat()
+                .takeIf { it.isFinite() && it in 0f..1f } ?: 0f else 0f,
+            primaryGrain = if (schema >= 13) root.optDouble("primaryGrain", 0.0).toFloat()
+                .takeIf { it.isFinite() && it in 0f..1f } ?: 0f else 0f,
+            primaryQuarterTurns = if (schema >= 11)
+                root.optInt("primaryQuarterTurns", 0).takeIf { it in 0..3 } ?: 0 else 0,
+            primaryFlipHorizontal = schema >= 11 &&
+                root.optBoolean("primaryFlipHorizontal", false),
             canvas = CanvasRatio.entries.firstOrNull { it.name == root.optString("canvas") } ?: CanvasRatio.SOURCE,
             shortSidePixels = root.optInt("shortSide", 1080).takeIf {
                 it in listOf(720, 1080, 2160)
