@@ -2,7 +2,7 @@ name: TongCut One-Time Audit and Test APK (corrected)
 
 on:
   push:
-    branches: [development/capcut-parity]
+    branches: [development/capcut-parity, development/capcut-parity-offline]
     paths:
       - '.github/workflows/audit-test-apk.yml'
   workflow_dispatch:
