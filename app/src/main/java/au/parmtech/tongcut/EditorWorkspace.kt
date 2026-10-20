@@ -1204,7 +1204,6 @@ internal fun VideoEditorScreen(
                     },
                     update = { view ->
                         view.player = primaryTransitionPlayer
-                        view.alpha = alpha
                     },
                     modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }
                 )
