@@ -530,5 +530,8 @@ internal fun primaryClipVideoEffects(options: ExportOptions): List<androidx.medi
                 grain = options.primaryGrain
             )))
         }
+        if (options.faceRetouch.isActive) {
+            add(ManualFaceRetouchEffect(options.faceRetouch))
+        }
         if (options.primaryVignette > 0f) add(VideoVignetteEffect(options.primaryVignette))
     }

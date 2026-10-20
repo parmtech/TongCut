@@ -60,7 +60,8 @@ data class EditorDraft(
     val primaryVignette: Float = 0f,
     /** Quarter-turn rotation and horizontal mirror for primary footage. */
     val primaryQuarterTurns: Int = 0,
-    val primaryFlipHorizontal: Boolean = false
+    val primaryFlipHorizontal: Boolean = false,
+    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch()
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
@@ -142,7 +143,8 @@ data class EditorDraft(
         primaryGrain = primaryGrain,
         primaryVignette = primaryVignette,
         primaryQuarterTurns = primaryQuarterTurns,
-        primaryFlipHorizontal = primaryFlipHorizontal
+        primaryFlipHorizontal = primaryFlipHorizontal,
+        faceRetouch = faceRetouch
     )
 }
 

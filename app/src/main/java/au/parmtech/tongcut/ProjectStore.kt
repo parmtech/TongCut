@@ -47,7 +47,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..14) { "Unsupported project schema" }
+        require(schema in 1..15) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -92,6 +92,9 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                 root.optInt("primaryQuarterTurns", 0).takeIf { it in 0..3 } ?: 0 else 0,
             primaryFlipHorizontal = schema >= 11 &&
                 root.optBoolean("primaryFlipHorizontal", false),
+            faceRetouch = if (schema >= 15)
+                ManualFaceRetouchCodec.decode(root.optJSONObject("faceRetouch"))
+            else ManualFaceRetouch(),
             canvas = CanvasRatio.entries.firstOrNull { it.name == root.optString("canvas") } ?: CanvasRatio.SOURCE,
             shortSidePixels = root.optInt("shortSide", 1080).takeIf {
                 it in listOf(720, 1080, 2160)
@@ -106,7 +109,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 14)
+            put("schema", 15)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -122,6 +125,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
             put("primaryVignette", project.primaryVignette.toDouble())
             put("primaryQuarterTurns", project.primaryQuarterTurns)
             put("primaryFlipHorizontal", project.primaryFlipHorizontal)
+            put("faceRetouch", ManualFaceRetouchCodec.encode(project.faceRetouch))
             put("canvas", project.canvas.name)
             put("shortSide", project.shortSidePixels)
             put("mute", project.muteOriginalAudio)

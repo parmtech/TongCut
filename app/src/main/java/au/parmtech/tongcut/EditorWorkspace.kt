@@ -108,6 +108,7 @@ private val tools = listOf(
     ProTool("Captions", Icons.Default.Subtitles),
     ProTool("Filters", Icons.Default.FilterVintage),
     ProTool("Adjust", Icons.Default.Tune),
+    ProTool("Retouch", Icons.Default.Face),
     ProTool("Canvas", Icons.Default.AspectRatio),
     ProTool("AI", Icons.Default.SmartToy)
 )
@@ -794,7 +795,7 @@ internal fun VideoEditorScreen(
     // source URI and clipping window are the same values sent to Transformer.
     LaunchedEffect(active.colorGrade, active.colorLutProfile, active.primaryBlur,
         active.primarySharpen, active.primaryGrain, active.primaryVignette,
-        active.primaryQuarterTurns, active.primaryFlipHorizontal) {
+        active.faceRetouch, active.primaryQuarterTurns, active.primaryFlipHorizontal) {
         val effects = mutableListOf<androidx.media3.common.Effect>()
         if (active.primaryQuarterTurns != 0 || active.primaryFlipHorizontal) {
             effects += androidx.media3.effect.ScaleAndRotateTransformation.Builder()
@@ -810,6 +811,9 @@ internal fun VideoEditorScreen(
                 blur = active.primaryBlur, sharpen = active.primarySharpen,
                 grain = active.primaryGrain
             ))
+        }
+        if (active.faceRetouch.isActive) {
+            effects += ManualFaceRetouchEffect(active.faceRetouch)
         }
         if (active.primaryVignette > 0f) {
             effects += VideoVignetteEffect(active.primaryVignette)
@@ -1590,6 +1594,49 @@ internal fun VideoEditorScreen(
                             onChange(active.copy(colorGrade = ColorGrade(), primaryBlur = 0f,
                                 primarySharpen = 0f, primaryGrain = 0f,
                                 primaryVignette = 0f))
+                        }
+                    }
+                    "Retouch" -> {
+                        val face = active.faceRetouch
+                        Text(
+                            "Place the oval manually. Controls use fixed positions, not detected landmarks. " +
+                                "Face-region softening affects the whole oval; edits stay local " +
+                                "and affect primary SDR footage only.",
+                            color = Color.LightGray,
+                            fontSize = 11.sp
+                        )
+                        GradeSlider("Region center X", face.centerX, 0f..1f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(centerX = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Region center Y", face.centerY, 0f..1f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(centerY = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Region width", face.radiusX, 0.08f..0.48f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(radiusX = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Region height", face.radiusY, 0.08f..0.48f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(radiusY = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Face width", face.faceWidth, -0.25f..0.25f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(faceWidth = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Jaw width", face.jawWidth, -0.25f..0.25f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(jawWidth = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Nose width", face.noseWidth, -0.08f..0.08f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(noseWidth = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Eye enlargement", face.eyeScale, 0f..0.35f, { value ->
+                            previewDraft = active.copy(faceRetouch = face.copy(eyeScale = value))
+                        }, ::commitGradePreview)
+                        GradeSlider("Face-region softening", face.skinSoftening, 0f..1f, { value ->
+                            previewDraft = active.copy(
+                                faceRetouch = face.copy(skinSoftening = value)
+                            )
+                        }, ::commitGradePreview)
+                        ToolPill("Reset retouch") {
+                            previewDraft = null
+                            onChange(active.copy(faceRetouch = ManualFaceRetouch()))
                         }
                     }
                     "Canvas" -> ToolChips(CanvasRatio.entries.toList(), active.canvas,

@@ -50,7 +50,8 @@ data class ExportOptions(
     val primaryGrain: Float = 0f,
     val primaryVignette: Float = 0f,
     val primaryQuarterTurns: Int = 0,
-    val primaryFlipHorizontal: Boolean = false
+    val primaryFlipHorizontal: Boolean = false,
+    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch()
 ) {
     init {
         require(videoBitrateBps in 1_000_000..50_000_000)
