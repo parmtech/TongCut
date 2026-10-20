@@ -26,7 +26,7 @@
 ## Engineering rules
 - Use permissively licensed upstream *only after checking license compatibility and actual code*, with attribution. GPL/AGPL use triggers different distribution obligations; do not paste proprietary CapCut binaries/assets into this repository.
 - Make every new feature actually edit the project/render, not just display a button.
-- Every merge needs unit test and build, manual device test for codec and rendering changes, plus migration check of older saved drafts.
+- After the offline feature-construction pass, test the release candidate with unit tests and a full build, manual device checks for codec/rendering changes, and migration checks of older saved drafts. Do not run tests or build APKs during the current feature-first pass, per owner direction.
 - Keep the current release offline-first, minimize permissions, and do not add network-dependent editing features. If/when the future P6 AI scope is authorized, require explicit upload consent and encrypted credentials.
 - AI provider APIs are distinct; each adapter must check supported tasks, rate limits, job status and budget. No unsupported universal 'any API works' promises.
 - Use issues/PRs and tests to track each phase. No deceptive "100% ready" release claims.
