@@ -13,9 +13,6 @@ enum class EffectKernel(val id: String) {
         fun fromId(id: String): EffectKernel? = entries.firstOrNull { it.id == id }
     }
 
-    private fun mix(original: Float, effect: Float, strength: Float): Int =
-        ((original + (effect - original) * strength).coerceIn(0f, 1f) * 255f)
-            .toInt().coerceIn(0, 255)
 }
 
 data class EffectParameterSpec(
@@ -211,4 +208,8 @@ object OfflineEffectRenderer {
                 (mix(g, effectG, strength) shl 8) or mix(b, effectB, strength)
         }
     }
+
+    private fun mix(original: Float, effect: Float, strength: Float): Int =
+        ((original + (effect - original) * strength).coerceIn(0f, 1f) * 255f)
+            .toInt().coerceIn(0, 255)
 }
