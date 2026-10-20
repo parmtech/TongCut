@@ -18,6 +18,11 @@ internal object PhotoBitmapDecoder {
         context: Context, uri: Uri, effects: PhotoEffects,
         colorLutProfile: ColorLutProfile? = null
     ): Bitmap {
+        val lut = if (effects.applyColorLut) {
+            requireNotNull(colorLutProfile) {
+                "This layer uses a LUT that is no longer available in the project"
+            }.copy(strength = effects.colorLutStrength)
+        } else null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         // BitmapFactory.decodeStream RETURNS NULL intentionally when
         // inJustDecodeBounds=true. Only a missing input stream is an error.
@@ -86,11 +91,6 @@ internal object PhotoBitmapDecoder {
             if (bitmap !== source && !source.isRecycled) source.recycle()
         }
         // Retouch is applied before alpha/matte work to avoid sampling across transparent edges.
-        val lut = if (effects.applyColorLut) {
-            requireNotNull(colorLutProfile) {
-                "This layer uses a LUT that is no longer available in the project"
-            }.copy(strength = effects.colorLutStrength)
-        } else null
         if (effects.copy(faceRetouch = ManualFaceRetouch(), applyColorLut = false,
                 colorLutStrength = 1f) == PhotoEffects() && lut == null) return bitmap
 
