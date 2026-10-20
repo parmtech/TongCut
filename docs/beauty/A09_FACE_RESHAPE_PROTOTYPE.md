@@ -8,6 +8,10 @@ Branch: `agent/A09-face-reshape` (owned by GitHub issue #15). This module is **n
 
 - `app/src/main/java/au/parmtech/tongcut/beauty/FaceReshapeWarp.kt`: independent pure Kotlin CPU geometric face warp with normalized landmarks, bounded user settings (cheek slimming, jaw slimming, eye enlargement, nose slimming and chin-length change). Uses inverse mapping and alpha-aware bilinear sampling to avoid transparent-color fringes.
 - `app/src/main/java/au/parmtech/tongcut/beauty/FaceReshapeBitmap.kt`: Android software-Bitmap adapter, validates dimensions and returns a separate newly allocated ARGB8888 bitmap without modifying the original.
+- `app/src/main/java/au/parmtech/tongcut/beauty/FaceReshapeFramePlan.kt`: bounded source-timeline observation interpolation with confidence/face-switch/long-gap guards; includes a prepared track for logarithmic per-frame lookup.
+- `app/src/main/java/au/parmtech/tongcut/beauty/FaceReshapeControls.kt`: isolated reusable Compose slider panel; not connected to production editor.
+- `app/src/main/java/au/parmtech/tongcut/beauty/FaceReshapeLandmarkPicker.kt`: isolated Compose image overlay for manually positioning nine landmarks; not connected to production editor.
+- `app/src/test/java/au/parmtech/tongcut/beauty/FaceReshapeFramePlanTest.kt`: source-only tests for interpolation, track switches, occlusion and malformed timing.
 - `app/src/test/java/au/parmtech/tongcut/beauty/FaceReshapeWarpTest.kt`: synthetic JVM test **source**, covering neutral identity/copy, geometry changes, eye enlargement, transparent edge color, malformed landmarks and frame-size errors. These tests are **not claimed passed**; per the owner's current feature-first workflow, CI/build/phone QA is deferred.
 
 ## Minimal caller contract
@@ -43,7 +47,7 @@ These coordinates are illustration-only normalized image points, **not** detecto
 
 1. **No automatic face detection / body reshape yet.** Input points must be supplied by an approved on-device detector or explicitly adjusted by the user. The engine does not identify people, upload images or require a subscription/API.
 2. **CPU photo proof-of-concept only.** It can produce modified still bitmap buffers, but is NOT integrated into the main editor, project JSON, undo/redo, preview or exported MP4 video frames.
-3. It assumes a near-frontal upright face and one face per set of landmarks. A rotated, profile, partly hidden or moving face requires per-frame reliable anchors and temporal stabilization.
+3. It assumes a near-frontal upright face and one face per set of landmarks. The new `FaceReshapeFramePlan.prepare(observations)` form should be used before per-frame lookups; it validates/copies source observations once, then uses binary search for each requested frame. A rotated, profile, partly hidden or moving face requires per-frame reliable anchors and temporal stabilization.
 4. Maximum input image is 16,777,216 pixels. Rendering a high-resolution image repeatedly on the main UI thread will stall the app. For video, build a corresponding GPU GLES shader consuming the identical displacement formula.
 5. Current model has bounded manual adjustments; physically implausible settings and complex neighboring features may look distorted. Needs skin/teeth/hair edge-quality tests across ages/tones/angles. No claims of beauty quality until tested.
 6. No dependency/license changes, no Gradle/Manifest changes, no third-party proprietary libraries and no permissions added.
