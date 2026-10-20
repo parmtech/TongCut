@@ -896,9 +896,13 @@ internal fun VideoEditorScreen(
 
     LaunchedEffect(
         reversePreviewSession, reverseClipIndex, reverseClip?.sourceUri,
-        reverseClip?.inMs, reverseClip?.outMs, reverseClip?.reverseVideo
+        reverseClip?.inMs, reverseClip?.outMs, reverseClip?.reverseVideo,
+        active.faceRetouch
     ) {
         val session = reversePreviewSession
+        session?.let { frameSession ->
+            withContext(Dispatchers.IO) { frameSession.invalidateLastFrame() }
+        }
         snapshotFlow { playMs }.collect {
             // A previous session may still be finishing a non-interruptible bitmap decode.
             // Wait for the one in-flight worker, then honor the latest playhead value.
@@ -921,7 +925,8 @@ internal fun VideoEditorScreen(
                 (currentPlayMs - selectedStartMs).coerceAtLeast(0L), 1_000L
             )
             val next = decodeReverseFrameCancellable(
-                session, localTimeUs, reversePreviewWorker, reversePreviewDecodeBusy
+                session, localTimeUs, active.faceRetouch,
+                reversePreviewWorker, reversePreviewDecodeBusy
             )
             if (next != null) {
                 if (currentCoroutineContext().isActive) {
@@ -1599,8 +1604,8 @@ internal fun VideoEditorScreen(
                     "Retouch" -> {
                         val face = active.faceRetouch
                         val retouchNote = if (reverseClip != null) {
-                            "Cached reverse-frame preview does not render retouch yet. Export still " +
-                                "applies it to primary SDR footage; switch to a forward clip to preview."
+                            "Reverse frames use a reduced CPU preview capped at 230,400 pixels; export uses " +
+                                "the full-resolution GPU effect. Pixel match and speed need device checks."
                         } else {
                             "Place the oval manually. Controls use fixed positions, not detected " +
                                 "landmarks. Face-region softening affects the whole oval; edits stay " +
@@ -2132,6 +2137,7 @@ private fun <T> ToolChips(
 private suspend fun decodeReverseFrameCancellable(
     session: ReversePreviewSession,
     outputTimeUs: Long,
+    faceRetouch: ManualFaceRetouch,
     worker: ExecutorService,
     decodeBusy: AtomicBoolean
 ): Bitmap? {
@@ -2146,18 +2152,32 @@ private suspend fun decodeReverseFrameCancellable(
             }
             try {
                 worker.execute {
+                    var decoded: Bitmap? = null
                     try {
                         if (cancelled.get()) return@execute
-                        val decoded = session.decodeFrameAt(outputTimeUs)
-                        pending.set(decoded)
+                        decoded = session.decodeFrameAt(outputTimeUs)
+                        if (cancelled.get()) return@execute
+                        val raw = decoded
+                        decoded = null
+                        val frame = if (raw != null && faceRetouch.isActive) {
+                            try {
+                                ManualFaceRetouchBitmapPreview.render(raw, faceRetouch) {
+                                    cancelled.get() || Thread.currentThread().isInterrupted
+                                }
+                            } finally {
+                                if (!raw.isRecycled) raw.recycle()
+                            }
+                        } else raw
+                        pending.set(frame)
                         if (cancelled.get() || !continuation.isActive) {
                             pending.getAndSet(null)?.recycle()
                         } else {
-                            continuation.resume(decoded)
+                            continuation.resume(frame)
                         }
                     } catch (failure: Throwable) {
                         if (continuation.isActive) continuation.resumeWithException(failure)
                     } finally {
+                        decoded?.let { if (!it.isRecycled) it.recycle() }
                         decodeBusy.set(false)
                     }
                 }

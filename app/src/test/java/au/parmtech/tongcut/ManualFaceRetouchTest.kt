@@ -85,6 +85,37 @@ class ManualFaceRetouchTest {
         }
     }
 
+    @Test fun reversePreviewMapIsNeutralOrBoundedInsideTheFrame() {
+        val uv = FloatArray(2)
+        ManualFaceRetouchMath.mapSourceUv(
+            ManualFaceRetouch(), 0.23f, 0.71f, 640, 360, uv
+        )
+        assertEquals(0.23f, uv[0], 0.00001f)
+        assertEquals(0.71f, uv[1], 0.00001f)
+
+        val maximum = ManualFaceRetouch(
+            faceWidth = 0.25f, jawWidth = 0.25f, noseWidth = 0.08f, eyeScale = 0.35f
+        )
+        for (y in 1..99 step 7) for (x in 1..99 step 7) {
+            ManualFaceRetouchMath.mapSourceUv(
+                maximum, x / 100f, y / 100f, 640, 360, uv
+            )
+            assertTrue(uv[0] in 0f..1f)
+            assertTrue(uv[1] in 0f..1f)
+        }
+    }
+
+    @Test fun reversePreviewPixelBudgetPreservesLandscapeAndPortraitAspect() {
+        val landscape = ManualFaceRetouchBitmapPreview.previewSize(1920, 1080)
+        val portrait = ManualFaceRetouchBitmapPreview.previewSize(1080, 1920)
+        assertTrue(landscape.first.toLong() * landscape.second <=
+            ManualFaceRetouchBitmapPreview.MAX_PREVIEW_PIXELS)
+        assertTrue(portrait.first.toLong() * portrait.second <=
+            ManualFaceRetouchBitmapPreview.MAX_PREVIEW_PIXELS)
+        assertTrue(kotlin.math.abs(landscape.first.toFloat() / landscape.second - 16f / 9f) < 0.01f)
+        assertTrue(kotlin.math.abs(portrait.first.toFloat() / portrait.second - 9f / 16f) < 0.01f)
+    }
+
     @Test fun outOfRangeAndNonFiniteControlsAreRejected() {
         assertTrue(runCatching { ManualFaceRetouch(centerX = Float.NaN) }.isFailure)
         assertTrue(runCatching { ManualFaceRetouch(radiusY = 0f) }.isFailure)
