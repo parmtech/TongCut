@@ -3,6 +3,9 @@ package au.parmtech.tongcut
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.Random
 import kotlin.math.PI
 import kotlin.math.exp
@@ -37,23 +40,26 @@ object TongCutSoundEffectGenerator {
             throw IOException("Unable to create TongCut sound-effects folder")
         }
         val target = File(directory, effect.fileName)
-        val expectedBytes = wavSize(effect)
-        if (target.isFile && target.length() == expectedBytes.toLong() && hasWaveHeader(target)) {
+        val bytes = wavBytes(effect)
+        if (hasExactWaveBytes(target, bytes)) {
             return GeneratedSoundEffect(target, effect.durationMs)
         }
 
         val temporary = File.createTempFile("sfx_", ".tmp", directory)
         try {
-            val bytes = wavBytes(effect)
             FileOutputStream(temporary).use { output ->
                 output.write(bytes)
                 output.fd.sync()
             }
-            if (target.exists() && !target.delete()) {
-                throw IOException("Unable to replace the cached TongCut sound effect")
-            }
-            if (!temporary.renameTo(target)) {
-                throw IOException("Unable to publish the generated TongCut sound effect")
+            try {
+                Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (error: AtomicMoveNotSupportedException) {
+                throw IOException("Atomic sound-effect cache replacement is unavailable", error)
             }
             return GeneratedSoundEffect(target, effect.durationMs)
         } finally {
@@ -124,20 +130,26 @@ object TongCutSoundEffectGenerator {
         return frames.toInt()
     }
 
-    private fun hasWaveHeader(file: File): Boolean = runCatching {
-        file.inputStream().use { input ->
-            val header = ByteArray(12)
-            var offset = 0
-            while (offset < header.size) {
-                val count = input.read(header, offset, header.size - offset)
-                if (count <= 0) break
-                offset += count
+    private fun hasExactWaveBytes(file: File, expected: ByteArray): Boolean {
+        if (!file.isFile || file.length() != expected.size.toLong()) return false
+        return try {
+            file.inputStream().use { input ->
+                val actual = ByteArray(8_192)
+                var offset = 0
+                while (offset < expected.size) {
+                    val count = input.read(actual, 0, minOf(actual.size, expected.size - offset))
+                    if (count <= 0) return false
+                    for (index in 0 until count) {
+                        if (actual[index] != expected[offset + index]) return false
+                    }
+                    offset += count
+                }
+                input.read() == -1
             }
-            offset == header.size &&
-                String(header, 0, 4, Charsets.US_ASCII) == "RIFF" &&
-                String(header, 8, 4, Charsets.US_ASCII) == "WAVE"
+        } catch (_: IOException) {
+            false
         }
-    }.getOrDefault(false)
+    }
 
     private fun writeAscii(output: ByteArray, offset: Int, value: String) {
         value.toByteArray(Charsets.US_ASCII).copyInto(output, offset)
