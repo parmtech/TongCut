@@ -133,7 +133,8 @@ class VideoExporter(private val context: Context) {
             // Post-composition overlays draw photos first, titles last.
             val visibleOverlays = (if (hasVisiblePhoto) {
                 PhotoOverlayEffects.overlays(
-                    context, overlayLayers, photoCanvas.first, photoCanvas.second
+                    context, overlayLayers, photoCanvas.first, photoCanvas.second,
+                    options.colorLutProfile
                 )
             } else emptyList()) + TimedTextEffects.overlays(overlayLayers)
             if (visibleOverlays.isNotEmpty()) {
