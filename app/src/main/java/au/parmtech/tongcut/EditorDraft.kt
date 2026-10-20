@@ -135,6 +135,22 @@ data class EditorDraft(
         return copy(clips = items, primaryTransitions = transitions)
     }
 
+    /** Adds or removes a transition attached to the cut after [index]. */
+    fun withPrimaryTransitionAfter(index: Int, durationMs: Long?): EditorDraft {
+        require(index in 0 until clips.lastIndex) { "A transition needs two adjacent primary clips" }
+        val kept = primaryTransitions.filterNot { it.afterClipIndex == index }
+        if (durationMs == null) return copy(primaryTransitions = kept)
+        require(!clips[index].reverseVideo && !clips[index + 1].reverseVideo) {
+            "Primary transitions are unavailable on reversed clips"
+        }
+        val updated = kept + PrimaryTransitionSpec(index, durationMs * 1_000L)
+        PrimaryTransitionPlan.build(
+            clips.map { PrimaryTransitionClip(it.id, it.durationMs * 1_000L,
+                it.inMs * 1_000L, it.outMs * 1_000L) }, updated
+        )
+        return copy(primaryTransitions = updated.sortedBy { it.afterClipIndex })
+    }
+
     /** Prevent silent omission of layered content by the older sequential renderer. */
     val canExportWithLegacyRenderer: Boolean get() =
         layers.layers.none { it.kind == LayerKind.STICKER } &&
