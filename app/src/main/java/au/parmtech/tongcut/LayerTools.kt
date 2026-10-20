@@ -1,5 +1,7 @@
 package au.parmtech.tongcut
 
+import au.parmtech.tongcut.beauty.ManualFaceBeautyPanel
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
