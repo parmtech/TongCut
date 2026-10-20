@@ -1,0 +1,56 @@
+name: Retire old 20-agent branch sets
+
+# Runs only when this cleanup workflow is first added/edited on main,
+# or by explicit manual dispatch. Keeps archival tags before deletion.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/retire-legacy-agents.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  archive-and-retire:
+    if: github.repository == 'manbir6-ux/TongCut'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Archive legacy branches before removal
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branches = await github.paginate(github.rest.repos.listBranches, {owner, repo, per_page: 100});
+            // Retire ONLY both historical 20-branch sets, not main, development,
+            // build snapshots, or the new Master/Worker-1/Worker-2 branches.
+            const legacy = branches.filter(b => /^agent\/[aA](?:0[1-9]|1[0-9]|20)-/.test(b.name));
+            core.info(`Found ${legacy.length} old agent branches; preserving source commits as archive tags.`);
+            for (const branch of legacy) {
+              const original = branch.name;
+              const sha = branch.commit.sha;
+              const tag = `archive/retired-agents-20261020/${original.replaceAll('/', '-')}`;
+              const tagRef = `tags/${tag}`;
+              try {
+                const existing = await github.rest.git.getRef({owner, repo, ref: tagRef});
+                if (existing.data.object.sha !== sha) {
+                  throw new Error(`Archive tag ${tag} exists with different SHA; refusing to delete ${original}.`);
+                }
+              } catch (e) {
+                if (e.status !== 404) throw e;
+                await github.rest.git.createRef({owner, repo, ref: `refs/tags/${tag}`, sha});
+                core.info(`Archived ${original} at ${sha}`);
+              }
+              // Re-check the ref before deletion so that no new agent work is lost.
+              const latest = await github.rest.git.getRef({owner, repo, ref: `heads/${original}`});
+              if (latest.data.object.sha !== sha) {
+                core.warning(`Branch ${original} moved after discovery; leaving it untouched.`);
+                continue;
+              }
+              await github.rest.git.deleteRef({owner, repo, ref: `heads/${original}`});
+              core.info(`Deleted retired branch ${original}; archive tag remains.`);
+            }
+            core.info('Legacy branch cleanup finished; exactly three named agent roles remain supported by AGENTS.md.');
