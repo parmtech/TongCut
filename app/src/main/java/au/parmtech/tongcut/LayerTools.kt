@@ -1,6 +1,7 @@
 package au.parmtech.tongcut
 
 import au.parmtech.tongcut.beauty.ManualFaceBeautyPanel
+import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -445,6 +446,54 @@ internal fun LayerTools(
                                 color = Color(0xFFFFC987),
                                 fontSize = 10.sp
                             )
+                            Text("Original offline still-image looks",
+                                color = Color.LightGray, fontSize = 10.sp)
+                            OfflineEffectPresets.all.forEach { preset ->
+                                val selected = fx.offlineEffectPreset?.presetId == preset.id
+                                SmallLayerButton(if (selected) "✓ ${preset.title}" else preset.title) {
+                                    val next = if (selected) null else preset.defaults()
+                                    runCatching {
+                                        applyMatte(fx.copy(offlineEffectPreset = next))
+                                    }.onSuccess(onChange)
+                                        .onFailure { onError(it.message ?: "Photo effect change failed") }
+                                }
+                            }
+                            fx.offlineEffectPreset?.let { state ->
+                                val preset = OfflineEffectPresets.find(state.presetId)
+                                val strengthSpec = preset?.parameters?.firstOrNull {
+                                    it.id == "strength"
+                                }
+                                val strength = state.values["strength"]
+                                    ?: strengthSpec?.defaultValue ?: 0f
+                                Text(
+                                    "${preset?.title ?: "Offline effect"} · Strength ${(strength * 100).toInt()}%",
+                                    color = Color.LightGray, fontSize = 10.sp
+                                )
+                                SmallLayerButton("Effect strength −") {
+                                    val nextStrength = (strength - 0.1f).coerceAtLeast(0f)
+                                    runCatching {
+                                        applyMatte(fx.copy(offlineEffectPreset = state.copy(
+                                            values = state.values + ("strength" to nextStrength)
+                                        )))
+                                    }.onSuccess(onChange)
+                                        .onFailure { onError(it.message ?: "Photo effect strength failed") }
+                                }
+                                SmallLayerButton("Effect strength +") {
+                                    val nextStrength = (strength + 0.1f).coerceAtMost(1f)
+                                    runCatching {
+                                        applyMatte(fx.copy(offlineEffectPreset = state.copy(
+                                            values = state.values + ("strength" to nextStrength)
+                                        )))
+                                    }.onSuccess(onChange)
+                                        .onFailure { onError(it.message ?: "Photo effect strength failed") }
+                                }
+                                SmallLayerButton("Reset photo effect") {
+                                    runCatching {
+                                        applyMatte(fx.copy(offlineEffectPreset = null))
+                                    }.onSuccess(onChange)
+                                        .onFailure { onError(it.message ?: "Photo effect reset failed") }
+                                }
+                            }
                             if (fx.applyColorLut || fx.colorLutStrength != 1f) {
                                 SmallLayerButton("Reset layer LUT") {
                                     runCatching {
