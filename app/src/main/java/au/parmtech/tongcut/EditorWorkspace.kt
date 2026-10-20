@@ -998,6 +998,20 @@ fun VideoEditorScreen(
                         }
                         Text("Imported 3D LUT affects primary SDR footage in preview and export.",
                             color = Color.LightGray, fontSize = 11.sp)
+                        Text("TongCut original looks",
+                            color = Color(0xFF7CE7E8), fontSize = 12.sp)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            itemsIndexed(ColorLutPresets.all) { _, preset ->
+                                FilterChip(
+                                    selected = active.colorLutProfile?.name == preset.name,
+                                    onClick = {
+                                        previewDraft = null
+                                        onChange(active.copy(colorLutProfile = preset))
+                                    },
+                                    label = { Text(preset.name.removePrefix("TongCut ")) }
+                                )
+                            }
+                        }
                         ToolPill("Import 3D .cube LUT") { colorLutPicker.launch(arrayOf("*/*")) }
                         active.colorLutProfile?.let { lut ->
                             Text("${lut.name} · ${lut.size}³ SDR LUT",

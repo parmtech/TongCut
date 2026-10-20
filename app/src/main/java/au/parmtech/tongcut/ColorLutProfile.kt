@@ -46,6 +46,46 @@ data class ColorLutProfile(
     }
 }
 
+/** Original TongCut looks, generated locally rather than bundled from third-party packs. */
+object ColorLutPresets {
+    val all: List<ColorLutProfile> by lazy {
+        listOf(
+            create("TongCut Amber") { red, green, blue ->
+                floatArrayOf(
+                    red * 1.04f + 0.018f,
+                    green * 0.99f + red * 0.012f,
+                    blue * 0.88f + (1f - red) * 0.035f
+                )
+            },
+            create("TongCut Tidal") { red, green, blue ->
+                floatArrayOf(
+                    red * 0.93f + (1f - green) * 0.025f,
+                    green * 1.025f + blue * 0.008f,
+                    blue * 1.08f + (1f - blue) * 0.012f
+                )
+            }
+        )
+    }
+
+    private fun create(name: String, transform: (Float, Float, Float) -> FloatArray): ColorLutProfile {
+        val size = 17
+        val colors = buildList(size * size * size) {
+            for (blue in 0 until size) for (green in 0 until size) for (red in 0 until size) {
+                val mapped = transform(
+                    red.toFloat() / (size - 1),
+                    green.toFloat() / (size - 1),
+                    blue.toFloat() / (size - 1)
+                )
+                val r = (mapped[0].coerceIn(0f, 1f) * 255f).roundToInt()
+                val g = (mapped[1].coerceIn(0f, 1f) * 255f).roundToInt()
+                val b = (mapped[2].coerceIn(0f, 1f) * 255f).roundToInt()
+                add((0xff shl 24) or (r shl 16) or (g shl 8) or b)
+            }
+        }
+        return ColorLutProfile(name, size, colors)
+    }
+}
+
 /** Strict, local-only parser for the portable .cube 3D LUT subset. */
 object CubeLutParser {
     fun parse(filename: String, text: String): ColorLutProfile {

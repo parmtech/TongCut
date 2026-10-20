@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ColorLutProfileTest {
+    @Test fun originalTongCutPresetsAreBoundedDistinctAndAdjustable() {
+        val presets = ColorLutPresets.all
+        assertEquals(listOf("TongCut Amber", "TongCut Tidal"), presets.map { it.name })
+        assertTrue(presets.all { it.size == 17 && it.entriesArgb.size == 17 * 17 * 17 })
+        assertNotEquals(presets[0].entriesArgb, presets[1].entriesArgb)
+        assertNotEquals(presets[0].toCube().contentDeepToString(),
+            presets[0].copy(strength = 0.35f).toCube().contentDeepToString())
+    }
+
     @Test fun parsesRedFastestIdentityCubeIntoMedia3RgbOrder() {
         val identity = """
             TITLE "Identity check"
