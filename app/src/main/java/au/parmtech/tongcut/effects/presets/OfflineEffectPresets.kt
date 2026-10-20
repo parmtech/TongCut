@@ -119,6 +119,15 @@ object OfflineEffectPresets {
         return state.values.keys.all(specs::containsKey) &&
             specs.all { (id, spec) -> state.values[id]?.let(spec::validate) ?: true }
     }
+
+    /** True only when every parameter resolves to its neutral lower bound. */
+    fun isNeutral(state: EffectPresetState): Boolean {
+        if (!validate(state)) return false
+        val preset = requireNotNull(find(state.presetId))
+        return preset.parameters.all { spec ->
+            (state.values[spec.id] ?: spec.defaultValue) == spec.minimum
+        }
+    }
 }
 
 /** Strict, versioned codec for isolated preset configurations. Unknown keys are rejected. */
