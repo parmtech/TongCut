@@ -87,10 +87,15 @@ object TimedTextEffects {
                             CaptionAlignment.CENTER -> 0f
                             CaptionAlignment.RIGHT -> 1f
                         }
+                        val placementOffsetY = when (layer.captionStyle.placement) {
+                            CaptionPlacement.TOP -> 0.65f
+                            CaptionPlacement.CENTER -> 0f
+                            CaptionPlacement.BOTTOM -> -0.65f
+                        }
                         return StaticOverlaySettings.Builder()
                             .setBackgroundFrameAnchor(
                                 (pose.x + alignmentOffset).coerceIn(-1f, 1f),
-                                pose.y.coerceIn(-1f, 1f)
+                                (pose.y + placementOffsetY).coerceIn(-1f, 1f)
                             )
                             .setOverlayFrameAnchor(overlayAnchorX, 0f)
                             .setScale(

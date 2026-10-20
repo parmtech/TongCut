@@ -19,6 +19,7 @@ enum class CaptionFont(val title: String, val androidFamily: String) {
 }
 
 enum class CaptionAlignment(val title: String) { LEFT("Left"), CENTER("Center"), RIGHT("Right") }
+enum class CaptionPlacement(val title: String) { TOP("Top"), CENTER("Center"), BOTTOM("Bottom") }
 
 internal const val CAPTION_ALIGNMENT_BOX_HALF_WIDTH = 0.88f
 
@@ -29,7 +30,8 @@ data class CaptionStyle(
     val font: CaptionFont = CaptionFont.SANS,
     val alignment: CaptionAlignment = CaptionAlignment.CENTER,
     /** Original TongCut translucent charcoal caption backing. */
-    val background: Boolean = false
+    val background: Boolean = false,
+    val placement: CaptionPlacement = CaptionPlacement.CENTER
 ) {
     init {
         require(size.isFinite() && size in 0.5f..3f) {

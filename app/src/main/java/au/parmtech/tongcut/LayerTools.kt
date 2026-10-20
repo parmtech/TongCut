@@ -168,6 +168,12 @@ internal fun LayerTools(
                         SmallLayerButton(if (current.background) "Backdrop ✓" else "Backdrop") {
                             style(current.copy(background = !current.background))
                         }
+                        SmallLayerButton("Position: ${current.placement.title}") {
+                            val placements = CaptionPlacement.entries
+                            val next = placements[(placements.indexOf(current.placement) + 1) %
+                                placements.size]
+                            style(current.copy(placement = next))
+                        }
                     }
                     SmallLayerButton(
                         if (layer.id in validGroup) "✓ Group" else "+ Group"

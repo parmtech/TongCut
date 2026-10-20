@@ -1119,6 +1119,13 @@ internal fun VideoEditorScreen(
                                 1f - CAPTION_ALIGNMENT_BOX_HALF_WIDTH * motion.scale
                             )
                         }
+                        val placementOffsetY = when (layer.captionStyle.placement) {
+                            CaptionPlacement.TOP -> 0.65f
+                            CaptionPlacement.CENTER -> 0f
+                            CaptionPlacement.BOTTOM -> -0.65f
+                        }
+                        val alignedMotionY =
+                            (motion.y + placementOffsetY).coerceIn(-1f, 1f)
                         Text(
                             text = captionText,
                             color = Color(layer.captionStyle.tone.argb),
@@ -1141,7 +1148,7 @@ internal fun VideoEditorScreen(
                                 .fillMaxWidth(0.88f)
                                 .graphicsLayer {
                                     translationX = alignedMotionX * viewportWidthPx / 2f
-                                    translationY = -motion.y * viewportHeightPx / 2f
+                                    translationY = -alignedMotionY * viewportHeightPx / 2f
                                     scaleX = motion.scale
                                     scaleY = motion.scale
                                     rotationZ = motion.rotation
