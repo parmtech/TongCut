@@ -91,4 +91,25 @@ class FaceReshapeFramePlanTest {
     fun impossibleConfidenceIsRejected() {
         FaceReshapeObservation(1L, 1, sample, 2f)
     }
+    @Test fun preparedTrackIsImmutableAndMatchesOneShotLookup() {
+        val source = mutableListOf(
+            FaceReshapeObservation(100_000L, 7, sample, 0.95f),
+            FaceReshapeObservation(200_000L, 7, sample.copy(
+                leftEye = FacePoint(0.39f, 0.35f)
+            ), 0.95f)
+        )
+        val prepared = FaceReshapeFramePlan.prepare(source)
+        source.clear() // A renderer must not lose data because callers mutate input.
+        assertEquals(0.37f, prepared.at(150_000L)!!.leftEye.x, 0.0001f)
+        assertNull(prepared.at(201_000L))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun preparedTrackRejectsOutOfOrderFramesOnConstruction() {
+        FaceReshapeFramePlan.prepare(listOf(
+            FaceReshapeObservation(100_000L, 7, sample, 0.95f),
+            FaceReshapeObservation(50_000L, 7, sample, 0.95f)
+        ))
+    }
+
 }
