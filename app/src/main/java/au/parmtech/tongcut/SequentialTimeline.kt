@@ -45,7 +45,13 @@ class SequentialTimeline(
         totalMs = (transitionPlan?.durationUs ?: 0L) / 1_000L
     }
 
-    fun startOf(index: Int): Long = offsets[index]
+    private fun incomingOverlapMs(index: Int): Long =
+        transitionPlan?.transitions?.firstOrNull {
+            it.incomingClipId == clips[index].id
+        }?.durationUs?.div(1_000L) ?: 0L
+
+    /** First non-transition frame in the primary player's trimmed playlist item. */
+    fun startOf(index: Int): Long = offsets[index] + incomingOverlapMs(index)
 
     fun pointAt(timeMs: Long): TimelinePosition? {
         if (clips.isEmpty()) return null
@@ -89,6 +95,6 @@ class SequentialTimeline(
 
     fun sourceTimeOf(index: Int, sourceMs: Long): Long {
         val clip = clips[index]
-        return timeOf(index, sourceMs.coerceIn(clip.inMs, clip.outMs) - clip.inMs)
+        return offsets[index] + (sourceMs.coerceIn(clip.inMs, clip.outMs) - clip.inMs)
     }
 }
