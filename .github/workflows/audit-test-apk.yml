@@ -15,6 +15,9 @@ on:
       - 'app/src/test/java/au/parmtech/tongcut/ColorGradePresetsTest.kt'
       - 'app/src/test/java/au/parmtech/tongcut/PhotoMatteTest.kt'
       - 'app/src/test/java/au/parmtech/tongcut/VisualOverlaySlotsTest.kt'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'app/src/main/java/au/parmtech/tongcut/ExportService.kt'
+      - 'app/src/main/java/au/parmtech/tongcut/EditorWorkspace.kt'
   workflow_dispatch:
 
 permissions:

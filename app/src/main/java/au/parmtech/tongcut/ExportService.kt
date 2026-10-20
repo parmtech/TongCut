@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -303,6 +304,10 @@ class ExportService : Service() {
     }
 
     private fun updateNotification(state: ExportJobState) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, notification(state))
     }

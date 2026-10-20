@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import android.net.Uri
@@ -156,6 +157,15 @@ internal fun VideoEditorScreen(
     var fullscreen by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<String?>(null) }
     var exportDialog by remember { mutableStateOf(false) }
+    val enqueueExport: (EditorDraft) -> Unit = { snapshot ->
+        runCatching { exportJobs.enqueue(snapshot) }
+            .onFailure { onInfo("Could not start export: ${it.message}") }
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) onInfo("Export will continue, but progress notifications are disabled.")
+    }
     var exportCodec by remember(draft.exportVideoCodec) { mutableStateOf(draft.exportVideoCodec) }
     var exportBitrate by remember(draft.exportVideoBitrateBps) {
         mutableIntStateOf(draft.exportVideoBitrateBps)
@@ -2096,8 +2106,16 @@ internal fun VideoEditorScreen(
                             exportAudioBitrateBps = exportAudioBitrate,
                             exportMaxFrameRate = exportMaxFrameRate
                         ).normalized()
-                        runCatching { exportJobs.enqueue(snapshot) }
-                            .onFailure { onInfo("Could not start export: ${it.message}") }
+                        enqueueExport(snapshot)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.POST_NOTIFICATIONS
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermissionLauncher.launch(
+                                Manifest.permission.POST_NOTIFICATIONS
+                            )
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ProCyan)
                 ) { Text("Export MP4", color = Color.Black) }
