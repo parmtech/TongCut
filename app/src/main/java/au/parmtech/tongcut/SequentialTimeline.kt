@@ -56,8 +56,14 @@ class SequentialTimeline(
     fun pointAt(timeMs: Long): TimelinePosition? {
         if (clips.isEmpty()) return null
         val t = timeMs.coerceIn(0L, totalMs)
+        // During a dissolve the primary/base player stays on outgoing footage;
+        // the incoming source is decoded in the transition preview lane.
+        val transitionOutgoingIndex = transitionPlan
+            ?.transitionAt(t * 1_000L)
+            ?.let { window -> clips.indexOfFirst { it.id == window.outgoingClipId } }
+            ?.takeIf { it >= 0 }
         // Exact boundaries belong to the next clip (except end-of-timeline).
-        val index = if (t == totalMs) clips.lastIndex else {
+        val index = transitionOutgoingIndex ?: if (t == totalMs) clips.lastIndex else {
             var low = 0
             var high = clips.lastIndex
             var answer = 0
