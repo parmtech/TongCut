@@ -94,6 +94,8 @@ data class PhotoEffects(
 
 /** Pure pixel-matte math, shared by Android bitmap processing and JVM tests. */
 object PhotoMatte {
+    const val MAX_POLYGON_POINTS = 8 // GPU shader supports exactly eight slots
+
     private val blurWeights = intArrayOf(1, 2, 1, 2, 4, 2, 1, 2, 1)
 
     private fun smooth(low: Float, high: Float, value: Float): Float {
