@@ -33,7 +33,8 @@ data class CaptionStyle(
     /** Original TongCut translucent charcoal caption backing. */
     val background: Boolean = false,
     val placement: CaptionPlacement = CaptionPlacement.CENTER,
-    val entrance: CaptionEntrance = CaptionEntrance.NONE
+    val entrance: CaptionEntrance = CaptionEntrance.NONE,
+    val shadow: Boolean = false
 ) {
     init {
         require(size.isFinite() && size in 0.5f..3f) {

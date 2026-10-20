@@ -3,12 +3,14 @@ package au.parmtech.tongcut
 import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.TextPaint
 import android.text.Layout
 import android.text.style.AlignmentSpan
 import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
+import android.text.style.CharacterStyle
 import androidx.media3.common.OverlaySettings
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.OverlayEffect
@@ -53,6 +55,10 @@ object TimedTextEffects {
                         TypefaceSpan(layer.captionStyle.font.androidFamily),
                         0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
+                    if (layer.captionStyle.shadow && length > 0) {
+                        setSpan(CaptionShadowSpan(), 0, length,
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
                     val alignment = when (layer.captionStyle.alignment) {
                         CaptionAlignment.LEFT -> Layout.Alignment.ALIGN_NORMAL
                         CaptionAlignment.CENTER -> Layout.Alignment.ALIGN_CENTER
@@ -124,4 +130,11 @@ object TimedTextEffects {
     fun create(timeline: LayerTimeline): OverlayEffect? =
         overlays(timeline).takeIf { it.isNotEmpty() }?.let { OverlayEffect(it) }
 
+}
+
+private class CaptionShadowSpan : CharacterStyle() {
+    override fun updateDrawState(textPaint: TextPaint) {
+        val radius = (textPaint.textSize * 0.11f).coerceAtLeast(1f)
+        textPaint.setShadowLayer(radius, 0f, radius * 0.35f, 0xD9000000.toInt())
+    }
 }
