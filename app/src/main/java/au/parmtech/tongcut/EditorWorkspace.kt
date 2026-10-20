@@ -1598,10 +1598,16 @@ internal fun VideoEditorScreen(
                     }
                     "Retouch" -> {
                         val face = active.faceRetouch
+                        val retouchNote = if (reverseClip != null) {
+                            "Cached reverse-frame preview does not render retouch yet. Export still " +
+                                "applies it to primary SDR footage; switch to a forward clip to preview."
+                        } else {
+                            "Place the oval manually. Controls use fixed positions, not detected " +
+                                "landmarks. Face-region softening affects the whole oval; edits stay " +
+                                "local and affect primary SDR footage only."
+                        }
                         Text(
-                            "Place the oval manually. Controls use fixed positions, not detected landmarks. " +
-                                "Face-region softening affects the whole oval; edits stay local " +
-                                "and affect primary SDR footage only.",
+                            retouchNote,
                             color = Color.LightGray,
                             fontSize = 11.sp
                         )
