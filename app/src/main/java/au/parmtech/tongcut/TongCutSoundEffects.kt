@@ -14,7 +14,7 @@ enum class TongCutSoundEffect(
     val title: String,
     val fileName: String,
     val durationMs: Long,
-    private val seed: Long
+    internal val seed: Long
 ) {
     TICK("Tick", "tick.wav", 180L, 0x5449434BL),
     SWIPE("Swipe", "swipe.wav", 760L, 0x5357495045L),
