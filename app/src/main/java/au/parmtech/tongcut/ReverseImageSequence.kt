@@ -3,6 +3,7 @@ package au.parmtech.tongcut
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
 import java.io.Closeable
 
 /**
@@ -14,6 +15,10 @@ class ReverseImageSequence private constructor(
     val items: List<EditedMediaItem>,
     private val frames: ReverseFramePlayback
 ) : Closeable {
+    /** Ready-to-compose video-only sequence; this object must outlive Transformer consumption. */
+    fun asVideoSequence(): EditedMediaItemSequence =
+        EditedMediaItemSequence.withVideoFrom(items)
+
     override fun close() = frames.close()
 
     companion object {
