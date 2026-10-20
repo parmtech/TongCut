@@ -32,6 +32,8 @@ class ManualFaceRetouchTest {
         assertEquals(ManualFaceRetouch(), ManualFaceRetouchCodec.decode(null))
         val malformed = JSONObject().put("faceWidth", 1.0)
         assertEquals(ManualFaceRetouch(), ManualFaceRetouchCodec.decode(malformed))
+        val offFrame = JSONObject().put("centerX", 0.1).put("radiusX", 0.4)
+        assertEquals(0.402f, ManualFaceRetouchCodec.decode(offFrame).centerX, 0.00001f)
     }
 
     @Test fun contourBoundsMatchFoldFreeShaderProfile() {
@@ -44,6 +46,9 @@ class ManualFaceRetouchTest {
     @Test fun outOfRangeAndNonFiniteControlsAreRejected() {
         assertTrue(runCatching { ManualFaceRetouch(centerX = Float.NaN) }.isFailure)
         assertTrue(runCatching { ManualFaceRetouch(radiusY = 0f) }.isFailure)
+        assertTrue(runCatching {
+            ManualFaceRetouch(centerX = 0.1f, radiusX = 0.2f)
+        }.isFailure)
         assertTrue(runCatching { ManualFaceRetouch(faceWidth = 0.5f) }.isFailure)
         assertTrue(runCatching { ManualFaceRetouch(eyeScale = -0.1f) }.isFailure)
     }

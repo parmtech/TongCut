@@ -28,10 +28,13 @@ internal data class ManualFaceRetouch(
     val skinSoftening: Float = 0f
 ) {
     init {
-        require(centerX.isFinite() && centerX in 0f..1f)
-        require(centerY.isFinite() && centerY in 0f..1f)
         require(radiusX.isFinite() && radiusX in 0.08f..0.48f)
         require(radiusY.isFinite() && radiusY in 0.08f..0.48f)
+        // Keep a small frame guard so bounded warps never need a fold-causing edge clamp.
+        require(centerX.isFinite() && centerX in
+            (radiusX + FRAME_GUARD)..(1f - radiusX - FRAME_GUARD))
+        require(centerY.isFinite() && centerY in
+            (radiusY + FRAME_GUARD)..(1f - radiusY - FRAME_GUARD))
         require(faceWidth.isFinite() && faceWidth in -0.25f..0.25f)
         require(jawWidth.isFinite() && jawWidth in -0.25f..0.25f)
         require(noseWidth.isFinite() && noseWidth in -0.08f..0.08f)
@@ -42,6 +45,10 @@ internal data class ManualFaceRetouch(
     val isActive: Boolean
         get() = faceWidth != 0f || jawWidth != 0f || noseWidth != 0f ||
             eyeScale != 0f || skinSoftening != 0f
+
+    companion object {
+        const val FRAME_GUARD = 0.002f
+    }
 }
 
 /** Tolerant per-field project persistence; unknown or malformed values revert to neutral. */
@@ -65,11 +72,19 @@ internal object ManualFaceRetouchCodec {
             val value = root.optDouble(key, Double.NaN).toFloat()
             return if (value.isFinite() && value in range) value else fallback
         }
+        val radiusX = bounded("radiusX", defaults.radiusX, 0.08f..0.48f)
+        val radiusY = bounded("radiusY", defaults.radiusY, 0.08f..0.48f)
+        val centerX = bounded("centerX", defaults.centerX, 0f..1f)
+            .coerceIn(radiusX + ManualFaceRetouch.FRAME_GUARD,
+                1f - radiusX - ManualFaceRetouch.FRAME_GUARD)
+        val centerY = bounded("centerY", defaults.centerY, 0f..1f)
+            .coerceIn(radiusY + ManualFaceRetouch.FRAME_GUARD,
+                1f - radiusY - ManualFaceRetouch.FRAME_GUARD)
         return ManualFaceRetouch(
-            centerX = bounded("centerX", defaults.centerX, 0f..1f),
-            centerY = bounded("centerY", defaults.centerY, 0f..1f),
-            radiusX = bounded("radiusX", defaults.radiusX, 0.08f..0.48f),
-            radiusY = bounded("radiusY", defaults.radiusY, 0.08f..0.48f),
+            centerX = centerX,
+            centerY = centerY,
+            radiusX = radiusX,
+            radiusY = radiusY,
             faceWidth = bounded("faceWidth", 0f, -0.25f..0.25f),
             jawWidth = bounded("jawWidth", 0f, -0.25f..0.25f),
             noseWidth = bounded("noseWidth", 0f, -0.08f..0.08f),
@@ -165,7 +180,11 @@ private class ManualFaceRetouchShader(
 
         const val FRAGMENT_SHADER = """
             #version 100
+            #ifdef GL_FRAGMENT_PRECISION_HIGH
+            precision highp float;
+            #else
             precision mediump float;
+            #endif
             uniform sampler2D uTexSampler;
             uniform vec2 uCenter;
             uniform vec2 uRadius;
@@ -233,7 +252,7 @@ private class ManualFaceRetouchShader(
                 vec2 rightEye = uCenter + vec2(0.29 * uRadius.x, -0.21 * uRadius.y);
                 sourceUv = enlargeEye(sourceUv, leftEye);
                 sourceUv = enlargeEye(sourceUv, rightEye);
-                sourceUv = clamp(sourceUv, vec2(0.0), vec2(1.0));
+                // Every supported profile stays within the validated oval/frame bounds.
 
                 vec4 center = texture2D(uTexSampler, sourceUv);
                 vec4 right = texture2D(uTexSampler,

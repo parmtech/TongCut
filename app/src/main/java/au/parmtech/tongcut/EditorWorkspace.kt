@@ -1611,18 +1611,46 @@ internal fun VideoEditorScreen(
                             color = Color.LightGray,
                             fontSize = 11.sp
                         )
-                        GradeSlider("Region center X", face.centerX, 0f..1f, { value ->
-                            previewDraft = active.copy(faceRetouch = face.copy(centerX = value))
-                        }, ::commitGradePreview)
-                        GradeSlider("Region center Y", face.centerY, 0f..1f, { value ->
-                            previewDraft = active.copy(faceRetouch = face.copy(centerY = value))
-                        }, ::commitGradePreview)
-                        GradeSlider("Region width", face.radiusX, 0.08f..0.48f, { value ->
-                            previewDraft = active.copy(faceRetouch = face.copy(radiusX = value))
-                        }, ::commitGradePreview)
-                        GradeSlider("Region height", face.radiusY, 0.08f..0.48f, { value ->
-                            previewDraft = active.copy(faceRetouch = face.copy(radiusY = value))
-                        }, ::commitGradePreview)
+                        val maxRegionWidth = minOf(0.48f, face.centerX, 1f - face.centerX)
+                        val maxRegionHeight = minOf(0.48f, face.centerY, 1f - face.centerY)
+                        GradeSlider(
+                            "Region center X", face.centerX,
+                            (face.radiusX + ManualFaceRetouch.FRAME_GUARD)..(1f - face.radiusX - ManualFaceRetouch.FRAME_GUARD),
+                            { value -> previewDraft = active.copy(
+                                faceRetouch = face.copy(centerX = value)
+                            ) }, ::commitGradePreview
+                        )
+                        GradeSlider(
+                            "Region center Y", face.centerY,
+                            (face.radiusY + ManualFaceRetouch.FRAME_GUARD)..(1f - face.radiusY - ManualFaceRetouch.FRAME_GUARD),
+                            { value -> previewDraft = active.copy(
+                                faceRetouch = face.copy(centerY = value)
+                            ) }, ::commitGradePreview
+                        )
+                        GradeSlider(
+                            "Region width", face.radiusX, 0.08f..maxRegionWidth,
+                            { value ->
+                                val centerX = face.centerX.coerceIn(
+                                    value + ManualFaceRetouch.FRAME_GUARD,
+                                    1f - value - ManualFaceRetouch.FRAME_GUARD
+                                )
+                                previewDraft = active.copy(faceRetouch = face.copy(
+                                    radiusX = value, centerX = centerX
+                                ))
+                            }, ::commitGradePreview
+                        )
+                        GradeSlider(
+                            "Region height", face.radiusY, 0.08f..maxRegionHeight,
+                            { value ->
+                                val centerY = face.centerY.coerceIn(
+                                    value + ManualFaceRetouch.FRAME_GUARD,
+                                    1f - value - ManualFaceRetouch.FRAME_GUARD
+                                )
+                                previewDraft = active.copy(faceRetouch = face.copy(
+                                    radiusY = value, centerY = centerY
+                                ))
+                            }, ::commitGradePreview
+                        )
                         GradeSlider("Face width", face.faceWidth, -0.25f..0.25f, { value ->
                             previewDraft = active.copy(faceRetouch = face.copy(faceWidth = value))
                         }, ::commitGradePreview)
