@@ -32,7 +32,10 @@ data class AudioEqualizer(
 
 /** Small RBJ peaking-filter chain, shared by Media3 preview and Transformer PCM export. */
 @androidx.annotation.OptIn(UnstableApi::class)
-internal class AudioEqualizerProcessor(private val settings: AudioEqualizer) : BaseAudioProcessor() {
+internal class AudioEqualizerProcessor(
+    private val settings: AudioEqualizer,
+    private val stereoBalance: Float = 0f
+) : BaseAudioProcessor() {
     private data class Coefficients(val b0: Float, val b1: Float, val b2: Float,
                                    val a1: Float, val a2: Float)
     private lateinit var coefficients: List<Coefficients>
@@ -45,6 +48,10 @@ internal class AudioEqualizerProcessor(private val settings: AudioEqualizer) : B
     private val headroom = 10.0.pow(-maxOf(
         settings.bassDb, settings.midDb, settings.trebleDb, 0f
     ).toDouble() / 20.0).toFloat()
+
+    init {
+        require(stereoBalance.isFinite() && stereoBalance in -1f..1f)
+    }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat)
         : AudioProcessor.AudioFormat {
@@ -85,7 +92,12 @@ internal class AudioEqualizerProcessor(private val settings: AudioEqualizer) : B
                     z2[state] = c.b2 * value - c.a2 * next
                     value = next
                 }
-                value = (value * headroom).coerceIn(-1f, 1f)
+                val balanceGain = when {
+                    channels >= 2 && channel == 0 && stereoBalance > 0f -> 1f - stereoBalance
+                    channels >= 2 && channel == 1 && stereoBalance < 0f -> 1f + stereoBalance
+                    else -> 1f
+                }
+                value = (value * headroom * balanceGain).coerceIn(-1f, 1f)
                 if (sampleBytes == 4) output.putFloat(value)
                 else output.putShort((value * 32768f).toInt().coerceIn(-32768, 32767).toShort())
             }
@@ -127,7 +139,8 @@ internal class AudioEqualizerProcessor(private val settings: AudioEqualizer) : B
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class AudioEqualizerRenderersFactory(
     context: Context,
-    private val settings: AudioEqualizer
+    private val settings: AudioEqualizer,
+    private val stereoBalance: Float = 0f
 ) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(
         context: Context,
@@ -136,7 +149,8 @@ internal class AudioEqualizerRenderersFactory(
     ): AudioSink = DefaultAudioSink.Builder(context)
         .setEnableFloatOutput(enableFloatOutput)
         .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-        .setAudioProcessors(if (settings.isNeutral) emptyArray<AudioProcessor>()
-            else arrayOf(AudioEqualizerProcessor(settings)))
+        .setAudioProcessors(if (settings.isNeutral && stereoBalance == 0f)
+            emptyArray<AudioProcessor>()
+            else arrayOf(AudioEqualizerProcessor(settings, stereoBalance)))
         .build()
 }

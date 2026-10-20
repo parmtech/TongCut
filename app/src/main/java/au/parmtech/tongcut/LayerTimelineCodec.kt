@@ -9,7 +9,7 @@ import org.json.JSONObject
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 22)
+        put("schema", 23)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -30,6 +30,7 @@ object LayerTimelineCodec {
                         put("midDb", track.equalizer.midDb.toDouble())
                         put("trebleDb", track.equalizer.trebleDb.toDouble())
                     })
+                    put("stereoBalance", track.stereoBalance.toDouble())
                 })
             }
         })
@@ -131,7 +132,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..22) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..23) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -160,7 +161,8 @@ object LayerTimelineCodec {
                         midDb = eq.optDouble("midDb", 0.0).toFloat(),
                         trebleDb = eq.optDouble("trebleDb", 0.0).toFloat()
                     )
-                } ?: AudioEqualizer()
+                } ?: AudioEqualizer(),
+                stereoBalance = track.optDouble("stereoBalance", 0.0).toFloat()
             )
         }
         val clips = (0 until itemsJson.length()).map { i ->

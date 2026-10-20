@@ -64,4 +64,29 @@ class AudioEqualizerTest {
         assertTrue("the mid-band boost should remain audible with other bands boosted", peak > 12_000)
         assertTrue("the limiter should still keep output within the PCM16 rail", peak <= 32_000)
     }
+
+    @Test fun stereoBalanceChangesOnlyTheOppositeStereoSide() {
+        val processor = AudioEqualizerProcessor(AudioEqualizer(), stereoBalance = -1f)
+        processor.configure(AudioProcessor.AudioFormat(48_000, 2, C.ENCODING_PCM_16BIT))
+        processor.flush()
+        val input = ByteBuffer.allocateDirect(8).order(ByteOrder.nativeOrder())
+            .putShort(10_000).putShort(10_000).putShort(-12_000).putShort(-12_000)
+        input.flip()
+        processor.queueInput(input)
+        val output = processor.output.order(ByteOrder.nativeOrder())
+        assertEquals(10_000.toShort(), output.getShort())
+        assertEquals(0.toShort(), output.getShort())
+        assertEquals((-12_000).toShort(), output.getShort())
+        assertEquals(0.toShort(), output.getShort())
+    }
+
+    @Test fun monoInputIgnoresStereoBalance() {
+        val processor = AudioEqualizerProcessor(AudioEqualizer(), stereoBalance = 1f)
+        processor.configure(AudioProcessor.AudioFormat(48_000, 1, C.ENCODING_PCM_16BIT))
+        processor.flush()
+        val input = ByteBuffer.allocateDirect(2).order(ByteOrder.nativeOrder()).putShort(12_345)
+        input.flip()
+        processor.queueInput(input)
+        assertEquals(12_345.toShort(), processor.output.order(ByteOrder.nativeOrder()).getShort())
+    }
 }

@@ -1096,6 +1096,39 @@ internal fun LayerTools(
                                 }
                             }
                         }
+                        SmallLayerButton("Balance ← 5%") {
+                            runCatching { LayerEdits.setAudioStereoBalance(draft, track.id,
+                                (track.stereoBalance - 0.05f).coerceAtLeast(-1f))
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Audio balance failed")
+                            }
+                        }
+                        Text(
+                            when {
+                                track.stereoBalance < 0f ->
+                                    "Favor left ${(kotlin.math.abs(track.stereoBalance) * 100).toInt()}%"
+                                track.stereoBalance > 0f ->
+                                    "Favor right ${(track.stereoBalance * 100).toInt()}%"
+                                else -> "Centered balance"
+                            },
+                            color = Color.LightGray, fontSize = 10.sp
+                        )
+                        SmallLayerButton("Balance → 5%") {
+                            runCatching { LayerEdits.setAudioStereoBalance(draft, track.id,
+                                (track.stereoBalance + 0.05f).coerceAtMost(1f))
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Audio balance failed")
+                            }
+                        }
+                        if (track.stereoBalance != 0f) {
+                            SmallLayerButton("Center balance") {
+                                runCatching { LayerEdits.setAudioStereoBalance(draft,
+                                    track.id, 0f)
+                                }.onSuccess(onChange).onFailure {
+                                    onError(it.message ?: "Audio balance reset failed")
+                                }
+                            }
+                        }
                         Text("Tap the curve to add a clip gain point",
                             color = Color.LightGray, fontSize = 10.sp)
                         AudioEnvelopeCurve(

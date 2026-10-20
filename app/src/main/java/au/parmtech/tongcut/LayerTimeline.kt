@@ -70,6 +70,8 @@ data class TimelineTrack(
     val duckingGain: Float = 0.25f,
     /** Optional three-band PCM equalizer for preview and rendered audio. */
     val equalizer: AudioEqualizer = AudioEqualizer()
+    /** Stereo balance: -1 favors left, +1 favors right; mono sources remain unchanged. */
+    val stereoBalance: Float = 0f
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -78,6 +80,9 @@ data class TimelineTrack(
         require(gain.isFinite() && gain in 0f..1f) { "Audio gain must be 0–100%" }
         require(duckingGain.isFinite() && duckingGain in 0.05f..1f) {
             "Dialogue duck level must be 5–100%"
+        }
+        require(stereoBalance.isFinite() && stereoBalance in -1f..1f) {
+            "Stereo balance must be -100–100%"
         }
         require(!duckingSource || kind == LayerKind.AUDIO) {
             "Only audio tracks can be dialogue ducking sources"

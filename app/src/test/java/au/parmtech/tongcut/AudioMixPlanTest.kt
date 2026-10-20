@@ -45,10 +45,12 @@ class AudioMixPlanTest {
 
     @Test fun audioEqualizerFlowsIntoTheLaneRenderPlan() {
         val eq = AudioEqualizer(bassDb = 4f, midDb = -2f, trebleDb = 6f)
-        val audioTrack = lane.copy(equalizer = eq)
+        val audioTrack = lane.copy(equalizer = eq, stereoBalance = 0.35f)
         val graph = LayerTimeline(tracks = listOf(audioTrack),
             layers = listOf(clip("eq", 0L, videoUs)))
-        assertEquals(eq, AudioMixPlan.from(graph, videoUs).single().equalizer)
+        val plan = AudioMixPlan.from(graph, videoUs).single()
+        assertEquals(eq, plan.equalizer)
+        assertEquals(0.35f, plan.stereoBalance)
     }
 
     @Test(expected=IllegalArgumentException::class)

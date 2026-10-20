@@ -533,6 +533,20 @@ object LayerEdits {
         }))
     }
 
+    fun setAudioStereoBalance(
+        draft: EditorDraft, trackId: String, balance: Float
+    ): EditorDraft {
+        val lane = draft.layers.tracks.firstOrNull { it.id == trackId }
+            ?: throw IllegalArgumentException("Audio track not found")
+        require(lane.kind == LayerKind.AUDIO && !lane.locked) {
+            "Unlock the audio track first"
+        }
+        require(balance.isFinite() && balance in -1f..1f)
+        return draft.copy(layers = draft.layers.copy(tracks = draft.layers.tracks.map {
+            if (it.id == trackId) it.copy(stereoBalance = balance) else it
+        }))
+    }
+
     /** Mark a dialogue/voiceover lane as the source that ducks other audio. */
     fun setAudioDuckingSource(
         draft: EditorDraft, trackId: String, enabled: Boolean
