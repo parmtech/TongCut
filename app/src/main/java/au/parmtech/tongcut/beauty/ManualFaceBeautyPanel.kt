@@ -38,6 +38,7 @@ fun ManualFaceBeautyPanel(sourceUri: String?, colorLutProfile: ColorLutProfile?,
         }
     }
     var selected by remember { mutableIntStateOf(0) }
+    var staged by remember(value) { mutableStateOf(value) }
     val labels = listOf("L eye", "R eye", "L cheek", "R cheek", "Nose", "Mouth", "Chin")
     Text("IMAGE only · manual landmarks · no face detection", color = Color.White, fontSize = 11.sp)
     Text(labels[selected] + " selected — tap or drag to position",
@@ -53,17 +54,22 @@ fun ManualFaceBeautyPanel(sourceUri: String?, colorLutProfile: ColorLutProfile?,
     Canvas(Modifier.fillMaxWidth().height(170.dp)
         .pointerInput(value, selected) {
             detectTapGestures { pos ->
-                onChange(value.moveAnchor(selected, anchor(pos.x / size.width, pos.y / size.height)))
+                runCatching { value.moveAnchor(selected, anchor(pos.x / size.width, pos.y / size.height)) }
+                    .onSuccess { staged = it; onChange(it) }
             }
         }.pointerInput(value, selected) {
-            detectDragGestures { change, _ ->
+            detectDragGestures(
+                onDragStart = { staged = value },
+                onDragEnd = { if (staged != value) onChange(staged) }
+            ) { change, _ ->
                 change.consume()
-                onChange(value.moveAnchor(selected,
-                    anchor(change.position.x / size.width, change.position.y / size.height)))
+                runCatching { staged.moveAnchor(selected,
+                    anchor(change.position.x / size.width, change.position.y / size.height)) }
+                    .onSuccess { staged = it }
             }
         }) {
         bitmap?.let { drawImage(it.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt())) }
-        value.landmarks.asPoints().forEachIndexed { index, point ->
+        staged.landmarks.asPoints().forEachIndexed { index, point ->
             drawCircle(if (selected == index) Color(0xFF91D9D2) else Color.White,
                 if (selected == index) 8.dp.toPx() else 5.dp.toPx(),
                 Offset(point.x * size.width, point.y * size.height))
