@@ -29,6 +29,7 @@ class ExportService : Service() {
     private var cancellingJobId: String? = null
     private var reversePreparation: Thread? = null
     private var preparedReverseSequences: Map<Int, ReverseImageSequence> = emptyMap()
+    private var preparedReverseAudioFiles: Map<Int, File> = emptyMap()
 
     override fun onCreate() {
         super.onCreate()
@@ -85,13 +86,14 @@ class ExportService : Service() {
         updateNotification(jobs.state.value)
         val reverseClips = snapshot.clips.withIndex().filter { it.value.reverseVideo }
         if (reverseClips.isEmpty()) {
-            renderSnapshot(id, snapshot, jobs, emptyMap())
+            renderSnapshot(id, snapshot, jobs, emptyMap(), emptyMap())
             return
         }
 
         val preparation = Thread({
             val cache = ReverseFrameCache(File(cacheDir, "tongcut-reverse"))
             val sequences = LinkedHashMap<Int, ReverseImageSequence>()
+            val reverseAudio = LinkedHashMap<Int, File>()
             try {
                 reverseClips.forEach { (index, draftClip) ->
                     check(!Thread.currentThread().isInterrupted) { "Reverse preparation cancelled" }
@@ -130,21 +132,43 @@ class ExportService : Service() {
                         snapshot.exportMaxFrameRate,
                         primaryClipVideoEffects(snapshot.exportOptions())
                     ) ?: throw IllegalStateException("Reverse frame cache is incomplete for ${draftClip.label}.")
+                    if (!snapshot.muteOriginalAudio && !draftClip.sourceAudioMuted) {
+                        ReverseAudioMaterializer.materialize(
+                            context = applicationContext,
+                            source = source,
+                            sourceInUs = inUs,
+                            sourceOutUs = outUs,
+                            targetDurationUs = Math.multiplyExact(draftClip.editedDurationMs, 1_000L),
+                            isCancelled = { Thread.currentThread().isInterrupted }
+                        )?.let { audioFile ->
+                            val totalBytes = reverseAudio.values.sumOf { it.length() } + audioFile.length()
+                            if (totalBytes > MAX_REVERSE_AUDIO_CACHE_BYTES) {
+                                audioFile.delete()
+                                throw IllegalArgumentException(
+                                    "Reverse audio cache exceeds the 512 MB per-export limit"
+                                )
+                            }
+                            reverseAudio[index] = audioFile
+                        }
+                    }
                 }
                 Handler(Looper.getMainLooper()).post {
                     reversePreparation = null
                     if (activeJobId != id || cancellingJobId == id) {
                         sequences.values.forEach { it.close() }
+                        reverseAudio.values.forEach { it.delete() }
                         if (cancellingJobId == id) jobs.cancelled(id)
                         updateNotification(jobs.state.value)
                         stopJob()
                     } else {
                         preparedReverseSequences = sequences
-                        renderSnapshot(id, snapshot, jobs, sequences)
+                        preparedReverseAudioFiles = reverseAudio
+                        renderSnapshot(id, snapshot, jobs, sequences, reverseAudio)
                     }
                 }
             } catch (error: Throwable) {
                 sequences.values.forEach { it.close() }
+                reverseAudio.values.forEach { it.delete() }
                 Handler(Looper.getMainLooper()).post {
                     reversePreparation = null
                     if (cancellingJobId == id || error is CancellationException || error is InterruptedException) {
@@ -165,10 +189,12 @@ class ExportService : Service() {
         id: String,
         snapshot: EditorDraft,
         jobs: ExportJobs,
-        reverseSequences: Map<Int, ReverseImageSequence>
+        reverseSequences: Map<Int, ReverseImageSequence>,
+        reverseAudioFiles: Map<Int, File>
     ) {
         if (activeJobId != id || cancellingJobId == id) {
             reverseSequences.values.forEach { it.close() }
+            reverseAudioFiles.values.forEach { it.delete() }
             return
         }
         VideoExporter(applicationContext).also { renderer ->
@@ -212,11 +238,15 @@ class ExportService : Service() {
                         updateNotification(jobs.state.value)
                     },
                     exportJobId = id,
-                    reverseSequences = reverseSequences
+                    reverseSequences = reverseSequences,
+                    reverseAudioFiles = reverseAudioFiles
                 )
+                preparedReverseAudioFiles = emptyMap()
             } catch (error: Exception) {
                 reverseSequences.values.forEach { runCatching { it.close() } }
+                reverseAudioFiles.values.forEach { it.delete() }
                 preparedReverseSequences = emptyMap()
+                preparedReverseAudioFiles = emptyMap()
                 jobs.fail(id, "Unable to render export: ${error.message ?: "unknown error"}")
                 updateNotification(jobs.state.value)
                 stopJob()
@@ -256,6 +286,8 @@ class ExportService : Service() {
         reversePreparation = null
         preparedReverseSequences.values.forEach { runCatching { it.close() } }
         preparedReverseSequences = emptyMap()
+        preparedReverseAudioFiles.values.forEach { it.delete() }
+        preparedReverseAudioFiles = emptyMap()
         exporter = null
         activeJobId = null
         cancellingJobId = null
@@ -365,6 +397,8 @@ class ExportService : Service() {
         reversePreparation?.interrupt()
         preparedReverseSequences.values.forEach { runCatching { it.close() } }
         preparedReverseSequences = emptyMap()
+        preparedReverseAudioFiles.values.forEach { it.delete() }
+        preparedReverseAudioFiles = emptyMap()
         exporter = null
         activeJobId = null
         super.onDestroy()
@@ -380,6 +414,7 @@ class ExportService : Service() {
         private const val NOTIFICATION_ID = 7341
         private const val CONTENT_INTENT = 7342
         private const val CANCEL_INTENT = 7343
+        private const val MAX_REVERSE_AUDIO_CACHE_BYTES = 512L * 1024L * 1024L
 
         fun cancelIntent(context: Context, jobId: String) = Intent(context, ExportService::class.java)
             .setAction(ACTION_CANCEL)

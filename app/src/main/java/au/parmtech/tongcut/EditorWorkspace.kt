@@ -708,7 +708,8 @@ internal fun VideoEditorScreen(
             player.seekTo(selected, 0)
             playMs = editTimeline.startOf(selected)
             player.volume = if (active.muteOriginalAudio ||
-                active.clips[selected].sourceAudioMuted) 0f else 1f
+                active.clips[selected].sourceAudioMuted ||
+                active.clips[selected].reverseVideo) 0f else 1f
             if (resume) player.play()
         }
     }
@@ -718,7 +719,8 @@ internal fun VideoEditorScreen(
                 val index = player.currentMediaItemIndex
                 playMs = editTimeline.timeOf(index, player.currentPosition)
                 val sourceMuted = active.muteOriginalAudio ||
-                    editTimeline.clips[index].sourceAudioMuted
+                    editTimeline.clips[index].sourceAudioMuted ||
+                    editTimeline.clips[index].reverseVideo
                 val sourceVolume = if (sourceMuted) 0f else 1f
                 if (player.volume != sourceVolume) player.volume = sourceVolume
             }
@@ -1132,7 +1134,7 @@ internal fun VideoEditorScreen(
                                     clip.copy(reverseVideo = !clip.reverseVideo)
                                 ))
                                 if (!clip.reverseVideo) {
-                                    onInfo("Reverse video is enabled; clip audio remains forward for now.")
+                                    onInfo("Reverse audio is prepared for export; this editor preview is muted for the reversed clip.")
                                 }
                             }
                             ToolPill("Relink") {

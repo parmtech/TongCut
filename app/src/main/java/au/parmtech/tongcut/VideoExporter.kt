@@ -55,11 +55,16 @@ class VideoExporter(private val context: Context) {
         overlayLayers: LayerTimeline = LayerTimeline(),
         onWarning: (String) -> Unit = {},
         exportJobId: String? = null,
-        reverseSequences: Map<Int, ReverseImageSequence> = emptyMap()
+        reverseSequences: Map<Int, ReverseImageSequence> = emptyMap(),
+        reverseAudioFiles: Map<Int, File> = emptyMap()
     ) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
+        require(reverseAudioFiles.keys.all { index ->
+            index in clips.indices && index in reverseSequences.keys &&
+                clips[index].reverseVideo && reverseAudioFiles[index]?.isFile == true
+        }) { "Reverse audio cache does not match the selected reverse clips" }
         require(exportJobId == null || Regex("[a-fA-F0-9-]{36}").matches(exportJobId)) {
             "Invalid export job identifier"
         }
@@ -69,10 +74,12 @@ class VideoExporter(private val context: Context) {
         val original = clips.toList()
         val generation = Math.addExact(runGeneration, 1L).also { runGeneration = it }
         val runReverseSequences = reverseSequences.values.distinct()
+        val runReverseAudioFiles = reverseAudioFiles.values.distinct()
         val reverseSequencesClosed = AtomicBoolean(false)
         fun releaseRunReverseSequences() {
             if (reverseSequencesClosed.compareAndSet(false, true)) {
                 runReverseSequences.forEach { runCatching { it.close() } }
+                runReverseAudioFiles.forEach { runCatching { it.delete() } }
             }
         }
         activeReverseCleanup = { releaseRunReverseSequences() }
@@ -143,7 +150,7 @@ class VideoExporter(private val context: Context) {
                     ).build()
                 EditedMediaItem.Builder(source)
                     .setFrameRate(options.maxFrameRate)
-                    .setRemoveAudio(options.mute || clip.removeAudio)
+                    .setRemoveAudio(options.mute || clip.removeAudio || clip.reverseVideo)
                     .setEffects(Effects(emptyList(), clipEffects))
                     .build()
             }
@@ -182,7 +189,12 @@ class VideoExporter(private val context: Context) {
                 // Opaque reverse frames replace the matching forward video interval while the
                 // main sequence below retains ordinary clip audio and project timing.
                 reverseVideoSequence = reverseVideo.build()
-                onWarning("Reverse video is enabled for ${reverseSequences.size} clip(s); their source audio remains forward unless muted.")
+                onWarning(when {
+                    options.mute -> "Reverse video is enabled; export audio is muted."
+                    reverseAudioFiles.isEmpty() ->
+                        "Reverse video is enabled; no reverse audio was prepared, so those clips are silent."
+                    else -> "Reverse video and sample-reversed audio are enabled for ${reverseAudioFiles.size} clip(s)."
+                })
             }
             // Media3 composites in reverse sequence order, so PiP video lanes MUST
             // be registered before the fully opaque main video, then audio-only lanes.
@@ -191,6 +203,36 @@ class VideoExporter(private val context: Context) {
             ))
             reverseVideoSequence?.let(allSequences::add)
             allSequences += sequence
+            if (!options.mute && reverseAudioFiles.isNotEmpty()) {
+                val reverseAudioSequence = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+                var cursorUs = 0L
+                original.forEachIndexed { index, clip ->
+                    val audioFile = reverseAudioFiles[index]
+                    if (audioFile != null) {
+                        val targetStartUs = original.take(index).sumOf {
+                            Math.multiplyExact(it.trimmedDurationMs, 1_000L)
+                        }
+                        if (targetStartUs > cursorUs) {
+                            reverseAudioSequence.addGap(targetStartUs - cursorUs)
+                        }
+                        val audioItem = MediaItem.Builder().setUri(Uri.fromFile(audioFile))
+                            .setClippingConfiguration(
+                                MediaItem.ClippingConfiguration.Builder()
+                                    .setStartPositionMs(0L)
+                                    .setEndPositionMs(clip.trimmedDurationMs)
+                                    .build()
+                            ).build()
+                        reverseAudioSequence.addItem(
+                            EditedMediaItem.Builder(audioItem).setRemoveVideo(true).build()
+                        )
+                        cursorUs = Math.addExact(targetStartUs,
+                            Math.multiplyExact(clip.trimmedDurationMs, 1_000L))
+                    }
+                }
+                val remainderUs = baseVideoDurationUs - cursorUs
+                if (remainderUs > 0L) reverseAudioSequence.addGap(remainderUs)
+                allSequences += reverseAudioSequence.build()
+            }
             audioPlans.forEach { lane ->
                 val audioOnly = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
                 lane.parts.forEach { part ->
