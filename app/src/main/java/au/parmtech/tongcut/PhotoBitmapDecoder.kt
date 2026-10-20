@@ -1,6 +1,7 @@
 package au.parmtech.tongcut
 
 import au.parmtech.tongcut.beauty.ManualFaceWarpRenderer
+import au.parmtech.tongcut.effects.presets.OfflineEffectRenderer
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -117,6 +118,11 @@ internal object PhotoBitmapDecoder {
                     pixels[idx], x, y, width, height, effects, effectiveColorLutProfile
                 )
             }
+        }
+        // Same deterministic A15 kernel for editor preview and Media3 bitmap export.
+        // Apply last in the still-image stack; the renderer preserves each alpha byte.
+        effects.offlineEffectPreset?.let { preset ->
+            pixels = OfflineEffectRenderer.render(width, height, pixels, preset)
         }
         val masked = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         masked.setPixels(pixels, 0, width, 0, 0, width, height)
