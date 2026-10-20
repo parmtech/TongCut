@@ -357,6 +357,9 @@ internal fun LayerTools(
                                 .onSuccess(onChange)
                                 .onFailure { onError(it.message ?: "Color adjustment failed") }
                         }
+                        ColorGradePresets.all.forEach { preset ->
+                            SmallLayerButton("Look ${preset.name}") { grade(preset.grade) }
+                        }
                         SmallLayerButton("Exp −") {
                             grade(fx.colorGrade.copy(exposure =
                                 (fx.colorGrade.exposure - 0.25f).coerceAtLeast(-2f)))

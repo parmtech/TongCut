@@ -1408,6 +1408,15 @@ internal fun VideoEditorScreen(
                         val grade = active.colorGrade
                         Text("SDR colour adjustments update preview and export.",
                             color = Color.LightGray, fontSize = 11.sp)
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(
+                            rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ColorGradePresets.all.forEach { preset ->
+                                ToolPill("Look ${preset.name}") {
+                                    previewDraft = active.copy(colorGrade = preset.grade)
+                                    commitGradePreview()
+                                }
+                            }
+                        }
                         GradeSlider("Exposure", grade.exposure, -2f..2f, { value ->
                             previewDraft = active.copy(colorGrade = grade.copy(exposure = value))
                         }, ::commitGradePreview)
