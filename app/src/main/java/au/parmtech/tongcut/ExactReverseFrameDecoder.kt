@@ -32,6 +32,12 @@ class CachedReverseVideoSegment internal constructor(
         return ptsPlan.sourceTimeUs(outputOffset)
     }
 
+    fun frameIndexAtOutputTimeUs(outputTimeUs: Long): Int? =
+        ptsPlan.frameIndexAtOutputTimeUs(outputTimeUs)
+
+    fun frameDurationUs(outputOffset: Int): Long =
+        ptsPlan.frameDurationUs(outputOffset)
+
     fun openFrame(cache: ReverseFrameCache, outputOffset: Int): ReverseFrameCache.FrameLease? {
         require(outputOffset in 0 until frameCount)
         return cache.openFrame(cacheKey, outputOffset.toLong())
