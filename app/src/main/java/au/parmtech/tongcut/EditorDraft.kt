@@ -87,6 +87,9 @@ data class EditorDraft(
         require(clips.map { it.id }.toSet().size == clips.size) { "Duplicate clip identifier" }
         require(primaryTransitions.map { it.afterClipIndex }.toSet().size == primaryTransitions.size)
         require(primaryTransitions.all { it.afterClipIndex in 0 until clips.lastIndex })
+        require(primaryTransitions.none {
+            clips[it.afterClipIndex].reverseVideo || clips[it.afterClipIndex + 1].reverseVideo
+        }) { "Primary transitions cannot use reversed clips" }
     }
 
     fun normalized(): EditorDraft =
@@ -96,7 +99,12 @@ data class EditorDraft(
         require(index in clips.indices)
         val mutable = clips.toMutableList()
         mutable[index] = updated.copy(id = clips[index].id)
-        return copy(clips = mutable)
+        val transitions = if (updated.reverseVideo) {
+            primaryTransitions.filter {
+                it.afterClipIndex != index && it.afterClipIndex + 1 != index
+            }
+        } else primaryTransitions
+        return copy(clips = mutable, primaryTransitions = transitions)
     }
 
     private fun reattachAdjacentTransitions(newClips: List<DraftClip>): List<PrimaryTransitionSpec> =
