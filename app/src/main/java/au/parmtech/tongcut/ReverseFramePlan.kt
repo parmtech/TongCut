@@ -2,6 +2,11 @@ package au.parmtech.tongcut
 
 import java.math.BigInteger
 
+private fun BigInteger.toNonNegativeLongExact(): Long {
+    require(signum() >= 0 && bitLength() <= 63) { "Reverse frame index exceeds supported range" }
+    return toLong()
+}
+
 /**
  * Bounded, lazy source-frame order for a CFR reverse segment. Frame extraction,
  * cache ownership, VFR PTS indexing, and rendering remain the caller's job.
@@ -30,7 +35,7 @@ data class ReverseFramePlan(
             .multiply(MICROS_PER_SECOND)
         val divisor = BigInteger.valueOf(rate.numerator.toLong())
         return numerator.add(divisor).subtract(BigInteger.ONE)
-            .divide(divisor).longValueExact()
+            .divide(divisor).toNonNegativeLongExact()
     }
 
     companion object {
@@ -44,19 +49,14 @@ data class ReverseFramePlan(
             val fpsNumerator = BigInteger.valueOf(rate.numerator.toLong())
             val fpsDenominator = MICROS_PER_SECOND
                 .multiply(BigInteger.valueOf(rate.denominator.toLong()))
-
-            // The last included timestamp is strictly before the exclusive out point.
             val first = BigInteger.valueOf(outUs - 1L)
                 .multiply(fpsNumerator).divide(fpsDenominator)
-            // Match TimelineRate.atFrame(): integer PTS is ceil(frame * 1e6 * den / num).
-            // The first included frame has atFrame(index) >= inUs, equivalently
-            // frame * divisor > (inUs - 1) * numerator.
             val last = if (inUs == 0L) BigInteger.ZERO else
                 BigInteger.valueOf(inUs - 1L).multiply(fpsNumerator)
                     .divide(fpsDenominator).add(BigInteger.ONE)
             if (first < last) return null
-            val firstLong = first.longValueExact()
-            val lastLong = last.longValueExact()
+            val firstLong = first.toNonNegativeLongExact()
+            val lastLong = last.toNonNegativeLongExact()
             require(firstLong - lastLong < MAX_FRAMES) {
                 "Reverse segment exceeds frame safety limit"
             }
