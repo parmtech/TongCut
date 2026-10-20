@@ -48,6 +48,14 @@ class ReverseFramePlayback private constructor(
         return bitmap
     }
 
+    /** File URI for a frame while this reader's segment lease remains open. */
+    @Synchronized
+    internal fun frameUriAt(index: Int): android.net.Uri {
+        check(!closed) { "Reverse frame reader is closed" }
+        require(index in files.indices)
+        return android.net.Uri.fromFile(files[index])
+    }
+
     @Synchronized
     override fun close() {
         if (!closed) {
