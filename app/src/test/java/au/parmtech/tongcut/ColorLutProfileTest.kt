@@ -51,6 +51,24 @@ class ColorLutProfileTest {
         assertEquals(0xffc0c0c0.toInt(), half[1][1][1])
     }
 
+    @Test fun nonDefaultInputDomainResamplesNonlinearCubeOntoCanonicalGrid() {
+        val rows = buildString {
+            appendLine("LUT_3D_SIZE 3")
+            appendLine("DOMAIN_MIN 0.1 0.1 0.1")
+            appendLine("DOMAIN_MAX 0.6 0.6 0.6")
+            for (blue in 0..2) for (green in 0..2) for (red in 0..2) {
+                val redValue = red.toFloat() / 2f
+                val greenValue = green.toFloat() / 2f
+                val blueValue = blue.toFloat() / 2f
+                appendLine("${redValue * redValue} $greenValue $blueValue")
+            }
+        }
+        val profile = CubeLutParser.parse("nonlinear.cube", rows)
+        // Canonical input red=0.5 maps to source red=0.8; linear sampling between
+        // the source table's 0.5→0.25 and 1.0→1.0 entries gives output≈0.7.
+        assertEquals(179, (profile.entriesArgb[1] ushr 16) and 0xff)
+    }
+
     @Test fun rejectsUnsafeOrAmbiguousCubeFiles() {
         val wrongCount = "LUT_3D_SIZE 2\n0 0 0"
         assertFailure("Expected 8 LUT colors") {
