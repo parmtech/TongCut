@@ -138,6 +138,7 @@ class LayerTimelineCodecTest {
         val edit = PhotoEffects(
             mask = PhotoMask.CIRCLE,
             feather = 0.12f,
+            blur = 0.03f,
             chroma = PhotoChroma(
                 keyArgb = 0xFF0000FF.toInt(), tolerance = 0.25f, feather = 0.04f
             )
@@ -161,6 +162,7 @@ class LayerTimelineCodecTest {
         raw.getJSONArray("layers").getJSONObject(0).remove("photoFx")
         val restored = LayerTimelineCodec.decode(raw)
         assertEquals(PhotoEffects(),restored.layers.single().photoEffects)
+        assertEquals(0f, restored.layers.single().photoEffects.blur, 0f)
     }
 
     @Test(expected=IllegalArgumentException::class)

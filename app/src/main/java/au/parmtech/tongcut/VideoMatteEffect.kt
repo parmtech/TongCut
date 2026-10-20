@@ -78,6 +78,7 @@ private class MatteShader(
         program.setFloatUniform("uContrast", settings.colorGrade.contrast)
         program.setFloatUniform("uSaturation", settings.colorGrade.saturation)
         program.setFloatUniform("uTemperature", settings.colorGrade.temperature)
+        program.setFloatUniform("uBlurAmount", settings.blur)
     }
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
@@ -142,13 +143,56 @@ private class MatteShader(
             uniform float uContrast;
             uniform float uSaturation;
             uniform float uTemperature;
+            uniform float uBlurAmount;
             varying vec2 vTexSamplingCoord;
 
             float edge(float lo, float hi, float value) {
                 return smoothstep(lo, max(lo + 0.00001, hi), value);
             }
+            void accumulateBlurSample(vec4 sampleColor, float weight,
+                inout vec3 premultiplied, inout float alphaWeight) {
+                premultiplied += sampleColor.rgb * sampleColor.a * weight;
+                alphaWeight += sampleColor.a * weight;
+            }
+            vec4 blurredPixel(vec2 coord) {
+                if (uBlurAmount <= 0.00001) return texture2D(uTexSampler, coord);
+                float radiusPixels = max(1.0, floor(
+                    min(uFrameSize.x, uFrameSize.y) * uBlurAmount + 0.5));
+                vec2 radius = vec2(radiusPixels / uFrameSize.x,
+                    radiusPixels / uFrameSize.y);
+                vec3 premultiplied = vec3(0.0);
+                float alphaWeight = 0.0;
+                accumulateBlurSample(texture2D(uTexSampler, coord), 0.25,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(-radius.x, -radius.y)), 0.0625,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(0.0, -radius.y)), 0.125,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(radius.x, -radius.y)), 0.0625,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(-radius.x, 0.0)), 0.125,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(radius.x, 0.0)), 0.125,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(-radius.x, radius.y)), 0.0625,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(0.0, radius.y)), 0.125,
+                    premultiplied, alphaWeight);
+                accumulateBlurSample(texture2D(uTexSampler,
+                    coord + vec2(radius.x, radius.y)), 0.0625,
+                    premultiplied, alphaWeight);
+                if (alphaWeight <= 0.00001) return vec4(0.0);
+                return vec4(premultiplied / alphaWeight, alphaWeight);
+            }
             void main() {
-                vec4 pixel = texture2D(uTexSampler, vTexSamplingCoord);
+                vec4 pixel = blurredPixel(vTexSamplingCoord);
                 vec2 point = (vTexSamplingCoord - vec2(0.5)) * uFrameSize;
                 float shortSide = min(uFrameSize.x, uFrameSize.y);
                 float blur = shortSide * uMaskFeather;
@@ -221,4 +265,3 @@ private class MatteShader(
         """
     }
 }
-

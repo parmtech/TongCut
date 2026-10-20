@@ -67,6 +67,20 @@ class PhotoMatteTest {
         assertEquals(pixel,PhotoMatte.applyAlpha(pixel,4,4,20,20,PhotoEffects()))
     }
 
+    @Test fun boundedBlurUsesNeighbourPixelsAndZeroIsIdentity() {
+        val pixels = IntArray(9) { 0xFF000000.toInt() }
+        pixels[4] = 0xFFFFFFFF.toInt()
+        assertEquals(0xFF404040.toInt(), PhotoMatte.blurPixel(pixels, 1, 1, 3, 3, 1f / 3f))
+        assertEquals(pixels[4], PhotoMatte.blurPixel(pixels, 1, 1, 3, 3, 0f))
+
+        val transparentEdges = IntArray(9)
+        transparentEdges[4] = 0xFFFFFFFF.toInt()
+        assertEquals(
+            0x40FFFFFF,
+            PhotoMatte.blurPixel(transparentEdges, 1, 1, 3, 3, 1f / 3f)
+        )
+    }
+
     @Test(expected=IllegalArgumentException::class)
     fun invalidFeatherRejected() { PhotoEffects(feather=Float.NaN) }
 
@@ -104,4 +118,3 @@ class PhotoMatteTest {
     @Test(expected=IllegalArgumentException::class)
     fun invalidChromaRejected() { PhotoChroma(tolerance=1.2f) }
 }
-

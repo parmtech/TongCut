@@ -341,8 +341,27 @@ internal fun LayerTools(
                             grade(fx.colorGrade.copy(temperature =
                                 (fx.colorGrade.temperature - 0.25f).coerceAtLeast(-1f)))
                         }
+                        SmallLayerButton("Blur −") {
+                            runCatching { applyMatte(fx.copy(blur =
+                                (fx.blur - 0.01f).coerceAtLeast(0f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Blur change failed") }
+                        }
+                        SmallLayerButton("Blur +") {
+                            runCatching { applyMatte(fx.copy(blur =
+                                (fx.blur + 0.01f).coerceAtMost(0.08f))) }
+                                .onSuccess(onChange)
+                                .onFailure { onError(it.message ?: "Blur change failed") }
+                        }
                         if (fx.colorGrade != ColorGrade()) {
                             SmallLayerButton("Reset colour") { grade(ColorGrade()) }
+                        }
+                        if (fx.blur > 0f) {
+                            SmallLayerButton("Reset blur") {
+                                runCatching { applyMatte(fx.copy(blur = 0f)) }
+                                    .onSuccess(onChange)
+                                    .onFailure { onError(it.message ?: "Blur reset failed") }
+                            }
                         }
                         SmallLayerButton("Mask: ${fx.mask.name.replace('_',' ')}") {
                             val modes = PhotoMask.entries

@@ -6,6 +6,7 @@ import kotlin.math.min
 import kotlin.math.sqrt
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.roundToInt
 
 /**
  * P3 matte settings are persisted for IMAGE and VIDEO overlays. Android bitmap
@@ -43,7 +44,9 @@ data class PhotoEffects(
     val invertMask: Boolean = false,
     /** Degrees around the geometric center, for adjustable ellipse/diamond masks. */
     val maskRotationDegrees: Float = 0f,
-    val colorGrade: ColorGrade = ColorGrade()
+    val colorGrade: ColorGrade = ColorGrade(),
+    /** Gaussian-like 3x3 blur radius as a fraction of the image's short side. */
+    val blur: Float = 0f
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -52,11 +55,14 @@ data class PhotoEffects(
         require(maskScaleX.isFinite() && maskScaleX in 0.1f..1f)
         require(maskScaleY.isFinite() && maskScaleY in 0.1f..1f)
         require(maskRotationDegrees.isFinite() && maskRotationDegrees in -180f..180f)
+        require(blur.isFinite() && blur in 0f..0.08f)
     }
 }
 
 /** Pure pixel-matte math, shared by Android bitmap processing and JVM tests. */
 object PhotoMatte {
+    private val blurWeights = intArrayOf(1, 2, 1, 2, 4, 2, 1, 2, 1)
+
     private fun smooth(low: Float, high: Float, value: Float): Float {
         if (high <= low) return if (value >= high) 1f else 0f
         val t = ((value - low) / (high - low)).coerceIn(0f, 1f)
@@ -192,5 +198,35 @@ object PhotoMatte {
         val graded = settings.colorGrade.apply(corrected)
         return (graded and 0x00FFFFFF) or (next shl 24)
     }
-}
 
+    /** Fixed 3x3 premultiplied-alpha kernel for halo-safe IMAGE blur. */
+    fun blurPixel(pixels: IntArray, x: Int, y: Int, width: Int, height: Int, amount: Float): Int {
+        require(width > 0 && height > 0 && pixels.size == width * height)
+        require(x in 0 until width && y in 0 until height)
+        require(amount.isFinite() && amount in 0f..0.08f)
+        if (amount == 0f) return pixels[y * width + x]
+        val radius = (min(width, height) * amount).roundToInt().coerceAtLeast(1)
+        var alphaWeight = 0
+        var premultipliedRed = 0
+        var premultipliedGreen = 0
+        var premultipliedBlue = 0
+        var sample = 0
+        for (dy in -1..1) for (dx in -1..1) {
+            val sx = (x + dx * radius).coerceIn(0, width - 1)
+            val sy = (y + dy * radius).coerceIn(0, height - 1)
+            val color = pixels[sy * width + sx]
+            val weight = blurWeights[sample++]
+            val alpha = (color ushr 24) and 255
+            alphaWeight += alpha * weight
+            premultipliedRed += ((color ushr 16) and 255) * alpha * weight
+            premultipliedGreen += ((color ushr 8) and 255) * alpha * weight
+            premultipliedBlue += (color and 255) * alpha * weight
+        }
+        val alpha = (alphaWeight + 8) / 16
+        if (alphaWeight == 0) return 0
+        val red = (premultipliedRed + alphaWeight / 2) / alphaWeight
+        val green = (premultipliedGreen + alphaWeight / 2) / alphaWeight
+        val blue = (premultipliedBlue + alphaWeight / 2) / alphaWeight
+        return (alpha shl 24) or (red shl 16) or (green shl 8) or blue
+    }
+}
