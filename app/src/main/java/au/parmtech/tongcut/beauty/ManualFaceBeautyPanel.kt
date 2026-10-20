@@ -91,7 +91,7 @@ fun ManualFaceBeautyPanel(sourceUri: String?, colorLutProfile: ColorLutProfile?,
     BeautyStep("Softening", value.settings.skinSoftening, 0.05f, 0f, 0.65f) {
         onChange(value.copy(settings = value.settings.copy(skinSoftening = it)))
     }
-    Text("CPU still-image preview only · max 1.5 MP · no video/body reshape",
+    Text("CPU still-image processing · decoder max 1024² px · no video/body reshape",
         color = Color(0xFFFFC987), fontSize = 10.sp)
 }
 
