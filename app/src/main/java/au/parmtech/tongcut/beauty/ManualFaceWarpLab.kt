@@ -22,7 +22,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -252,7 +251,11 @@ private fun boundedBitmap(source: Bitmap): Bitmap {
     require(source.width >= 2 && source.height >= 2) { "Still image must be at least 2 by 2 pixels" }
     if (source.width.toLong() * source.height <= ManualFaceWarpRenderer.MAX_PIXELS) return source
     val scale = sqrt(ManualFaceWarpRenderer.MAX_PIXELS.toDouble() / (source.width.toDouble() * source.height))
-    val width = maxOf(2, (source.width * scale).toInt())
-    val height = maxOf(2, (source.height * scale).toInt())
+    var width = maxOf(2, (source.width * scale).toInt())
+    var height = maxOf(2, (source.height * scale).toInt())
+    if (width.toLong() * height > ManualFaceWarpRenderer.MAX_PIXELS) {
+        if (width >= height) width = ManualFaceWarpRenderer.MAX_PIXELS / height
+        else height = ManualFaceWarpRenderer.MAX_PIXELS / width
+    }
     return Bitmap.createScaledBitmap(source, width, height, true)
 }
