@@ -228,7 +228,14 @@ class VideoExporter(private val context: Context) {
 
                                     override fun isUnityUntil(
                                         samplePosition: Long, sampleRate: Int
-                                    ): Long = C.TIME_UNSET
+                                    ): Long {
+                                        val unityEnd = AudioEnvelope.unityUntilSamplePosition(
+                                            samplePosition, sampleRate, part.durationUs, part.envelope
+                                        ) ?: return C.TIME_UNSET
+                                        return if (unityEnd == AudioEnvelope.UNITY_TO_END_OF_STREAM) {
+                                            C.TIME_END_OF_SOURCE
+                                        } else unityEnd
+                                    }
                                 })
                                 edited.setEffects(Effects(listOf(processor), emptyList()))
                             }

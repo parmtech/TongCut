@@ -15,6 +15,7 @@ data class AudioGainKeyframe(val timeUs: Long, val gain: Float) {
 
 object AudioEnvelope {
     const val MAX_POINTS = 64
+    const val UNITY_TO_END_OF_STREAM = Long.MAX_VALUE
 
     fun validate(durationUs: Long, points: List<AudioGainKeyframe>) {
         require(points.size <= MAX_POINTS)
@@ -35,6 +36,28 @@ object AudioEnvelope {
         val left = points[rightIndex - 1]
         val fraction = (position - left.timeUs).toFloat() / (right.timeUs - left.timeUs)
         return left.gain + (right.gain - left.gain) * fraction
+    }
+
+    /**
+     * Returns the exclusive sample boundary of a unity run, null when the
+     * current sample is not unity. A one-sample boundary is conservative at a
+     * keyframe where a linear ramp begins; it avoids claiming a flat region
+     * across the ramp. Long.MAX_VALUE denotes unity through stream end.
+     */
+    fun unityUntilSamplePosition(
+        samplePosition: Long,
+        sampleRate: Int,
+        durationUs: Long,
+        points: List<AudioGainKeyframe>
+    ): Long? {
+        require(samplePosition >= 0L && sampleRate > 0)
+        val seconds = samplePosition / sampleRate
+        val remainder = samplePosition % sampleRate
+        val positionUs = seconds * 1_000_000L + remainder * 1_000_000L / sampleRate
+        if (gainAt(positionUs, durationUs, points) != 1f) return null
+        if (positionUs >= durationUs) return UNITY_TO_END_OF_STREAM
+        return if (samplePosition == Long.MAX_VALUE) UNITY_TO_END_OF_STREAM
+            else samplePosition + 1L
     }
 
     fun upsert(durationUs: Long, points: List<AudioGainKeyframe>, point: AudioGainKeyframe): List<AudioGainKeyframe> {

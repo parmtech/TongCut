@@ -31,6 +31,20 @@ class AudioDuckingTest {
         assertEquals(emptyList<AudioGainKeyframe>(), graph.layers[1].audioEnvelope)
     }
 
+    @Test fun unityAutomationReportsAValidExclusiveBoundaryForMedia3() {
+        val points = listOf(
+            AudioGainKeyframe(0L, 1f),
+            AudioGainKeyframe(1_000_000L, 1f),
+            AudioGainKeyframe(2_000_000L, 0.25f),
+            AudioGainKeyframe(3_000_000L, 1f)
+        )
+        assertEquals(1L, AudioEnvelope.unityUntilSamplePosition(0L, 1_000, 4_000_000L, points))
+        assertEquals(501L, AudioEnvelope.unityUntilSamplePosition(500L, 1_000, 4_000_000L, points))
+        assertNull(AudioEnvelope.unityUntilSamplePosition(2_500L, 1_000, 4_000_000L, points))
+        assertEquals(AudioEnvelope.UNITY_TO_END_OF_STREAM,
+            AudioEnvelope.unityUntilSamplePosition(4_000L, 1_000, 4_000_000L, points))
+    }
+
     @Test fun authoredAutomationIsMultipliedAndMutedDialogueDoesNotDuck() {
         val musicClip = audio("music", "music", 0L, 6_000_000L).copy(
             audioEnvelope = listOf(AudioGainKeyframe(0L, 1f),
