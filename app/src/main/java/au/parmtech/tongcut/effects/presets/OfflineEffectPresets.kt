@@ -2,7 +2,6 @@ package au.parmtech.tongcut.effects.presets
 
 import org.json.JSONException
 import org.json.JSONObject
-import kotlin.math.pow
 
 /** Stable identifiers are persisted in project data; never rename an ID after release. */
 enum class EffectKernel(val id: String) {
@@ -73,7 +72,7 @@ data class EffectPresetState(val presetId: String, val values: Map<String, Float
     init {
         require(presetId.isNotBlank())
         require(values.keys.all { it.matches(Regex("[a-z][a-z0-9_]{0,31}")) })
-        require(values.values.all(Float::isFinite))
+        require(values.values.all { it.isFinite() })
     }
 }
 
@@ -136,7 +135,8 @@ object EffectPresetCodec {
             .toString()
     }
 
-    fun decode(json: String): EffectPresetState? = try {
+    fun decode(json: String): EffectPresetState? {
+        return try {
         val root = JSONObject(json)
         if (root.optInt("schema", -1) != SCHEMA) return null
         val id = root.optString("presetId", "")
@@ -152,10 +152,11 @@ object EffectPresetCodec {
             values[key] = value
         }
         EffectPresetState(id, values).takeIf(OfflineEffectPresets::validate)
-    } catch (_: JSONException) {
-        null
-    } catch (_: IllegalArgumentException) {
-        null
+        } catch (_: JSONException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        }
     }
 }
 
