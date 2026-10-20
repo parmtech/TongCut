@@ -21,7 +21,11 @@ class PrimaryTransitionDraftTest {
         assertEquals(emptyList<PrimaryTransitionSpec>(), before.primaryTransitions)
         assertEquals(500_000L, after.primaryTransitions.single().durationUs)
         assertEquals(6_500L, SequentialTimeline(after.clips, after.primaryTransitions).totalMs)
-        assertEquals(4_000L, SequentialTimeline(after.clips, after.primaryTransitions).startOf(1))
+        val timeline = SequentialTimeline(after.clips, after.primaryTransitions)
+        assertEquals(4_000L, timeline.startOf(1))
+        val during = requireNotNull(timeline.pointAt(3_750L))
+        assertEquals(0, during.clipIndex)
+        assertEquals(3_750L, during.sourceMs)
         assertEquals(emptyList<PrimaryTransitionSpec>(),
             after.withPrimaryTransitionAfter(0, null).primaryTransitions)
     }
