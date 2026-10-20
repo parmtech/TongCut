@@ -560,6 +560,19 @@ object LayerEdits {
         }))
     }
 
+    fun setAudioRumbleReduction(
+        draft: EditorDraft, trackId: String, enabled: Boolean
+    ): EditorDraft {
+        val lane = draft.layers.tracks.firstOrNull { it.id == trackId }
+            ?: throw IllegalArgumentException("Audio track not found")
+        require(lane.kind == LayerKind.AUDIO && !lane.locked) {
+            "Unlock the audio track first"
+        }
+        return draft.copy(layers = draft.layers.copy(tracks = draft.layers.tracks.map {
+            if (it.id == trackId) it.copy(rumbleReduction = enabled) else it
+        }))
+    }
+
     /** Mark a dialogue/voiceover lane as the source that ducks other audio. */
     fun setAudioDuckingSource(
         draft: EditorDraft, trackId: String, enabled: Boolean

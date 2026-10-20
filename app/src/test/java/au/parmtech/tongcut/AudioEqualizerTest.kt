@@ -90,6 +90,20 @@ class AudioEqualizerTest {
         assertEquals(12_345.toShort(), processor.output.order(ByteOrder.nativeOrder()).getShort())
     }
 
+    @Test fun rumbleReductionRejectsDcButKeepsVoiceBand() {
+        val processor = AudioEqualizerProcessor(AudioEqualizer(), rumbleReduction = true)
+        processor.configure(AudioProcessor.AudioFormat(48_000, 1, C.ENCODING_PCM_16BIT))
+        processor.flush()
+        val input = ByteBuffer.allocateDirect(48_000 * 2).order(ByteOrder.nativeOrder())
+        repeat(48_000) { input.putShort(8_000) }
+        input.flip()
+        processor.queueInput(input)
+        val output = processor.output.order(ByteOrder.nativeOrder())
+        var last = 0
+        while (output.hasRemaining()) last = output.getShort().toInt()
+        assertTrue("steady DC should decay below the input", kotlin.math.abs(last) < 80)
+    }
+
     @Test fun stereoFoldDownAveragesChannelsAndReportsMonoOutputFormat() {
         val processor = AudioEqualizerProcessor(AudioEqualizer(), monoFoldDown = true)
         val outputFormat = processor.configure(

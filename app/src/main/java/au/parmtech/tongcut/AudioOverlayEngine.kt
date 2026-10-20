@@ -25,6 +25,7 @@ class AudioOverlayEngine(private val context: Context) {
         val equalizer: AudioEqualizer,
         val stereoBalance: Float,
         val monoFoldDown: Boolean,
+        val rumbleReduction: Boolean,
         val player: ExoPlayer
     )
     private val active = LinkedHashMap<String, Entry>()
@@ -64,10 +65,13 @@ class AudioOverlayEngine(private val context: Context) {
                 ?: AudioEqualizer()
             val currentBalance = source?.let { tracks[it.trackId]?.stereoBalance } ?: 0f
             val currentMonoFoldDown = source?.let { tracks[it.trackId]?.monoFoldDown } ?: false
+            val currentRumbleReduction =
+                source?.let { tracks[it.trackId]?.rumbleReduction } ?: false
             if (source == null || source != item.value.layer ||
                 currentEqualizer != item.value.equalizer ||
                 currentBalance != item.value.stereoBalance ||
                 currentMonoFoldDown != item.value.monoFoldDown ||
+                currentRumbleReduction != item.value.rumbleReduction ||
                 failures.messageFor(source) != null
             ) {
                 item.value.player.release()
@@ -89,9 +93,10 @@ class AudioOverlayEngine(private val context: Context) {
                     val equalizer = tracks[layer.trackId]?.equalizer ?: AudioEqualizer()
                     val stereoBalance = tracks[layer.trackId]?.stereoBalance ?: 0f
                     val monoFoldDown = tracks[layer.trackId]?.monoFoldDown ?: false
+                    val rumbleReduction = tracks[layer.trackId]?.rumbleReduction ?: false
                     val player = ExoPlayer.Builder(context,
                         AudioEqualizerRenderersFactory(context, equalizer, stereoBalance,
-                            monoFoldDown)).build()
+                            monoFoldDown, rumbleReduction)).build()
                     created = player
                     val startMs = layer.sourceInUs / 1_000L
                     val endMs = (layer.sourceInUs + layer.consumedSourceUs) / 1_000L
@@ -112,7 +117,8 @@ class AudioOverlayEngine(private val context: Context) {
                     })
                     player.setMediaItem(media)
                     player.prepare()
-                    Entry(layer, equalizer, stereoBalance, monoFoldDown, player)
+                    Entry(layer, equalizer, stereoBalance, monoFoldDown,
+                        rumbleReduction, player)
                         .also { active[layer.id] = it }
                 } catch (error: Exception) {
                     created?.release()

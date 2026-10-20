@@ -73,7 +73,9 @@ data class TimelineTrack(
     /** Stereo balance: -1 favors left, +1 favors right; mono sources remain unchanged. */
     val stereoBalance: Float = 0f,
     /** Average a stereo source to mono; other source channel layouts are preserved. */
-    val monoFoldDown: Boolean = false
+    val monoFoldDown: Boolean = false,
+    /** Apply deterministic 80 Hz high-pass rumble/DC cleanup to this audio lane. */
+    val rumbleReduction: Boolean = false
 ) {
     init {
         require(id.isNotBlank() && id.length <= 100)
@@ -88,6 +90,9 @@ data class TimelineTrack(
         }
         require(!duckingSource || kind == LayerKind.AUDIO) {
             "Only audio tracks can be dialogue ducking sources"
+        }
+        require(!rumbleReduction || kind == LayerKind.AUDIO) {
+            "Rumble reduction applies only to audio tracks"
         }
     }
 }

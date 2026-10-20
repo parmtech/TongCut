@@ -35,13 +35,17 @@ data class AudioEqualizer(
 internal class AudioEqualizerProcessor(
     private val settings: AudioEqualizer,
     private val stereoBalance: Float = 0f,
-    private val monoFoldDown: Boolean = false
+    private val monoFoldDown: Boolean = false,
+    private val rumbleReduction: Boolean = false
 ) : BaseAudioProcessor() {
     private data class Coefficients(val b0: Float, val b1: Float, val b2: Float,
                                    val a1: Float, val a2: Float)
     private lateinit var coefficients: List<Coefficients>
     private var z1 = FloatArray(0)
     private var z2 = FloatArray(0)
+    private var rumbleCoefficients: Coefficients? = null
+    private var rumbleZ1 = FloatArray(0)
+    private var rumbleZ2 = FloatArray(0)
     private var channels = 0
     private var inputChannels = 0
     private var frameSamples = FloatArray(0)
@@ -67,6 +71,9 @@ internal class AudioEqualizerProcessor(
         channels = if (monoFoldDown && inputChannels == 2) 1 else inputChannels
         frameSamples = FloatArray(channels)
         val sampleRate = inputAudioFormat.sampleRate.toFloat()
+        rumbleCoefficients = if (rumbleReduction) highPass(sampleRate, 80f) else null
+        rumbleZ1 = FloatArray(channels)
+        rumbleZ2 = FloatArray(channels)
         coefficients = listOf(
             peaking(sampleRate, 100f, settings.bassDb),
             peaking(sampleRate, 1_000f, settings.midDb),
@@ -101,6 +108,12 @@ internal class AudioEqualizerProcessor(
             }
             for (channel in 0 until channels) {
                 var value = frameSamples[channel]
+                rumbleCoefficients?.let { c ->
+                    val next = c.b0 * value + rumbleZ1[channel]
+                    rumbleZ1[channel] = c.b1 * value - c.a1 * next + rumbleZ2[channel]
+                    rumbleZ2[channel] = c.b2 * value - c.a2 * next
+                    value = next
+                }
                 for (band in coefficients.indices) {
                     val state = band * channels + channel
                     val c = coefficients[band]
@@ -126,15 +139,35 @@ internal class AudioEqualizerProcessor(
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
         z1.fill(0f)
         z2.fill(0f)
+        rumbleZ1.fill(0f)
+        rumbleZ2.fill(0f)
     }
 
     override fun onReset() {
         coefficients = emptyList()
         z1 = FloatArray(0)
         z2 = FloatArray(0)
+        rumbleCoefficients = null
+        rumbleZ1 = FloatArray(0)
+        rumbleZ2 = FloatArray(0)
         channels = 0
         inputChannels = 0
         frameSamples = FloatArray(0)
+    }
+
+    private fun highPass(sampleRate: Float, frequency: Float): Coefficients {
+        val f = frequency.coerceIn(10f, sampleRate * 0.20f)
+        val omega = (2.0 * PI * f / sampleRate).toFloat()
+        val cosOmega = cos(omega)
+        val alpha = sin(omega) / (2f * 0.70710677f)
+        val a0 = 1f + alpha
+        return Coefficients(
+            (1f + cosOmega) / (2f * a0),
+            -(1f + cosOmega) / a0,
+            (1f + cosOmega) / (2f * a0),
+            (-2f * cosOmega) / a0,
+            (1f - alpha) / a0
+        )
     }
 
     private fun peaking(sampleRate: Float, frequency: Float, gainDb: Float): Coefficients {
@@ -160,7 +193,8 @@ internal class AudioEqualizerRenderersFactory(
     context: Context,
     private val settings: AudioEqualizer,
     private val stereoBalance: Float = 0f,
-    private val monoFoldDown: Boolean = false
+    private val monoFoldDown: Boolean = false,
+    private val rumbleReduction: Boolean = false
 ) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(
         context: Context,
@@ -169,8 +203,10 @@ internal class AudioEqualizerRenderersFactory(
     ): AudioSink = DefaultAudioSink.Builder(context)
         .setEnableFloatOutput(enableFloatOutput)
         .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-        .setAudioProcessors(if (settings.isNeutral && stereoBalance == 0f && !monoFoldDown)
+        .setAudioProcessors(if (settings.isNeutral && stereoBalance == 0f &&
+            !monoFoldDown && !rumbleReduction)
             emptyArray<AudioProcessor>()
-            else arrayOf(AudioEqualizerProcessor(settings, stereoBalance, monoFoldDown)))
+            else arrayOf(AudioEqualizerProcessor(
+                settings, stereoBalance, monoFoldDown, rumbleReduction)))
         .build()
 }

@@ -1129,6 +1129,16 @@ internal fun LayerTools(
                                 }
                             }
                         }
+                        SmallLayerButton(if (track.rumbleReduction)
+                            "Rumble reduction: On" else "Rumble reduction: Off") {
+                            runCatching { LayerEdits.setAudioRumbleReduction(
+                                draft, track.id, !track.rumbleReduction)
+                            }.onSuccess(onChange).onFailure {
+                                onError(it.message ?: "Rumble reduction failed")
+                            }
+                        }
+                        Text("Fixed 80 Hz low-cut reduces DC and handling rumble",
+                            color = Color.LightGray, fontSize = 10.sp)
                         SmallLayerButton(if (track.monoFoldDown)
                             "Stereo-to-mono: On" else "Stereo-to-mono: Off") {
                             runCatching { LayerEdits.setAudioMonoFoldDown(draft, track.id,

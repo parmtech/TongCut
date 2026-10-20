@@ -287,9 +287,10 @@ class VideoExporter(private val context: Context) {
                             }
                             val audioProcessors = mutableListOf<androidx.media3.common.audio.AudioProcessor>()
                             if (!lane.equalizer.isNeutral || lane.stereoBalance != 0f ||
-                                lane.monoFoldDown) {
+                                lane.monoFoldDown || lane.rumbleReduction) {
                                 audioProcessors += AudioEqualizerProcessor(
-                                    lane.equalizer, lane.stereoBalance, lane.monoFoldDown)
+                                    lane.equalizer, lane.stereoBalance, lane.monoFoldDown,
+                                    lane.rumbleReduction)
                             }
                             if (lane.gain < 1f || part.envelope.isNotEmpty()) {
                                 audioProcessors += GainProcessor(object : GainProcessor.GainProvider {
