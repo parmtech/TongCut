@@ -497,6 +497,12 @@ class VideoExporter(private val context: Context) {
 @androidx.annotation.OptIn(UnstableApi::class, ExperimentalApi::class)
 internal fun primaryClipVideoEffects(options: ExportOptions): List<androidx.media3.common.Effect> =
     buildList {
+        if (options.primaryQuarterTurns != 0 || options.primaryFlipHorizontal) {
+            add(androidx.media3.effect.ScaleAndRotateTransformation.Builder()
+                .setScale(if (options.primaryFlipHorizontal) -1f else 1f, 1f)
+                .setRotationDegrees(options.primaryQuarterTurns * 90f)
+                .build())
+        }
         when (options.look) {
             Look.ORIGINAL -> Unit
             Look.MONO -> add(RgbFilter.createGrayscaleFilter())

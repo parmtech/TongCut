@@ -54,7 +54,10 @@ data class EditorDraft(
     val exportMaxFrameRate: Int = ExportFrameRate.DEFAULT,
     val colorLutProfile: ColorLutProfile? = null,
     /** Bounded SDR blur for primary footage, shared by editor preview and export. */
-    val primaryBlur: Float = 0f
+    val primaryBlur: Float = 0f,
+    /** Quarter-turn rotation and horizontal mirror for primary footage. */
+    val primaryQuarterTurns: Int = 0,
+    val primaryFlipHorizontal: Boolean = false
 ) {
     val selectedClip: DraftClip? get() = clips.getOrNull(selectedIndex)
 
@@ -63,6 +66,7 @@ data class EditorDraft(
         require(exportAudioBitrateBps in 64_000..320_000)
         require(exportMaxFrameRate in ExportFrameRate.choices)
         require(primaryBlur.isFinite() && primaryBlur in 0f..0.08f)
+        require(primaryQuarterTurns in 0..3)
     }
 
     fun normalized(): EditorDraft =
@@ -127,7 +131,9 @@ data class EditorDraft(
         audioBitrateBps = exportAudioBitrateBps,
         maxFrameRate = exportMaxFrameRate,
         colorLutProfile = colorLutProfile,
-        primaryBlur = primaryBlur
+        primaryBlur = primaryBlur,
+        primaryQuarterTurns = primaryQuarterTurns,
+        primaryFlipHorizontal = primaryFlipHorizontal
     )
 }
 

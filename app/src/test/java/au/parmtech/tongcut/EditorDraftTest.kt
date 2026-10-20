@@ -84,6 +84,17 @@ class EditorDraftTest {
         EditorDraft(primaryBlur = 0.081f)
     }
 
+    @Test fun primaryTransformFlowsIntoExportOptions() {
+        val draft = EditorDraft(primaryQuarterTurns = 3, primaryFlipHorizontal = true)
+        assertEquals(3, draft.exportOptions().primaryQuarterTurns)
+        assertTrue(draft.exportOptions().primaryFlipHorizontal)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectUnsupportedPrimaryQuarterTurns() {
+        EditorDraft(primaryQuarterTurns = 4)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectUnusableReplacement() {
         item().relink("content://bad", "bad", 50)

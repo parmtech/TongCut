@@ -754,8 +754,15 @@ internal fun VideoEditorScreen(
 
     // A single ExoPlayer playlist plays trimmed media clips consecutively.
     // source URI and clipping window are the same values sent to Transformer.
-    LaunchedEffect(active.colorGrade, active.colorLutProfile, active.primaryBlur) {
+    LaunchedEffect(active.colorGrade, active.colorLutProfile, active.primaryBlur,
+        active.primaryQuarterTurns, active.primaryFlipHorizontal) {
         val effects = mutableListOf<androidx.media3.common.Effect>()
+        if (active.primaryQuarterTurns != 0 || active.primaryFlipHorizontal) {
+            effects += androidx.media3.effect.ScaleAndRotateTransformation.Builder()
+                .setScale(if (active.primaryFlipHorizontal) -1f else 1f, 1f)
+                .setRotationDegrees(active.primaryQuarterTurns * 90f)
+                .build()
+        }
         if (active.colorGrade != ColorGrade()) effects += ColorGradeEffect(active.colorGrade)
         active.colorLutProfile?.let { effects += it.toMedia3Effect() }
         if (active.primaryBlur > 0f) {
@@ -994,7 +1001,10 @@ internal fun VideoEditorScreen(
             Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ) {
-            val stageAspect = (active.canvas.ratio ?: sourceAspect)
+            val transformedSourceAspect = if (active.primaryQuarterTurns % 2 == 1) {
+                1f / sourceAspect
+            } else sourceAspect
+            val stageAspect = (active.canvas.ratio ?: transformedSourceAspect)
                 .coerceIn(0.1f, 10f)
             val stageWidth = minOf(maxWidth, maxHeight * stageAspect)
             val stageHeight = stageWidth / stageAspect
@@ -1339,6 +1349,26 @@ internal fun VideoEditorScreen(
                         GradeSlider("Footage blur", active.primaryBlur, 0f..0.08f, { value ->
                             previewDraft = active.copy(primaryBlur = value)
                         }, ::commitGradePreview)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolPill("Rotate left") {
+                                onChange(active.copy(primaryQuarterTurns =
+                                    (active.primaryQuarterTurns + 1) % 4))
+                            }
+                            ToolPill("Rotate right") {
+                                onChange(active.copy(primaryQuarterTurns =
+                                    (active.primaryQuarterTurns + 3) % 4))
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolPill(if (active.primaryFlipHorizontal) "Unmirror" else "Mirror") {
+                                onChange(active.copy(primaryFlipHorizontal =
+                                    !active.primaryFlipHorizontal))
+                            }
+                            ToolPill("Reset transform") {
+                                onChange(active.copy(primaryQuarterTurns = 0,
+                                    primaryFlipHorizontal = false))
+                            }
+                        }
                         ToolPill("Reset adjustments") {
                             previewDraft = null
                             onChange(active.copy(colorGrade = ColorGrade(), primaryBlur = 0f))
