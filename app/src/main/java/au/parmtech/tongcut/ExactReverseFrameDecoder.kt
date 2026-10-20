@@ -370,7 +370,7 @@ object ExactReverseFrameDecoder {
         y: Int
     ): Int {
         val offset = buffer.position() + y * rowStride + x * pixelStride
-        require(offset in buffer.position until buffer.limit()) {
+        require(offset in buffer.position() until buffer.limit()) {
             "Decoder returned truncated YUV plane data"
         }
         return buffer.get(offset).toInt() and 255

@@ -16,7 +16,7 @@ import org.json.JSONObject
  * Deterministic, manually placed local face-region controls. Positive width values slim;
  * negative values widen. Feature locations are fixed relative positions, not detected landmarks.
  */
-internal data class ManualFaceRetouch(
+data class ManualFaceRetouch(
     val centerX: Float = 0.5f,
     val centerY: Float = 0.42f,
     val radiusX: Float = 0.23f,
