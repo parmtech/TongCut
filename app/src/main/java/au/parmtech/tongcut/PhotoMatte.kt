@@ -65,7 +65,9 @@ data class PhotoEffects(
     /** Bounded radial edge darkening, 0..1; zero is a pixel-identical no-op. */
     val vignette: Float = 0f,
     /** Manual, local non-generative face reshape shared across visual overlay types. */
-    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch()
+    val faceRetouch: ManualFaceRetouch = ManualFaceRetouch(),
+    /** Optional locally imported/generated LUT authored for this visual layer. */
+    val lutProfile: ColorLutProfile? = null
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
