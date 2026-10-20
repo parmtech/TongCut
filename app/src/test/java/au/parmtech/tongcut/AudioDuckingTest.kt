@@ -43,6 +43,9 @@ class AudioDuckingTest {
         assertNull(AudioEnvelope.unityUntilSamplePosition(2_500L, 1_000, 4_000_000L, points))
         assertEquals(AudioEnvelope.UNITY_TO_END_OF_STREAM,
             AudioEnvelope.unityUntilSamplePosition(4_000L, 1_000, 4_000_000L, points))
+        assertNull(AudioEnvelope.unityUntilSamplePosition(
+            0L, 1_000, 4_000_000L, points, globalGain = 0.5f
+        ))
     }
 
     @Test fun authoredAutomationIsMultipliedAndMutedDialogueDoesNotDuck() {

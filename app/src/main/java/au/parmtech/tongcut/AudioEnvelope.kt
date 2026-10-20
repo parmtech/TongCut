@@ -48,9 +48,12 @@ object AudioEnvelope {
         samplePosition: Long,
         sampleRate: Int,
         durationUs: Long,
-        points: List<AudioGainKeyframe>
+        points: List<AudioGainKeyframe>,
+        globalGain: Float = 1f
     ): Long? {
         require(samplePosition >= 0L && sampleRate > 0)
+        require(globalGain.isFinite() && globalGain in 0f..1f)
+        if (globalGain != 1f) return null
         val seconds = samplePosition / sampleRate
         val remainder = samplePosition % sampleRate
         val positionUs = seconds * 1_000_000L + remainder * 1_000_000L / sampleRate

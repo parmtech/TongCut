@@ -230,7 +230,8 @@ class VideoExporter(private val context: Context) {
                                         samplePosition: Long, sampleRate: Int
                                     ): Long {
                                         val unityEnd = AudioEnvelope.unityUntilSamplePosition(
-                                            samplePosition, sampleRate, part.durationUs, part.envelope
+                                            samplePosition, sampleRate, part.durationUs,
+                                            part.envelope, lane.gain
                                         ) ?: return C.TIME_UNSET
                                         return if (unityEnd == AudioEnvelope.UNITY_TO_END_OF_STREAM) {
                                             C.TIME_END_OF_SOURCE
