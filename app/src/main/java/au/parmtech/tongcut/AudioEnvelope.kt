@@ -40,9 +40,9 @@ object AudioEnvelope {
 
     /**
      * Returns the exclusive sample boundary of a unity run, null when the
-     * current sample is not unity. A one-sample boundary is conservative at a
-     * keyframe where a linear ramp begins; it avoids claiming a flat region
-     * across the ramp. Long.MAX_VALUE denotes unity through stream end.
+     * current sample is not unity. Flat unity keyframe spans are reported as
+     * one region; a linear ramp ends that region immediately after its unity
+     * keyframe. Long.MAX_VALUE denotes unity through stream end.
      */
     fun unityUntilSamplePosition(
         samplePosition: Long,
@@ -59,8 +59,34 @@ object AudioEnvelope {
         val positionUs = seconds * 1_000_000L + remainder * 1_000_000L / sampleRate
         if (gainAt(positionUs, durationUs, points) != 1f) return null
         if (positionUs >= durationUs) return UNITY_TO_END_OF_STREAM
-        return if (samplePosition == Long.MAX_VALUE) UNITY_TO_END_OF_STREAM
-            else samplePosition + 1L
+        if (points.isEmpty()) return UNITY_TO_END_OF_STREAM
+
+        val lastAtOrBefore = points.indexOfLast { it.timeUs <= positionUs }
+        val firstSegment = when {
+            lastAtOrBefore < 0 -> 0 // Before the first point, gain holds its first value.
+            points[lastAtOrBefore].timeUs == positionUs -> lastAtOrBefore
+            lastAtOrBefore + 1 < points.size -> lastAtOrBefore + 1
+            else -> return UNITY_TO_END_OF_STREAM
+        }
+        for (left in firstSegment until points.lastIndex) {
+            if (points[left].gain == 1f && points[left + 1].gain != 1f) {
+                return firstSampleAfterTimeUs(points[left].timeUs, sampleRate)
+            }
+        }
+        return UNITY_TO_END_OF_STREAM
+    }
+
+    private fun firstSampleAfterTimeUs(timeUs: Long, sampleRate: Int): Long {
+        if (timeUs == Long.MAX_VALUE) return Long.MAX_VALUE
+        val thresholdUs = timeUs + 1L
+        val wholeSeconds = thresholdUs / 1_000_000L
+        val remainingUs = thresholdUs % 1_000_000L
+        if (wholeSeconds > Long.MAX_VALUE / sampleRate) return Long.MAX_VALUE
+        val wholeSamples = wholeSeconds * sampleRate
+        val partialNumerator = remainingUs * sampleRate
+        val partialSamples = (partialNumerator + 999_999L) / 1_000_000L
+        return if (wholeSamples > Long.MAX_VALUE - partialSamples) Long.MAX_VALUE
+            else wholeSamples + partialSamples
     }
 
     fun upsert(durationUs: Long, points: List<AudioGainKeyframe>, point: AudioGainKeyframe): List<AudioGainKeyframe> {

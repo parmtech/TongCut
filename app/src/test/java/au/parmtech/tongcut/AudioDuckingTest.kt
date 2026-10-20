@@ -38,8 +38,13 @@ class AudioDuckingTest {
             AudioGainKeyframe(2_000_000L, 0.25f),
             AudioGainKeyframe(3_000_000L, 1f)
         )
-        assertEquals(1L, AudioEnvelope.unityUntilSamplePosition(0L, 1_000, 4_000_000L, points))
-        assertEquals(501L, AudioEnvelope.unityUntilSamplePosition(500L, 1_000, 4_000_000L, points))
+        assertEquals(1_001L, AudioEnvelope.unityUntilSamplePosition(0L, 1_000, 4_000_000L, points))
+        assertEquals(1_001L, AudioEnvelope.unityUntilSamplePosition(500L, 1_000, 4_000_000L, points))
+        assertEquals(48_001L,
+            AudioEnvelope.unityUntilSamplePosition(0L, 48_000, 4_000_000L, points))
+        assertNull(AudioEnvelope.unityUntilSamplePosition(
+            48_001L, 48_000, 4_000_000L, points
+        ))
         assertNull(AudioEnvelope.unityUntilSamplePosition(2_500L, 1_000, 4_000_000L, points))
         assertEquals(AudioEnvelope.UNITY_TO_END_OF_STREAM,
             AudioEnvelope.unityUntilSamplePosition(4_000L, 1_000, 4_000_000L, points))
