@@ -1417,6 +1417,8 @@ internal fun VideoEditorScreen(
                                 }
                             }
                         }
+                        Text("A look replaces the current grade; refine it with the controls below.",
+                            color = Color.LightGray, fontSize = 10.sp)
                         GradeSlider("Exposure", grade.exposure, -2f..2f, { value ->
                             previewDraft = active.copy(colorGrade = grade.copy(exposure = value))
                         }, ::commitGradePreview)

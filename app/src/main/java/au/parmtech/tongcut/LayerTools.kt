@@ -360,6 +360,8 @@ internal fun LayerTools(
                         ColorGradePresets.all.forEach { preset ->
                             SmallLayerButton("Look ${preset.name}") { grade(preset.grade) }
                         }
+                        Text("Looks replace this layer's grade; sliders and curves refine it.",
+                            color = Color.LightGray, fontSize = 10.sp)
                         SmallLayerButton("Exp −") {
                             grade(fx.colorGrade.copy(exposure =
                                 (fx.colorGrade.exposure - 0.25f).coerceAtLeast(-2f)))
