@@ -1348,7 +1348,8 @@ internal fun VideoEditorScreen(
                 positionMs = playMs,
                 onSeek = { point ->
                     player.pause()
-                    player.seekTo(point.clipIndex, point.offsetMs)
+                    player.seekTo(point.clipIndex,
+                        (point.timelineMs - editTimeline.startOf(point.clipIndex)).coerceAtLeast(0L))
                     playMs = point.timelineMs
                 },
                 onSelect = { index ->
