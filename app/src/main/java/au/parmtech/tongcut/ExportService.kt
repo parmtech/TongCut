@@ -209,7 +209,8 @@ class ExportService : Service() {
                         startMs = clip.inMs,
                         endMs = clip.outMs,
                         removeAudio = clip.sourceAudioMuted,
-                        reverseVideo = clip.reverseVideo
+                        reverseVideo = clip.reverseVideo,
+                        id = clip.id
                     )
                 }
                 renderer.start(
@@ -240,7 +241,8 @@ class ExportService : Service() {
                     },
                     exportJobId = id,
                     reverseSequences = reverseSequences,
-                    reverseAudioFiles = reverseAudioFiles
+                    reverseAudioFiles = reverseAudioFiles,
+                    primaryTransitions = snapshot.primaryTransitions
                 )
                 preparedReverseAudioFiles = emptyMap()
             } catch (error: Exception) {
