@@ -3,6 +3,8 @@ package au.parmtech.tongcut
 import org.json.JSONArray
 import org.json.JSONObject
 import au.parmtech.tongcut.beauty.ManualFaceBeautyJson
+import au.parmtech.tongcut.effects.presets.EffectPresetCodec
+import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
 
 /**
  * Schema v1 for layered state nested inside ProjectStore schema v2.
@@ -10,7 +12,7 @@ import au.parmtech.tongcut.beauty.ManualFaceBeautyJson
  */
 object LayerTimelineCodec {
     fun encode(timeline: LayerTimeline): JSONObject = JSONObject().apply {
-        put("schema", 27)
+        put("schema", 28)
         put("fpsNum", timeline.rate.numerator)
         put("fpsDen", timeline.rate.denominator)
         put("tracks", JSONArray().apply {
@@ -39,6 +41,10 @@ object LayerTimelineCodec {
         })
         put("layers", JSONArray().apply {
             timeline.layers.forEach { item ->
+                require(item.kind != LayerKind.VIDEO || item.photoEffects.offlineEffectPreset
+                    ?.let { OfflineEffectPresets.isNeutral(it) } != false) {
+                    "Non-neutral still-image presets are not supported on VIDEO layers"
+                }
                 put(JSONObject().apply {
                     put("id", item.id)
                     put("trackId", item.trackId)
@@ -92,6 +98,9 @@ object LayerTimelineCodec {
                         put("vignette", item.photoEffects.vignette.toDouble())
                         put("applyColorLut", item.photoEffects.applyColorLut)
                         put("colorLutStrength", item.photoEffects.colorLutStrength.toDouble())
+                        put("offlineEffectPreset", item.photoEffects.offlineEffectPreset?.let {
+                            JSONObject(EffectPresetCodec.encode(it))
+                        } ?: JSONObject.NULL)
                         put("colorGrade", ColorGradeCodec.encode(item.photoEffects.colorGrade))
                         put("manualFaceBeauty", ManualFaceBeautyJson.encode(item.photoEffects.manualFaceBeauty))
                         put("chroma", item.photoEffects.chroma?.let { key ->
@@ -138,7 +147,7 @@ object LayerTimelineCodec {
     }
 
     fun decode(obj: JSONObject): LayerTimeline {
-        require(obj.getInt("schema") in 1..27) { "Unsupported layered timeline format" }
+        require(obj.getInt("schema") in 1..28) { "Unsupported layered timeline format" }
         val rate = TimelineRate(
             numerator = obj.getInt("fpsNum"),
             denominator = obj.getInt("fpsDen")
@@ -242,6 +251,18 @@ object LayerTimelineCodec {
                         applyColorLut = fx.optBoolean("applyColorLut", false),
                         colorLutStrength = fx.optDouble("colorLutStrength", 1.0).toFloat()
                             .takeIf { it.isFinite() && it in 0f..1f } ?: 1f,
+                        offlineEffectPreset = if (!fx.has("offlineEffectPreset") ||
+                            fx.isNull("offlineEffectPreset")) null else {
+                            val config = fx.optJSONObject("offlineEffectPreset")
+                                ?: throw IllegalArgumentException("Invalid offline still-image preset")
+                            EffectPresetCodec.decode(config.toString())
+                                ?: throw IllegalArgumentException("Invalid offline still-image preset")
+                        }.also { preset ->
+                            require(item.optString("kind") != "VIDEO" || preset == null ||
+                                OfflineEffectPresets.isNeutral(preset)) {
+                                "Non-neutral still-image presets are not supported on VIDEO layers"
+                            }
+                        },
                         manualFaceBeauty = ManualFaceBeautyJson.decode(fx.optJSONObject("manualFaceBeauty"))
                             .also { beauty ->
                                 require(item.optString("kind") != "VIDEO" || beauty.isNeutral) {
