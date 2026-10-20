@@ -41,10 +41,13 @@ class PrimaryTransitionDraftTest {
         assertNotEquals(halves.first.id, halves.second.id)
     }
 
-    @Test fun reverseClipsCannotReceivePrimaryDissolves() {
-        val draft = EditorDraft(clips = listOf(clip("a", 3_000), clip("b", 3_000, reverse = true)))
+    @Test fun reverseClipsCannotReceivePrimaryDissolvesAndClearAdjacentCut() {
+        val draft = EditorDraft(clips = listOf(clip("a", 3_000), clip("b", 3_000)))
+            .withPrimaryTransitionAfter(0, 500)
+        val reversed = draft.withReplacedClip(1, draft.clips[1].copy(reverseVideo = true))
+        assertEquals(emptyList<PrimaryTransitionSpec>(), reversed.primaryTransitions)
         assertThrows(IllegalArgumentException::class.java) {
-            draft.withPrimaryTransitionAfter(0, 500)
+            reversed.withPrimaryTransitionAfter(0, 500)
         }
     }
 }
