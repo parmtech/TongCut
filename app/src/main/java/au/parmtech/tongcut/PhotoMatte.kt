@@ -1,6 +1,8 @@
 package au.parmtech.tongcut
 
 import au.parmtech.tongcut.beauty.ManualFaceBeauty
+import au.parmtech.tongcut.effects.presets.EffectPresetState
+import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
 
 import kotlin.math.abs
 import kotlin.math.max
@@ -71,7 +73,9 @@ data class PhotoEffects(
     /** Per-layer multiplier applied to the selected project LUT's own strength. */
     val colorLutStrength: Float = 1f,
     /** Offline manual landmark retouch; applied only to IMAGE layers. */
-    val manualFaceBeauty: ManualFaceBeauty = ManualFaceBeauty.Neutral
+    val manualFaceBeauty: ManualFaceBeauty = ManualFaceBeauty.Neutral,
+    /** Original A15 still-image look; null is the neutral/legacy default. */
+    val offlineEffectPreset: EffectPresetState? = null
 ) {
     init {
         require(feather.isFinite() && feather in 0f..0.4f)
@@ -98,6 +102,9 @@ data class PhotoEffects(
         require(grain.isFinite() && grain in 0f..1f)
         require(vignette.isFinite() && vignette in 0f..1f)
         require(colorLutStrength.isFinite() && colorLutStrength in 0f..1f)
+        require(offlineEffectPreset == null || OfflineEffectPresets.validate(offlineEffectPreset)) {
+            "Unsupported offline still-image preset state"
+        }
     }
 }
 
