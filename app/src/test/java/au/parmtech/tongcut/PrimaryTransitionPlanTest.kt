@@ -28,8 +28,9 @@ class PrimaryTransitionPlanTest {
             listOf(clip("a", 4_000), clip("b", 5_000, 1_000, 4_000)),
             listOf(PrimaryTransitionSpec(afterClipIndex = 0, durationUs = 500_000L))
         )
-        assertEquals(7_500_000L, plan.durationUs)
+        assertEquals(6_500_000L, plan.durationUs)
         assertEquals(3_500_000L, plan.clips[1].timelineStartUs)
+        assertEquals(6_500_000L, plan.clips.last().timelineEndUs)
         val at = 3_750_000L
         assertEquals(listOf("a", "b"), plan.activeAt(at).map { it.clip.id })
         assertEquals(3_750_000L, plan.clips[0].sourceAt(at))
