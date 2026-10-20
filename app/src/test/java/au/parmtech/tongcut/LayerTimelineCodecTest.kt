@@ -3,6 +3,8 @@ package au.parmtech.tongcut
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import au.parmtech.tongcut.effects.presets.EffectPresetCodec
+import au.parmtech.tongcut.effects.presets.OfflineEffectPresets
 
 class LayerTimelineCodecTest {
     private val timeline = LayerTimeline(
@@ -38,7 +40,7 @@ class LayerTimelineCodecTest {
         )
         val project = timeline.copy(layers = listOf(timeline.layers.first(), styled))
         val encoded = LayerTimelineCodec.encode(project)
-        assertEquals(26, encoded.getInt("schema"))
+        assertEquals(28, encoded.getInt("schema"))
         assertEquals(project, LayerTimelineCodec.decode(encoded))
         val legacy = LayerTimelineCodec.encode(timeline)
         legacy.put("schema", 7)
@@ -186,7 +188,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://image", photoEffects=edit)
         ))
         val json = LayerTimelineCodec.encode(project)
-        assertEquals(26,json.getInt("schema"))
+        assertEquals(28,json.getInt("schema"))
         assertEquals(project,LayerTimelineCodec.decode(json))
 
         val beforeVignette = JSONObject(json.toString()).put("schema", 20)
@@ -234,7 +236,7 @@ class LayerTimelineCodecTest {
                 sourceUri="content://photo",fade=fx)
         ))
         val serialized = LayerTimelineCodec.encode(graph)
-        assertEquals(26,serialized.getInt("schema"))
+        assertEquals(28,serialized.getInt("schema"))
         assertEquals(graph,LayerTimelineCodec.decode(serialized))
         serialized.put("schema",5)
         serialized.getJSONArray("layers").getJSONObject(0).remove("fade")
@@ -262,7 +264,7 @@ class LayerTimelineCodecTest {
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(26, encoded.getInt("schema"))
+        assertEquals(28, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 10)
@@ -280,7 +282,7 @@ class LayerTimelineCodecTest {
                 sourceUri = "content://voice")
         ))
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(26, encoded.getInt("schema"))
+        assertEquals(28, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 24)
@@ -306,7 +308,7 @@ class LayerTimelineCodecTest {
         ))
 
         val encoded = LayerTimelineCodec.encode(graph)
-        assertEquals(26, encoded.getInt("schema"))
+        assertEquals(28, encoded.getInt("schema"))
         assertEquals(graph, LayerTimelineCodec.decode(encoded))
 
         val legacy = JSONObject(encoded.toString()).put("schema", 25)
@@ -317,6 +319,68 @@ class LayerTimelineCodecTest {
         val restored = LayerTimelineCodec.decode(legacy).layers.single().photoEffects
         assertFalse(restored.applyColorLut)
         assertEquals(1f, restored.colorLutStrength, 0f)
+    }
+
+
+    @Test fun offlineImagePresetRoundTripsAndLegacySchemaDefaultsToNull() {
+        val photo = TimelineTrack("preset-photo", "Photo", LayerKind.IMAGE, 0)
+        val state = OfflineEffectPresets.find("sea-glass")!!.defaults()
+            .copy(values = mapOf("strength" to 0.37f))
+        val graph = LayerTimeline(tracks = listOf(photo), layers = listOf(
+            TimelineLayer("still", photo.id, LayerKind.IMAGE, 0, 2_000_000,
+                sourceUri = "content://image",
+                photoEffects = PhotoEffects(offlineEffectPreset = state))
+        ))
+        val encoded = LayerTimelineCodec.encode(graph)
+        assertEquals(28, encoded.getInt("schema"))
+        assertEquals(graph, LayerTimelineCodec.decode(encoded))
+
+        val legacy = JSONObject(encoded.toString()).put("schema", 27)
+        legacy.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx")
+            .remove("offlineEffectPreset")
+        assertNull(LayerTimelineCodec.decode(legacy).layers.single()
+            .photoEffects.offlineEffectPreset)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun malformedOfflineImagePresetIsRejected() {
+        val photo = TimelineTrack("preset-photo", "Photo", LayerKind.IMAGE, 0)
+        val graph = LayerTimeline(tracks = listOf(photo), layers = listOf(
+            TimelineLayer("still", photo.id, LayerKind.IMAGE, 0, 2_000_000,
+                sourceUri = "content://image")
+        ))
+        val encoded = LayerTimelineCodec.encode(graph)
+        encoded.getJSONArray("layers").getJSONObject(0).getJSONObject("photoFx")
+            .put("offlineEffectPreset", JSONObject()
+                .put("schema", 1).put("presetId", "unknown").put("values", JSONObject()))
+        LayerTimelineCodec.decode(encoded)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun videoLayerRejectsNonNeutralStillPresetOnEncode() {
+        val state = OfflineEffectPresets.find("sun-print")!!.defaults()
+        val video = timeline.layers.first { it.kind == LayerKind.VIDEO }
+            .copy(photoEffects = PhotoEffects(offlineEffectPreset = state))
+        LayerTimelineCodec.encode(timeline.copy(layers = listOf(video)))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun videoLayerRejectsNonNeutralStillPresetOnDecode() {
+        val encoded = LayerTimelineCodec.encode(timeline)
+        val video = encoded.getJSONArray("layers").getJSONObject(0)
+        video.getJSONObject("photoFx").put("offlineEffectPreset", JSONObject(
+            EffectPresetCodec.encode(OfflineEffectPresets.find("paper-mono")!!.defaults())
+        ))
+        LayerTimelineCodec.decode(encoded)
+    }
+
+    @Test fun neutralStillPresetStateIsAllowedOnVideoLayer() {
+        val neutral = OfflineEffectPresets.find("sea-glass")!!.defaults()
+            .copy(values = mapOf("strength" to 0f))
+        val video = timeline.layers.first { it.kind == LayerKind.VIDEO }
+            .copy(photoEffects = PhotoEffects(offlineEffectPreset = neutral))
+        val graph = timeline.copy(layers = listOf(video))
+        assertEquals(graph, LayerTimelineCodec.decode(LayerTimelineCodec.encode(graph)))
     }
 
     @Test fun malformedImageLutStateFallsBackToNeutralDefaults() {
