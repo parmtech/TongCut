@@ -6,6 +6,7 @@ import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
 import java.io.File
 import java.util.UUID
 
@@ -13,7 +14,15 @@ import java.util.UUID
 internal class VoiceoverCapture(private val context: Context) {
     private var recorder: MediaRecorder? = null
     private var destination: File? = null
+    private var paused = false
+    private var activeSegmentStartedAtMs = 0L
+    private var accumulatedDurationMs = 0L
     val isRecording: Boolean get() = recorder != null
+    val isPaused: Boolean get() = recorder != null && paused
+    val elapsedDurationMs: Long
+        get() = accumulatedDurationMs + if (recorder != null && !paused) {
+            (SystemClock.elapsedRealtime() - activeSegmentStartedAtMs).coerceAtLeast(0L)
+        } else 0L
 
     @Suppress("DEPRECATION")
     private fun legacyRecorder(): MediaRecorder = MediaRecorder()
@@ -41,6 +50,9 @@ internal class VoiceoverCapture(private val context: Context) {
             }
             destination = file
             recorder = initialized
+            paused = false
+            accumulatedDurationMs = 0L
+            activeSegmentStartedAtMs = SystemClock.elapsedRealtime()
         } catch (failure: Exception) {
             runCatching { initialized?.reset() }
             runCatching { initialized?.release() }
@@ -51,12 +63,31 @@ internal class VoiceoverCapture(private val context: Context) {
         }
     }
 
+    fun pause() {
+        val active = checkNotNull(recorder) { "No active voiceover recording" }
+        check(!paused) { "Voiceover recording is already paused" }
+        active.pause()
+        accumulatedDurationMs = elapsedDurationMs
+        paused = true
+    }
+
+    fun resume() {
+        val active = checkNotNull(recorder) { "No active voiceover recording" }
+        check(paused) { "Voiceover recording is not paused" }
+        active.resume()
+        activeSegmentStartedAtMs = SystemClock.elapsedRealtime()
+        paused = false
+    }
+
     /** Returns a durable, app-private file plus the actual encoded media duration. */
     fun finish(): Pair<Uri, Long> {
         val active = checkNotNull(recorder) { "No active voiceover recording" }
         val file = checkNotNull(destination)
         recorder = null
         destination = null
+        paused = false
+        activeSegmentStartedAtMs = 0L
+        accumulatedDurationMs = 0L
         try {
             active.stop()
             require(file.exists() && file.length() > 256L) {
@@ -85,6 +116,9 @@ internal class VoiceoverCapture(private val context: Context) {
         recorder = null
         val file = destination
         destination = null
+        paused = false
+        activeSegmentStartedAtMs = 0L
+        accumulatedDurationMs = 0L
         if (active != null) {
             runCatching { active.stop() }
             runCatching { active.reset() }

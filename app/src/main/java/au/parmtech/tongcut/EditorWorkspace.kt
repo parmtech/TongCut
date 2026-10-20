@@ -131,8 +131,16 @@ internal fun VideoEditorScreen(
     val voiceoverCapture = remember(context) { VoiceoverCapture(context.applicationContext) }
     var voiceoverStartMs by remember { mutableLongStateOf(0L) }
     var recordingVoiceover by remember { mutableStateOf(false) }
+    var voiceoverPaused by remember { mutableStateOf(false) }
+    var voiceoverElapsedMs by remember { mutableLongStateOf(0L) }
     DisposableEffect(voiceoverCapture) {
         onDispose { voiceoverCapture.cancel() }
+    }
+    LaunchedEffect(recordingVoiceover) {
+        while (recordingVoiceover) {
+            voiceoverElapsedMs = voiceoverCapture.elapsedDurationMs
+            delay(250L)
+        }
     }
     var playing by remember { mutableStateOf(false) }
     var playMs by remember { mutableLongStateOf(0L) }
@@ -332,6 +340,8 @@ internal fun VideoEditorScreen(
             playing = false
             voiceoverCapture.start()
             voiceoverStartMs = playMs
+            voiceoverElapsedMs = 0L
+            voiceoverPaused = false
             recordingVoiceover = true
             panel = "Audio"
             onInfo("Recording locally. Press Stop & add to create an editable audio layer.")
@@ -358,12 +368,14 @@ internal fun VideoEditorScreen(
             val (uri, durationMs) = voiceoverCapture.finish()
             captured = uri
             recordingVoiceover = false
+            voiceoverPaused = false
             val latest = currentDraft.value
             onChange(LayerEdits.addAudio(latest, voiceoverStartMs, uri.toString(), durationMs))
             onInfo("Voiceover added as an editable audio track.")
         } catch (error: Exception) {
             captured?.let(voiceoverCapture::discard)
             recordingVoiceover = false
+            voiceoverPaused = false
             onInfo("Voiceover failed: ${error.message}")
         }
     }
@@ -1331,13 +1343,29 @@ internal fun VideoEditorScreen(
                             if (!recordingVoiceover) {
                                 ToolPill("● Record voiceover") { requestVoiceover() }
                             } else {
+                                ToolPill(if (voiceoverPaused) "Resume" else "Pause") {
+                                    runCatching {
+                                        if (voiceoverPaused) voiceoverCapture.resume()
+                                        else voiceoverCapture.pause()
+                                        voiceoverPaused = voiceoverCapture.isPaused
+                                    }.onFailure { onInfo("Voiceover control failed: ${it.message}") }
+                                }
                                 ToolPill("■ Stop & add") { finishVoiceover() }
                                 ToolPill("Discard take") {
                                     voiceoverCapture.cancel()
                                     recordingVoiceover = false
+                                    voiceoverPaused = false
                                     onInfo("Voiceover discarded.")
                                 }
-                                Text("REC", color = Color(0xFFFF746D))
+                                Text(
+                                    "${if (voiceoverPaused) "PAUSED" else "REC"}  " +
+                                        "%02d:%02d".format(
+                                            voiceoverElapsedMs / 60_000L,
+                                            voiceoverElapsedMs / 1_000L % 60L
+                                        ),
+                                    color = if (voiceoverPaused) Color.LightGray
+                                        else Color(0xFFFF746D)
+                                )
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
