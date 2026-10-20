@@ -47,7 +47,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
         val raw = file.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
         val root = JSONObject(raw)
         val schema = root.optInt("schema", -1)
-        require(schema in 1..15) { "Unsupported project schema" }
+        require(schema in 1..16) { "Unsupported project schema" }
         val array = root.getJSONArray("clips")
         require(array.length() <= 500) { "Project exceeds clip limit" }
         val clips = (0 until array.length()).map { index ->
@@ -59,10 +59,28 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                 inMs = clip.getLong("inMs"),
                 outMs = clip.getLong("outMs"),
                 sourceAudioMuted = clip.optBoolean("sourceAudioMuted", false),
-                reverseVideo = schema >= 9 && clip.optBoolean("reverseVideo", false)
+                reverseVideo = schema >= 9 && clip.optBoolean("reverseVideo", false),
+                id = if (schema >= 16) clip.optString("id").takeIf { it.isNotBlank() }
+                    ?: java.util.UUID.randomUUID().toString() else java.util.UUID.randomUUID().toString()
             )
         }
+        val primaryTransitions = if (schema >= 16) {
+            val transitionArray = root.optJSONArray("primaryTransitions") ?: JSONArray()
+            (0 until transitionArray.length()).mapNotNull { index ->
+                val value = transitionArray.optJSONObject(index) ?: return@mapNotNull null
+                val outgoingId = value.optString("outgoingClipId")
+                val incomingId = value.optString("incomingClipId")
+                val outgoing = clips.indexOfFirst { it.id == outgoingId }
+                val incoming = clips.indexOfFirst { it.id == incomingId }
+                if (outgoing >= 0 && incoming == outgoing + 1) {
+                    runCatching {
+                        PrimaryTransitionSpec(outgoing, value.getLong("durationUs"))
+                    }.getOrNull()
+                } else null
+            }
+        } else emptyList()
         return EditorDraft(
+            primaryTransitions = primaryTransitions,
             title = root.optString("title", "Untitled Project").take(120),
             clips = clips,
             selectedIndex = root.optInt("selected", 0),
@@ -109,7 +127,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
     fun save(project: EditorDraft) {
         require(project.clips.size <= 500) { "Project exceeds clip limit" }
         val root = JSONObject().apply {
-            put("schema", 15)
+            put("schema", 16)
             put("title", project.title.take(120))
             put("selected", project.selectedIndex)
             put("look", project.look.name)
@@ -130,6 +148,18 @@ class ProjectStore private constructor(private val file: AtomicFile) {
             put("shortSide", project.shortSidePixels)
             put("mute", project.muteOriginalAudio)
             put("layerTimeline", LayerTimelineCodec.encode(project.layers))
+            put("primaryTransitions", JSONArray().apply {
+                project.primaryTransitions.forEach { transition ->
+                    val outgoing = project.clips[transition.afterClipIndex]
+                    val incoming = project.clips[transition.afterClipIndex + 1]
+                    put(JSONObject().apply {
+                        put("outgoingClipId", outgoing.id)
+                        put("incomingClipId", incoming.id)
+                        put("durationUs", transition.durationUs)
+                        put("kind", transition.kind.name)
+                    })
+                }
+            })
             put("clips", JSONArray().apply {
                 project.clips.forEach { clip ->
                     put(JSONObject().apply {
@@ -140,6 +170,7 @@ class ProjectStore private constructor(private val file: AtomicFile) {
                         put("outMs", clip.outMs)
                         put("sourceAudioMuted", clip.sourceAudioMuted)
                         put("reverseVideo", clip.reverseVideo)
+                        put("id", clip.id)
                     })
                 }
             })
