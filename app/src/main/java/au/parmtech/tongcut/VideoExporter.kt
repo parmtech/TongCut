@@ -62,51 +62,6 @@ class VideoExporter(private val context: Context) {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Call export on main thread" }
         require(!active) { "Export already in progress" }
         require(clips.isNotEmpty()) { "Select at least one video" }
-        if (primaryLookPreflightApproved) {
-            primaryLookPreflightApproved = false
-        } else if (options.primaryOfflineEffectPreset != null) {
-            // MediaExtractor can block on slow document providers. Keep it off the
-            // UI thread, but do not construct the composition until every source
-            // has passed this conservative SDR-only preflight.
-            active = true
-            val preflightGeneration =
-                Math.addExact(runGeneration, 1L).also { runGeneration = it }
-            try {
-                Thread({
-                    val colorStatus = runCatching {
-                        PrimaryVideoColorPreflight.aggregate(clips.map { clip ->
-                            PrimaryVideoColorPreflight.inspect(context, clip.uri)
-                        })
-                    }.getOrDefault(PrimaryVideoColorStatus.UNKNOWN)
-                    main.post {
-                        if (preflightGeneration != runGeneration) return@post
-                        val rejection = when (colorStatus) {
-                            PrimaryVideoColorStatus.CONFIRMED_SDR -> null
-                            PrimaryVideoColorStatus.HDR ->
-                                "Primary offline looks need confirmed SDR footage; HDR clips are unsupported. Convert all primary clips to SDR or remove the look, then retry."
-                            PrimaryVideoColorStatus.UNKNOWN ->
-                                "Could not confirm SDR color-transfer metadata for every primary clip. Remove the look or use explicitly SDR-tagged footage, then retry."
-                        }
-                        if (rejection != null) {
-                            active = false
-                            onError(rejection)
-                        } else {
-                            active = false
-                            primaryLookPreflightApproved = true
-                            start(
-                                clips, options, onProgress, onSuccess, onError,
-                                overlayLayers, onWarning, exportJobId,
-                                reverseSequences, reverseAudioFiles
-                            )
-                        }
-                    }
-                }, "TongCut-primary-color-preflight").start()
-            } catch (failure: Exception) {
-                active = false
-                onError("Unable to check primary video color metadata: ${failure.message ?: "unknown error"}")
-            }
-            return
-        }
         require(reverseAudioFiles.keys.all { index ->
             index in clips.indices && index in reverseSequences.keys &&
                 clips[index].reverseVideo && reverseAudioFiles[index]?.isFile == true
@@ -116,6 +71,87 @@ class VideoExporter(private val context: Context) {
         }
         require(overlayLayers.layers.none { it.kind == LayerKind.STICKER }) {
             "Sticker compositor has not been implemented"
+        }
+        if (primaryLookPreflightApproved) {
+            primaryLookPreflightApproved = false
+        } else if (options.primaryOfflineEffectPreset != null) {
+            // MediaExtractor can block on slow document providers. Keep it off the
+            // UI thread, but do not construct the composition until every source
+            // has passed this conservative SDR-only preflight. The cleanup owns
+            // cached reverse sequences/audio until the normal export path takes over.
+            val preflightCleanupDone = AtomicBoolean(false)
+            val preflightSequences = reverseSequences.values.distinct()
+            val preflightAudioFiles = reverseAudioFiles.values.distinct()
+            val preflightCleanup: () -> Unit = {
+                if (preflightCleanupDone.compareAndSet(false, true)) {
+                    preflightSequences.forEach { runCatching { it.close() } }
+                    preflightAudioFiles.forEach { runCatching { it.delete() } }
+                }
+            }
+            activeReverseCleanup = preflightCleanup
+            active = true
+            try {
+                val preflightGeneration =
+                    Math.addExact(runGeneration, 1L).also { runGeneration = it }
+                Thread({
+                    val colorStatus = runCatching {
+                        PrimaryVideoColorPreflight.aggregate(clips.map { clip ->
+                            PrimaryVideoColorPreflight.inspect(context, clip.uri)
+                        })
+                    }.getOrDefault(PrimaryVideoColorStatus.UNKNOWN)
+                    main.post {
+                        if (preflightGeneration != runGeneration) {
+                            preflightCleanup()
+                            if (activeReverseCleanup === preflightCleanup) {
+                                activeReverseCleanup = null
+                            }
+                            return@post
+                        }
+                        val rejection = when (colorStatus) {
+                            PrimaryVideoColorStatus.CONFIRMED_SDR -> null
+                            PrimaryVideoColorStatus.HDR ->
+                                "Primary offline looks need confirmed SDR footage; HDR clips are unsupported. Convert all primary clips to SDR or remove the look, then retry."
+                            PrimaryVideoColorStatus.UNKNOWN ->
+                                "Could not confirm SDR color-transfer metadata for every primary clip. Remove the look or use explicitly SDR-tagged footage, then retry."
+                        }
+                        if (rejection != null) {
+                            preflightCleanup()
+                            if (activeReverseCleanup === preflightCleanup) {
+                                activeReverseCleanup = null
+                            }
+                            active = false
+                            onError(rejection)
+                        } else {
+                            active = false
+                            primaryLookPreflightApproved = true
+                            try {
+                                start(
+                                    clips, options, onProgress, onSuccess, onError,
+                                    overlayLayers, onWarning, exportJobId,
+                                    reverseSequences, reverseAudioFiles
+                                )
+                            } catch (failure: Exception) {
+                                if (activeReverseCleanup === preflightCleanup) {
+                                    preflightCleanup()
+                                } else {
+                                    activeReverseCleanup?.invoke()
+                                }
+                                activeReverseCleanup = null
+                                active = false
+                                onError("Unable to start export: ${failure.message ?: "unknown error"}")
+                            }
+                        }
+                    }
+                }, "TongCut-primary-color-preflight").start()
+            } catch (failure: Exception) {
+                preflightCleanup()
+                if (activeReverseCleanup === preflightCleanup) {
+                    activeReverseCleanup = null
+                }
+                active = false
+                onError("Unable to check primary video color metadata: ${failure.message ?: "unknown error"}")
+            }
+            return
         }
         val original = clips.toList()
         val generation = Math.addExact(runGeneration, 1L).also { runGeneration = it }
