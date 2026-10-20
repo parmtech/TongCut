@@ -139,8 +139,8 @@ class PrimaryTransitionTimelineTest {
 
     @Test
     fun insufficientIncomingHeadOrOutgoingTailHandleIsRejected() {
-        val outgoing = outClip().copy(sourceOutMs = 9_800L)
-        val incoming = inClip().copy(sourceInMs = 200L)
+        val outgoing = outClip().copy(sourceDurationMs = 5_200L)
+        val incoming = inClip().copy(sourceInMs = 200L, sourceOutMs = 4_200L)
         assertThrows(IllegalArgumentException::class.java) {
             PrimaryTransitionPlan.create(outgoing, inClip(), config(), 9_000L)
         }
