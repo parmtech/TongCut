@@ -57,6 +57,14 @@ class CachedReverseVideoSegment internal constructor(
  * mappings fail closed and remove this attempt's unique cache generation.
  */
 object ExactReverseFrameDecoder {
+    // The MediaFormat.KEY_CROP_* constants are annotated API 33. The codec
+    // metadata string keys themselves also work on API 29–32, TongCut's
+    // minimum supported devices. Refer to the strings rather than fields so
+    // Kotlin/Java do not imply an API 33 dependency.
+    private const val CROP_LEFT_KEY = "crop-left"
+    private const val CROP_TOP_KEY = "crop-top"
+    private const val CROP_RIGHT_KEY = "crop-right"
+    private const val CROP_BOTTOM_KEY = "crop-bottom"
     private const val MAX_INPUT_SAMPLES = 12_000
     private const val MAX_SOURCE_DIMENSION = 4_096
     private const val MAX_SOURCE_PIXELS = 8_847_360L // 4096 × 2160
@@ -102,10 +110,10 @@ object ExactReverseFrameDecoder {
                 sourceWidth.toLong() * sourceHeight <= MAX_SOURCE_PIXELS) {
                 "Source dimensions exceed reverse decoder limits"
             }
-            val cropLeft = format.getIntegerOrNull(MediaFormat.KEY_CROP_LEFT) ?: 0
-            val cropTop = format.getIntegerOrNull(MediaFormat.KEY_CROP_TOP) ?: 0
-            val cropRight = format.getIntegerOrNull(MediaFormat.KEY_CROP_RIGHT) ?: sourceWidth - 1
-            val cropBottom = format.getIntegerOrNull(MediaFormat.KEY_CROP_BOTTOM) ?: sourceHeight - 1
+            val cropLeft = format.getIntegerOrNull(CROP_LEFT_KEY) ?: 0
+            val cropTop = format.getIntegerOrNull(CROP_TOP_KEY) ?: 0
+            val cropRight = format.getIntegerOrNull(CROP_RIGHT_KEY) ?: sourceWidth - 1
+            val cropBottom = format.getIntegerOrNull(CROP_BOTTOM_KEY) ?: sourceHeight - 1
             val visibleWidth = cropRight - cropLeft + 1
             val visibleHeight = cropBottom - cropTop + 1
             require(cropLeft >= 0 && cropTop >= 0 && cropRight < sourceWidth &&
