@@ -22,7 +22,9 @@ object CaptionEntranceMotion {
             CaptionEntrance.NONE -> CaptionEntrancePose()
             CaptionEntrance.FADE -> CaptionEntrancePose(alpha = eased)
             CaptionEntrance.POP -> CaptionEntrancePose(alpha = eased, scale = 0.78f + 0.22f * eased)
-            CaptionEntrance.RISE -> CaptionEntrancePose(alpha = eased, y = -0.16f * (1f - eased))
+            CaptionEntrance.RISE -> CaptionEntrancePose(
+                alpha = eased, y = if (eased >= 1f) 0f else -0.16f * (1f - eased)
+            )
         }
     }
 }

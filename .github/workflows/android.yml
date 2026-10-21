@@ -24,6 +24,8 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER" || { echo "Android sdkmanager not installed"; exit 1; }
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Guard Kotlin source integrity
+        run: python3 tools/ci/check_kotlin_sources.py
       - name: Compile, unit tests and Android Lint (NO APK packaging)
         run: gradle --no-daemon testDebugUnitTest lintDebug
 # Owner release policy: do not add assembleDebug, assembleRelease,

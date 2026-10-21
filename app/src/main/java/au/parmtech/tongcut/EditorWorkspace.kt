@@ -1469,8 +1469,8 @@ internal fun VideoEditorScreen(
                         GradeSlider("HSL lightness", grade.hslLightness, -1f..1f, { value ->
                             previewDraft = active.copy(colorGrade = grade.copy(hslLightness = value))
                         }, ::commitGradePreview)
-                        ToolChips(HSL_BAND_NAMES, selectedHslBand,
-                            { selectedHslBand = it }) { it }
+                        ToolChips(HSL_BAND_NAMES.indices.toList(), selectedHslBand,
+                            { selectedHslBand = it }) { HSL_BAND_NAMES[it] }
                         val band = grade.hslBands[selectedHslBand]
                         fun updateBand(next: HslBandAdjustment) {
                             val bands = grade.hslBands.toMutableList().apply {
@@ -1487,8 +1487,8 @@ internal fun VideoEditorScreen(
                         GradeSlider("${HSL_BAND_NAMES[selectedHslBand]} lightness",
                             band.lightness, -1f..1f,
                             { updateBand(band.copy(lightness = it)) }, ::commitGradePreview)
-                        ToolChips(CURVE_CHANNEL_NAMES, selectedCurveChannel,
-                            { selectedCurveChannel = it }) { it }
+                        ToolChips(CURVE_CHANNEL_NAMES.indices.toList(), selectedCurveChannel,
+                            { selectedCurveChannel = it }) { CURVE_CHANNEL_NAMES[it] }
                         val curve = grade.curves.curve(selectedCurveChannel)
                         ToneCurveGraph(
                             curve = curve,

@@ -32,6 +32,16 @@ class CachedReverseVideoSegment internal constructor(
         return ptsPlan.sourceTimeUs(outputOffset)
     }
 
+    /** Source-PTS derived timing shared by reverse preview and export. */
+    fun frameDurationUs(outputOffset: Int): Long {
+        require(outputOffset in 0 until frameCount)
+        return ptsPlan.frameDurationUs(outputOffset)
+    }
+
+    /** Returns the visible reversed frame index at an output-local timestamp. */
+    fun frameIndexAtOutputTimeUs(outputTimeUs: Long): Int? =
+        ptsPlan.frameIndexAtOutputTimeUs(outputTimeUs)
+
     fun openFrame(cache: ReverseFrameCache, outputOffset: Int): ReverseFrameCache.FrameLease? {
         require(outputOffset in 0 until frameCount)
         return cache.openFrame(cacheKey, outputOffset.toLong())
@@ -370,7 +380,7 @@ object ExactReverseFrameDecoder {
         y: Int
     ): Int {
         val offset = buffer.position() + y * rowStride + x * pixelStride
-        require(offset in buffer.position until buffer.limit()) {
+        require(offset in buffer.position() until buffer.limit()) {
             "Decoder returned truncated YUV plane data"
         }
         return buffer.get(offset).toInt() and 255

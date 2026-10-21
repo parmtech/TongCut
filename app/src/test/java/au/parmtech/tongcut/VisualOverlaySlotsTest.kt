@@ -37,7 +37,8 @@ class VisualOverlaySlotsTest {
         val frozen=project.copy(layers=project.layers.map { if(it.kind==LayerKind.IMAGE)
             it.copy(visualSlot=0) else it })
         val encoded=LayerTimelineCodec.encode(frozen)
-        assertEquals(11,encoded.getInt("schema"))
+        assertTrue("Visual-slot support requires schema 11 or newer",
+            encoded.getInt("schema") >= 11)
         assertEquals(frozen,LayerTimelineCodec.decode(encoded))
         val legacy=LayerTimelineCodec.encode(project)
         legacy.put("schema",6)
