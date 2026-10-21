@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -303,8 +305,22 @@ class ExportService : Service() {
     }
 
     private fun updateNotification(state: ExportJobState) {
+        // Android 13+ requires a user-granted permission for drawer updates.
+        // Launching a media-processing foreground service itself is allowed
+        // without this permission; its mandatory startForeground notification
+        // remains available to the system Task Manager when drawer access is
+        // denied. Never crash or abort the export because of notification UI.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
         val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, notification(state))
+        try {
+            manager.notify(NOTIFICATION_ID, notification(state))
+        } catch (_: SecurityException) {
+            // The permission can be revoked between checking and posting.
+            // Export progress is also available in the persisted ExportJobs state.
+        }
     }
 
     private fun notification(state: ExportJobState): Notification {
