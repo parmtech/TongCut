@@ -19,6 +19,7 @@ import kotlin.math.abs
  * from being re-created on every timeline poll (~90 ms). The same failed source
  * stays paused with an actionable message until it is relinked/changed.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class AudioOverlayEngine(private val context: Context) {
     private data class Entry(
         val layer: TimelineLayer,
