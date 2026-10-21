@@ -1,7 +1,7 @@
 name: TongCut Source Checks (No APK)
 on:
   push:
-    branches: [main, development/capcut-parity]
+    branches: [main, development/capcut-parity, 'agent/master', 'agent/worker-1', 'agent/worker-2']
   pull_request:
   workflow_dispatch:
 permissions:
