@@ -1,0 +1,80 @@
+name: TongCut Current Development Emulator Smoke (2026-10-21)
+
+on:
+  push:
+    branches: [qa/android-emulator-20261021]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-pip-pixels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install Android SDK compile platform
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Install FFmpeg for synthetic test fixture generation
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Prepare synthetic media and chroma matte fixture (never upload user media)
+        run: |
+          mkdir -p app/src/androidTest/assets
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/main_blue.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=red:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_red.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=lime:s=320x180:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_green.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=lime:s=320x180:r=30:d=3 -vf "drawbox=x=100:y=55:w=120:h=70:color=red:t=fill" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_chroma.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=lime:s=320x180:r=30:d=3 -vf "drawbox=x=100:y=55:w=120:h=70:color=0x96DC28:t=fill" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/overlay_spill.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=blue:s=180x320:r=30:d=3 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -y app/src/androidTest/assets/main_blue_portrait.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=green:s=128x128:d=1 -vf "drawbox=x=40:y=40:w=48:h=48:color=red:t=fill" -frames:v 1 -y app/src/androidTest/assets/matte_green_red.png
+          ffmpeg -hide_banner -loglevel error -f lavfi -i sine=frequency=440:sample_rate=48000:duration=3 -c:a aac -b:a 128k -y app/src/androidTest/assets/music_440.m4a
+          ffmpeg -hide_banner -loglevel error -f lavfi -i sine=frequency=880:sample_rate=44100:duration=3 -c:a aac -b:a 128k -y app/src/androidTest/assets/music_880.m4a
+      - name: Guard Kotlin source before emulator
+        run: python3 tools/ci/check_kotlin_sources.py
+      - name: Grant Linux KVM access
+        run: |
+          sudo chmod 666 /dev/kvm || true
+      - name: Run Android emulator rendered-pixel test (NO APK artifact)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          # CI runners have a constrained free disk. Replace the AVD's existing
+          # userdata size: the action appends disk-size, and duplicate INI keys
+          # leave the larger default effective on this emulator build.
+          disk-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          pre-emulator-launch-script: >-
+            sed -i '/^disk\.dataPartition\.size=/d' "$ANDROID_AVD_HOME/test.avd/config.ini" &&
+            printf '\ndisk.dataPartition.size=4096M\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
+          disable-animations: true
+          # Emulator runner sends every newline as a separate command.
+          # Keep failure capture in a single shell command to retain its exit code.
+          script: "gradle --no-daemon --stacktrace connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=au.parmtech.tongcut.ProjectRecoveryDeviceTest,au.parmtech.tongcut.PiPExportDeviceTest,au.parmtech.tongcut.VideoCrossfadeExportDeviceTest,au.parmtech.tongcut.AudioDuckingExportDeviceTest,au.parmtech.tongcut.VideoMaskShapesDeviceTest || (mkdir -p app/build; adb logcat -d -v threadtime > app/build/android-pixel-failure-logcat.txt || true; exit 1)"
+      - name: Upload device test results only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-20261021-emulator-smoke-reports
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/android-pixel-failure-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
