@@ -24,6 +24,8 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Check Kotlin source integrity before Gradle
+        run: python3 tools/ci/check_kotlin_sources.py
       - name: Full JVM unit suite, Android Lint and Debug APK
         run: gradle --no-daemon --stacktrace testDebugUnitTest lintDebug assembleDebug
       - name: Verify output artifact integrity
