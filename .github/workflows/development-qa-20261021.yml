@@ -1,0 +1,70 @@
+name: TongCut Development QA - Verify Current Debug APK
+on:
+  push:
+    branches:
+      - fix/development-qa-20261021
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Install SDK 36
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0"
+      - name: Full JVM unit suite, Android Lint and Debug APK
+        run: gradle --no-daemon --stacktrace testDebugUnitTest lintDebug assembleDebug
+      - name: Verify output artifact integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, os, zipfile
+          src = "app/build/outputs/apk/debug/app-debug.apk"
+          assert os.path.isfile(src) and os.path.getsize(src) > 1024*1024
+          with zipfile.ZipFile(src) as archive:
+              assert archive.testzip() is None
+              names = archive.namelist()
+              assert "AndroidManifest.xml" in names
+              assert any(n.endswith(".dex") for n in names)
+          with open(src, "rb") as stream:
+              print("APK sha256 =", hashlib.file_digest(stream, "sha256").hexdigest())
+          PY
+      - name: Package verified QA candidate
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/TongCut-Development-QA-TEST.apk
+          sha256sum dist/TongCut-Development-QA-TEST.apk > dist/SHA256SUMS.txt
+          git rev-parse HEAD > dist/SOURCE_COMMIT.txt
+      - name: Upload QA APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-Development-QA-TEST
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Upload unit and lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TongCut-Development-QA-reports
+          path: |
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.xml
+            app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 7
