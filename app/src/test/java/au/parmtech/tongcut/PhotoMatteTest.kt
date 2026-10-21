@@ -70,14 +70,14 @@ class PhotoMatteTest {
     @Test fun boundedBlurUsesNeighbourPixelsAndZeroIsIdentity() {
         val pixels = IntArray(9) { 0xFF000000.toInt() }
         pixels[4] = 0xFFFFFFFF.toInt()
-        assertEquals(0xFF404040.toInt(), PhotoMatte.blurPixel(pixels, 1, 1, 3, 3, 1f / 3f))
+        assertEquals(0xFF404040.toInt(), PhotoMatte.blurPixel(pixels, 1, 1, 3, 3, 0.08f))
         assertEquals(pixels[4], PhotoMatte.blurPixel(pixels, 1, 1, 3, 3, 0f))
 
         val transparentEdges = IntArray(9)
         transparentEdges[4] = 0xFFFFFFFF.toInt()
         assertEquals(
             0x40FFFFFF,
-            PhotoMatte.blurPixel(transparentEdges, 1, 1, 3, 3, 1f / 3f)
+            PhotoMatte.blurPixel(transparentEdges, 1, 1, 3, 3, 0.08f)
         )
     }
 
